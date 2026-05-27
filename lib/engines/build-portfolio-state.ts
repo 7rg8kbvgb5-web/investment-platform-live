@@ -5,6 +5,10 @@ import type {
 } from '../../domain/types/allocation';
 import { applyTacticalOverlays } from './apply-tactical-overlays';
 import { calculateGrowthDefensiveTotals } from './calculate-growth-defensive-totals';
+import {
+  checkPortfolioGuardrails,
+  type GuardrailWarning,
+} from './check-portfolio-guardrails';
 import { validateAllocationTotal } from './validate-allocation-total';
 
 export type BuildPortfolioStateInput = {
@@ -19,6 +23,7 @@ export type PortfolioState = {
   growthTotal: number;
   defensiveTotal: number;
   status: 'Valid' | 'Check allocation';
+  guardrailWarnings: GuardrailWarning[];
 };
 
 export function buildPortfolioState({
@@ -37,11 +42,21 @@ export function buildPortfolioState({
   const { growthTotal, defensiveTotal } =
     calculateGrowthDefensiveTotals(profileAllocations);
 
-  return {
+  const portfolioState = {
     adjustedAllocations: profileAllocations,
     totalWeight,
     growthTotal,
     defensiveTotal,
     status,
+  };
+
+  const guardrailWarnings = checkPortfolioGuardrails({
+    ...portfolioState,
+    guardrailWarnings: [],
+  });
+
+  return {
+    ...portfolioState,
+    guardrailWarnings,
   };
 }
