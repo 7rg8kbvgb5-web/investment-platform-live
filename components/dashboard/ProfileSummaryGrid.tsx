@@ -1,3 +1,7 @@
+import StatusBox, {
+  allocationStatusVariant,
+} from './StatusBox';
+
 type ProfileSummaryGridProps = {
   totalWeight: number;
   growthTotal: number;
@@ -30,7 +34,9 @@ export default function ProfileSummaryGrid({
 
       <div style={summaryBox}>
         <span>Status</span>
-        <strong>{status}</strong>
+        <StatusBox variant={allocationStatusVariant(status)} display="inline">
+          {status}
+        </StatusBox>
       </div>
     </div>
   );

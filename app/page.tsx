@@ -7,6 +7,7 @@ import ProfileCardHeader from '../components/dashboard/ProfileCardHeader';
 import ProfileSummaryGrid from '../components/dashboard/ProfileSummaryGrid';
 import ProfileChartsSection from '../components/dashboard/ProfileChartsSection';
 import ProfileAllocationTable from '../components/dashboard/ProfileAllocationTable';
+import StatusBox from '../components/dashboard/StatusBox';
 
 export default async function Home() {
   const { data: profiles } = await supabase
@@ -57,9 +58,9 @@ export default async function Home() {
             />
 
             {profileAllocations.length === 0 ? (
-              <div style={warningBox}>
+              <StatusBox variant="warning">
                 No allocation rows found for this risk profile.
-              </div>
+              </StatusBox>
             ) : (
               <>
                 <ProfileChartsSection
@@ -94,10 +95,3 @@ const profileCard = {
   border: '1px solid #2d4a6b',
 };
 
-const warningBox = {
-  padding: '18px',
-  background: '#5b2b12',
-  border: '1px solid #d97706',
-  borderRadius: '12px',
-  marginBottom: '25px',
-};
