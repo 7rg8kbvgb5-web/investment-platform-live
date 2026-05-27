@@ -1,7 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { applyTacticalOverlays } from '../lib/engines/apply-tactical-overlays';
-import { calculateGrowthDefensiveTotals } from '../lib/engines/calculate-growth-defensive-totals';
-import { validateAllocationTotal } from '../lib/engines/validate-allocation-total';
+import { buildPortfolioState } from '../lib/engines/build-portfolio-state';
 import DashboardHero from '../components/dashboard/DashboardHero';
 import ProfileCardHeader from '../components/dashboard/ProfileCardHeader';
 import ProfileSummaryGrid from '../components/dashboard/ProfileSummaryGrid';
@@ -30,16 +28,17 @@ export default async function Home() {
       <DashboardHero />
 
       {profiles?.map((profile) => {
-        const profileAllocations = applyTacticalOverlays(
-          allocations?.filter((a) => a.risk_profile === profile.name) || [],
-          overlays || []
-        );
-
-        const { totalWeight, status } =
-          validateAllocationTotal(profileAllocations);
-
-        const { growthTotal, defensiveTotal } =
-          calculateGrowthDefensiveTotals(profileAllocations);
+        const {
+          adjustedAllocations: profileAllocations,
+          totalWeight,
+          growthTotal,
+          defensiveTotal,
+          status,
+        } = buildPortfolioState({
+          riskProfileName: profile.name,
+          strategicAllocations: allocations || [],
+          tacticalOverlays: overlays || [],
+        });
 
         return (
           <section key={profile.id} style={profileCard}>
