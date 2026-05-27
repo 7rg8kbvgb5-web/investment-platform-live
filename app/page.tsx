@@ -1,6 +1,10 @@
 import { supabase } from '../lib/supabase';
+import { applyTacticalOverlays } from '../lib/engines/apply-tactical-overlays';
+import { calculateGrowthDefensiveTotals } from '../lib/engines/calculate-growth-defensive-totals';
+import { validateAllocationTotal } from '../lib/engines/validate-allocation-total';
 import AllocationPieChart from '../components/AllocationPieChart';
 import GrowthDefensiveChart from '../components/GrowthDefensiveChart';
+import DashboardHero from '../components/dashboard/DashboardHero';
 
 export default async function Home() {
   const { data: profiles } = await supabase
@@ -20,49 +24,19 @@ export default async function Home() {
 
   return (
     <main style={page}>
-      <section style={hero}>
-        <p style={eyebrow}>Investment Platform</p>
-        <h1 style={title}>Portfolio Construction Engine</h1>
-        <p style={subtitle}>
-          Strategic asset allocation by risk profile, with live Supabase data,
-          growth/defensive validation and portfolio guardrail foundations.
-        </p>
-      </section>
+      <DashboardHero />
 
       {profiles?.map((profile) => {
-        const profileAllocations =
-          allocations
-            ?.filter((a) => a.risk_profile === profile.name)
-            .map((allocation) => {
-              const overlay = overlays?.find(
-                (o) =>
-                  o.risk_profile === allocation.risk_profile &&
-                  o.asset_class === allocation.asset_class &&
-                  o.status === 'Active'
-              );
-
-              const tacticalAdjustment = Number(overlay?.tactical_adjustment || 0);
-
-              return {
-                ...allocation,
-                tactical_adjustment: tacticalAdjustment,
-                final_weight: Number(allocation.target_weight) + tacticalAdjustment,
-                overlay_reason: overlay?.reason || null,
-              };
-            }) || [];
-
-        const totalWeight = profileAllocations.reduce(
-          (sum, a) => sum + Number(a.target_weight),
-          0
+        const profileAllocations = applyTacticalOverlays(
+          allocations?.filter((a) => a.risk_profile === profile.name) || [],
+          overlays || []
         );
 
-        const growthTotal = profileAllocations
-          .filter((a) => a.classification === 'Growth')
-          .reduce((sum, a) => sum + Number(a.target_weight), 0);
+        const { totalWeight, status } =
+          validateAllocationTotal(profileAllocations);
 
-        const defensiveTotal = profileAllocations
-          .filter((a) => a.classification === 'Defensive')
-          .reduce((sum, a) => sum + Number(a.target_weight), 0);
+        const { growthTotal, defensiveTotal } =
+          calculateGrowthDefensiveTotals(profileAllocations);
 
         return (
           <section key={profile.id} style={profileCard}>
@@ -96,7 +70,7 @@ export default async function Home() {
 
               <div style={summaryBox}>
                 <span>Status</span>
-                <strong>{totalWeight === 100 ? 'Valid' : 'Check allocation'}</strong>
+                <strong>{status}</strong>
               </div>
             </div>
 
@@ -159,34 +133,6 @@ const page = {
   background: '#04142b',
   minHeight: '100vh',
   color: 'white',
-};
-
-const hero = {
-  marginBottom: '40px',
-  padding: '30px',
-  background: '#0b2342',
-  borderRadius: '18px',
-  border: '1px solid #2d4a6b',
-};
-
-const eyebrow = {
-  textTransform: 'uppercase' as const,
-  letterSpacing: '2px',
-  color: '#8fb7e8',
-  fontSize: '13px',
-  marginBottom: '10px',
-};
-
-const title = {
-  fontSize: '48px',
-  margin: '0 0 15px 0',
-};
-
-const subtitle = {
-  fontSize: '18px',
-  maxWidth: '900px',
-  opacity: 0.85,
-  lineHeight: 1.5,
 };
 
 const profileCard = {
