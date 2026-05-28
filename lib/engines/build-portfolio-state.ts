@@ -1,5 +1,6 @@
 import type {
   BuildPortfolioStateInput,
+  PortfolioGovernanceSummary,
   PortfolioState,
 } from '../../domain/types/portfolio';
 import type { GuardrailWarning } from '../../domain/types/guardrails';
@@ -11,10 +12,7 @@ import { validateAllocationTotal } from './validate-allocation-total';
 
 function deriveGovernanceSummaries(
   guardrailWarnings: GuardrailWarning[]
-): Pick<
-  PortfolioState,
-  'hasHardBreaches' | 'approvalRequired' | 'warningCount' | 'errorCount'
-> {
+): PortfolioGovernanceSummary {
   return {
     hasHardBreaches: guardrailWarnings.some(
       (warning) => warning.breachType === 'hard'

@@ -26,6 +26,12 @@ export type PortfolioState = {
   errorCount: number;
 };
 
+/** Guardrail-derived counts shared by portfolio state and simulation engines. */
+export type PortfolioGovernanceSummary = Pick<
+  PortfolioState,
+  'hasHardBreaches' | 'approvalRequired' | 'warningCount' | 'errorCount'
+>;
+
 /** Minimal portfolio slice required by the guardrail engine. */
 export type PortfolioGuardrailInput = Pick<
   PortfolioState,
