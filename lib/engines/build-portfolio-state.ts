@@ -9,8 +9,6 @@ import { checkPortfolioGuardrails } from './check-portfolio-guardrails';
 import { checkTacticalOverlayDates } from './check-tactical-overlay-dates';
 import { validateAllocationTotal } from './validate-allocation-total';
 
-export type { BuildPortfolioStateInput, PortfolioState } from '../../domain/types/portfolio';
-
 function deriveGovernanceSummaries(
   guardrailWarnings: GuardrailWarning[]
 ): Pick<
