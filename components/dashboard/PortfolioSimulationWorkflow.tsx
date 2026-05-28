@@ -6,6 +6,7 @@ import type {
   StrategicAllocation,
   TacticalOverlay,
 } from '../../domain/types/allocation';
+import { createApprovalWorkflowFromScenario } from '../../domain/types/approval';
 import {
   createDraftScenario,
   type ScenarioSimulationSummary,
@@ -15,6 +16,7 @@ import {
   isProposedOverlayDraftComplete,
 } from '../../lib/engines/build-proposed-tactical-overlays';
 import { simulatePortfolioChanges } from '../../lib/engines/simulate-portfolio-changes';
+import ApprovalWorkflowPanel from './ApprovalWorkflowPanel';
 import ModelPortfolioComparisonPanel from './ModelPortfolioComparisonPanel';
 import ModelPortfolioManagerPanel from './ModelPortfolioManagerPanel';
 import PortfolioSimulationPanel from './PortfolioSimulationPanel';
@@ -118,6 +120,15 @@ export default function PortfolioSimulationWorkflow({
     simulationSummary,
   ]);
 
+  const approvalWorkflow = useMemo(
+    () =>
+      createApprovalWorkflowFromScenario(
+        currentScenario,
+        simulationSummary?.warningSummaryAfter
+      ),
+    [currentScenario, simulationSummary]
+  );
+
   return (
     <>
       <TacticalOverlayInputPanel
@@ -147,6 +158,7 @@ export default function PortfolioSimulationWorkflow({
         proposedDraft={proposedDraft}
       />
       <ScenarioManagerPanel currentScenario={currentScenario} />
+      <ApprovalWorkflowPanel workflow={approvalWorkflow} />
     </>
   );
 }
