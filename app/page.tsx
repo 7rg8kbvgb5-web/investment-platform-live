@@ -5,6 +5,7 @@ import ProfileCardHeader from '../components/dashboard/ProfileCardHeader';
 import ProfileSummaryGrid from '../components/dashboard/ProfileSummaryGrid';
 import ProfileChartsSection from '../components/dashboard/ProfileChartsSection';
 import ProfileAllocationTable from '../components/dashboard/ProfileAllocationTable';
+import GuardrailsPanel from '../components/dashboard/GuardrailsPanel';
 import StatusBox from '../components/dashboard/StatusBox';
 
 export default async function Home() {
@@ -34,6 +35,7 @@ export default async function Home() {
           growthTotal,
           defensiveTotal,
           status,
+          guardrailWarnings,
         } = buildPortfolioState({
           riskProfileName: profile.name,
           strategicAllocations: allocations || [],
@@ -71,6 +73,8 @@ export default async function Home() {
                 <ProfileAllocationTable allocations={profileAllocations} />
               </>
             )}
+
+            <GuardrailsPanel warnings={guardrailWarnings} />
           </section>
         );
       })}
