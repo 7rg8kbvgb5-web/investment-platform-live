@@ -9,6 +9,10 @@ import {
   checkPortfolioGuardrails,
   type GuardrailWarning,
 } from './check-portfolio-guardrails';
+import {
+  checkTacticalOverlayDates,
+  type TacticalOverlayDateWarning,
+} from './check-tactical-overlay-dates';
 import { validateAllocationTotal } from './validate-allocation-total';
 
 export type BuildPortfolioStateInput = {
@@ -24,6 +28,7 @@ export type PortfolioState = {
   defensiveTotal: number;
   status: 'Valid' | 'Check allocation';
   guardrailWarnings: GuardrailWarning[];
+  tacticalOverlayDateWarnings: TacticalOverlayDateWarning[];
 };
 
 export function buildPortfolioState({
@@ -53,10 +58,14 @@ export function buildPortfolioState({
   const guardrailWarnings = checkPortfolioGuardrails({
     ...portfolioState,
     guardrailWarnings: [],
+    tacticalOverlayDateWarnings: [],
   });
+
+  const tacticalOverlayDateWarnings = checkTacticalOverlayDates(tacticalOverlays);
 
   return {
     ...portfolioState,
     guardrailWarnings,
+    tacticalOverlayDateWarnings,
   };
 }
