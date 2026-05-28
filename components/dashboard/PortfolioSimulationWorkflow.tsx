@@ -12,6 +12,7 @@ import {
   createDraftScenario,
   type ScenarioSimulationSummary,
 } from '../../domain/types/scenario';
+import { compareToModelPortfolio } from '../../lib/engines/compare-to-model-portfolio';
 import {
   buildProposedTacticalOverlays,
   isProposedOverlayDraftComplete,
@@ -19,6 +20,7 @@ import {
 import { simulatePortfolioChanges } from '../../lib/engines/simulate-portfolio-changes';
 import ApprovalWorkflowPanel from './ApprovalWorkflowPanel';
 import ImplementationChecklistPanel from './ImplementationChecklistPanel';
+import WorkflowSummaryPanel from './WorkflowSummaryPanel';
 import ModelPortfolioComparisonPanel from './ModelPortfolioComparisonPanel';
 import ModelPortfolioManagerPanel from './ModelPortfolioManagerPanel';
 import PortfolioSimulationPanel from './PortfolioSimulationPanel';
@@ -62,9 +64,13 @@ export default function PortfolioSimulationWorkflow({
 
   const hasProposedOverlay = isProposedOverlayDraftComplete(proposedDraft);
 
-  const simulationSummary = useMemo((): ScenarioSimulationSummary | null => {
+  const workflowPreview = useMemo(() => {
     if (!hasProposedOverlay && !hasActiveOverlays) {
-      return null;
+      return {
+        simulationSummary: null as ScenarioSimulationSummary | null,
+        modelComparisonState: 'Pending — add overlay or use active overlays',
+        proposalGenerated: false,
+      };
     }
 
     const simulation = simulatePortfolioChanges({
@@ -81,12 +87,36 @@ export default function PortfolioSimulationWorkflow({
       resetToStrategic: !hasProposedOverlay && hasActiveOverlays,
     });
 
-    return {
+    const modelAllocations = strategicAllocations.filter(
+      (allocation) => allocation.risk_profile === riskProfileName
+    );
+    const comparisonRows = compareToModelPortfolio({
+      simulatedAllocations: simulation.simulatedAllocations,
+      modelAllocations,
+    });
+    const nonNeutralCount = comparisonRows.filter(
+      (row) => row.position !== 'neutral'
+    ).length;
+
+    const modelComparisonState =
+      comparisonRows.length === 0
+        ? 'Ready — no model rows'
+        : nonNeutralCount > 0
+          ? `Ready — ${nonNeutralCount} non-neutral position(s)`
+          : 'Ready — all positions neutral';
+
+    const simulationSummary: ScenarioSimulationSummary = {
       simulationApplied: simulation.metadata.simulationApplied,
       timestamp: simulation.metadata.timestamp,
       allocationDifferenceCount: simulation.allocationDifferences.length,
       warningSummaryBefore: simulation.warningSummaryBefore,
       warningSummaryAfter: simulation.warningSummaryAfter,
+    };
+
+    return {
+      simulationSummary,
+      modelComparisonState,
+      proposalGenerated: simulation.metadata.simulationApplied,
     };
   }, [
     hasProposedOverlay,
@@ -96,6 +126,9 @@ export default function PortfolioSimulationWorkflow({
     tacticalOverlays,
     proposedDraft,
   ]);
+
+  const { simulationSummary, modelComparisonState, proposalGenerated } =
+    workflowPreview;
 
   const currentScenario = useMemo(() => {
     const scenario = createDraftScenario({
@@ -168,6 +201,13 @@ export default function PortfolioSimulationWorkflow({
       <ScenarioManagerPanel currentScenario={currentScenario} />
       <ApprovalWorkflowPanel workflow={approvalWorkflow} />
       <ImplementationChecklistPanel checklist={implementationChecklist} />
+      <WorkflowSummaryPanel
+        scenario={currentScenario}
+        approvalWorkflow={approvalWorkflow}
+        checklist={implementationChecklist}
+        modelComparisonState={modelComparisonState}
+        proposalGenerated={proposalGenerated}
+      />
     </>
   );
 }
