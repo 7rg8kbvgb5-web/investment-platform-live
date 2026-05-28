@@ -7,6 +7,7 @@ import ProfileChartsSection from '../components/dashboard/ProfileChartsSection';
 import ProfileAllocationTable from '../components/dashboard/ProfileAllocationTable';
 import GuardrailsPanel from '../components/dashboard/GuardrailsPanel';
 import OverlayGovernancePanel from '../components/dashboard/OverlayGovernancePanel';
+import ResetToStrategicPanel from '../components/dashboard/ResetToStrategicPanel';
 import StatusBox from '../components/dashboard/StatusBox';
 
 export default async function Home() {
@@ -78,6 +79,11 @@ export default async function Home() {
 
             <GuardrailsPanel warnings={guardrailWarnings} />
             <OverlayGovernancePanel warnings={tacticalOverlayDateWarnings} />
+            <ResetToStrategicPanel
+              strategicAllocations={allocations || []}
+              tacticalOverlays={overlays || []}
+              riskProfileName={profile.name}
+            />
           </section>
         );
       })}

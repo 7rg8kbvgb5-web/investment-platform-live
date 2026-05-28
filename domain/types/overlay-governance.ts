@@ -1,9 +1,7 @@
 import type { SeverityLevel } from './severity';
 
-export type TacticalOverlayDateLevel = SeverityLevel;
-
 export type TacticalOverlayDateWarning = {
-  level: TacticalOverlayDateLevel;
+  level: SeverityLevel;
   message: string;
   assetClass?: string;
   reviewDate?: string;

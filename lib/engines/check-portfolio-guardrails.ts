@@ -29,6 +29,7 @@ function checkSoftMinMaxBreaches(
     if (minWeight !== null && currentWeight < minWeight) {
       warnings.push({
         level: SOFT_GUARDRAIL_LEVEL,
+        breachType: 'soft',
         message: `${allocation.asset_class} weight ${currentWeight}% is below minimum ${minWeight}%`,
         assetClass: allocation.asset_class,
         currentWeight,
@@ -40,6 +41,7 @@ function checkSoftMinMaxBreaches(
     if (maxWeight !== null && currentWeight > maxWeight) {
       warnings.push({
         level: SOFT_GUARDRAIL_LEVEL,
+        breachType: 'soft',
         message: `${allocation.asset_class} weight ${currentWeight}% exceeds maximum ${maxWeight}%`,
         assetClass: allocation.asset_class,
         currentWeight,
