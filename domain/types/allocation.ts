@@ -15,6 +15,9 @@ export type TacticalOverlay = {
   tactical_adjustment: number | string | null;
   reason: string | null;
   status: string;
+  reviewDate?: string;
+  expiryDate?: string;
+  rationale?: string;
 };
 
 export type AllocationWithOverlay = StrategicAllocation & {
