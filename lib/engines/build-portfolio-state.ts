@@ -29,7 +29,37 @@ export type PortfolioState = {
   status: 'Valid' | 'Check allocation';
   guardrailWarnings: GuardrailWarning[];
   tacticalOverlayDateWarnings: TacticalOverlayDateWarning[];
+  hasHardBreaches: boolean;
+  approvalRequired: boolean;
+  warningCount: number;
+  errorCount: number;
 };
+
+type GuardrailWarningWithGovernance = GuardrailWarning & {
+  breachType?: 'soft' | 'hard';
+  requiresApproval?: boolean;
+};
+
+function deriveGovernanceSummaries(
+  guardrailWarnings: GuardrailWarningWithGovernance[]
+): Pick<
+  PortfolioState,
+  'hasHardBreaches' | 'approvalRequired' | 'warningCount' | 'errorCount'
+> {
+  return {
+    hasHardBreaches: guardrailWarnings.some(
+      (warning) => warning.breachType === 'hard'
+    ),
+    approvalRequired: guardrailWarnings.some(
+      (warning) => warning.requiresApproval === true
+    ),
+    warningCount: guardrailWarnings.filter(
+      (warning) => warning.level === 'warning'
+    ).length,
+    errorCount: guardrailWarnings.filter((warning) => warning.level === 'error')
+      .length,
+  };
+}
 
 export function buildPortfolioState({
   riskProfileName,
@@ -59,6 +89,10 @@ export function buildPortfolioState({
     ...portfolioState,
     guardrailWarnings: [],
     tacticalOverlayDateWarnings: [],
+    hasHardBreaches: false,
+    approvalRequired: false,
+    warningCount: 0,
+    errorCount: 0,
   });
 
   const tacticalOverlayDateWarnings = checkTacticalOverlayDates(tacticalOverlays);
@@ -67,5 +101,6 @@ export function buildPortfolioState({
     ...portfolioState,
     guardrailWarnings,
     tacticalOverlayDateWarnings,
+    ...deriveGovernanceSummaries(guardrailWarnings),
   };
 }
