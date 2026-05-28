@@ -7,6 +7,7 @@ import type {
   TacticalOverlay,
 } from '../../domain/types/allocation';
 import ModelPortfolioComparisonPanel from './ModelPortfolioComparisonPanel';
+import ModelPortfolioManagerPanel from './ModelPortfolioManagerPanel';
 import PortfolioSimulationPanel from './PortfolioSimulationPanel';
 import ProposalSummaryPanel from './ProposalSummaryPanel';
 import TacticalOverlayInputPanel from './TacticalOverlayInputPanel';
@@ -50,6 +51,10 @@ export default function PortfolioSimulationWorkflow({
         tacticalOverlays={tacticalOverlays}
         riskProfileName={riskProfileName}
         proposedDraft={proposedDraft}
+      />
+      <ModelPortfolioManagerPanel
+        strategicAllocations={strategicAllocations}
+        riskProfileName={riskProfileName}
       />
       <ModelPortfolioComparisonPanel
         strategicAllocations={strategicAllocations}
