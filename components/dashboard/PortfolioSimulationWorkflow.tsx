@@ -7,6 +7,7 @@ import type {
   TacticalOverlay,
 } from '../../domain/types/allocation';
 import PortfolioSimulationPanel from './PortfolioSimulationPanel';
+import ProposalSummaryPanel from './ProposalSummaryPanel';
 import TacticalOverlayInputPanel from './TacticalOverlayInputPanel';
 
 const EMPTY_DRAFT: ProposedOverlayDraft = {
@@ -38,6 +39,12 @@ export default function PortfolioSimulationWorkflow({
         onDraftChange={setProposedDraft}
       />
       <PortfolioSimulationPanel
+        strategicAllocations={strategicAllocations}
+        tacticalOverlays={tacticalOverlays}
+        riskProfileName={riskProfileName}
+        proposedDraft={proposedDraft}
+      />
+      <ProposalSummaryPanel
         strategicAllocations={strategicAllocations}
         tacticalOverlays={tacticalOverlays}
         riskProfileName={riskProfileName}
