@@ -76,17 +76,6 @@ function resolveSimulatedOverlays(
   } = input;
 
   if (resetToStrategic) {
-    resetToStrategicAllocation({
-      strategicAllocations: filterByRiskProfile(
-        strategicAllocations,
-        riskProfileName
-      ),
-      tacticalOverlays: filterByRiskProfile(
-        currentTacticalOverlays,
-        riskProfileName
-      ),
-    });
-
     return currentTacticalOverlays.filter(
       (overlay) => overlay.risk_profile !== riskProfileName
     );

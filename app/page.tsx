@@ -9,6 +9,7 @@ import GuardrailsPanel from '../components/dashboard/GuardrailsPanel';
 import OverlayGovernancePanel from '../components/dashboard/OverlayGovernancePanel';
 import ResetToStrategicPanel from '../components/dashboard/ResetToStrategicPanel';
 import PortfolioSimulationPanel from '../components/dashboard/PortfolioSimulationPanel';
+import TacticalOverlayInputPanel from '../components/dashboard/TacticalOverlayInputPanel';
 import StatusBox from '../components/dashboard/StatusBox';
 
 export default async function Home() {
@@ -90,6 +91,7 @@ export default async function Home() {
               tacticalOverlays={overlays || []}
               riskProfileName={profile.name}
             />
+            <TacticalOverlayInputPanel riskProfileName={profile.name} />
           </section>
         );
       })}
