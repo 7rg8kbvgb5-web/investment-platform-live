@@ -11,6 +11,12 @@ export type GuardrailWarning = {
   maxWeight?: number;
 };
 
+/** Soft breaches (e.g. min/max band drift) — surfaced as warnings. */
+const SOFT_GUARDRAIL_LEVEL: GuardrailLevel = 'warning';
+
+/** Hard breaches (e.g. regulatory ceilings) — surfaced as errors. */
+const HARD_GUARDRAIL_LEVEL: GuardrailLevel = 'error';
+
 function parseWeight(value: number | string | null | undefined): number | null {
   if (value === null || value === undefined || value === '') {
     return null;
@@ -20,7 +26,7 @@ function parseWeight(value: number | string | null | undefined): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-export function checkPortfolioGuardrails(
+function checkSoftMinMaxBreaches(
   portfolioState: PortfolioState
 ): GuardrailWarning[] {
   const warnings: GuardrailWarning[] = [];
@@ -32,7 +38,7 @@ export function checkPortfolioGuardrails(
 
     if (minWeight !== null && currentWeight < minWeight) {
       warnings.push({
-        level: 'error',
+        level: SOFT_GUARDRAIL_LEVEL,
         message: `${allocation.asset_class} weight ${currentWeight}% is below minimum ${minWeight}%`,
         assetClass: allocation.asset_class,
         currentWeight,
@@ -43,7 +49,7 @@ export function checkPortfolioGuardrails(
 
     if (maxWeight !== null && currentWeight > maxWeight) {
       warnings.push({
-        level: 'error',
+        level: SOFT_GUARDRAIL_LEVEL,
         message: `${allocation.asset_class} weight ${currentWeight}% exceeds maximum ${maxWeight}%`,
         assetClass: allocation.asset_class,
         currentWeight,
@@ -54,4 +60,20 @@ export function checkPortfolioGuardrails(
   }
 
   return warnings;
+}
+
+function checkHardLimitBreaches(_portfolioState: PortfolioState): GuardrailWarning[] {
+  // Reserved for future hard-limit rules (e.g. regulatory caps, absolute ceilings).
+  // Return warnings with level: HARD_GUARDRAIL_LEVEL when implemented.
+  void HARD_GUARDRAIL_LEVEL;
+  return [];
+}
+
+export function checkPortfolioGuardrails(
+  portfolioState: PortfolioState
+): GuardrailWarning[] {
+  return [
+    ...checkSoftMinMaxBreaches(portfolioState),
+    ...checkHardLimitBreaches(portfolioState),
+  ];
 }
