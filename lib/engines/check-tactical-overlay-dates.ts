@@ -1,14 +1,12 @@
 import type { TacticalOverlay } from '../../domain/types/allocation';
+import type {
+  TacticalOverlayDateWarning,
+} from '../../domain/types/overlay-governance';
 
-export type TacticalOverlayDateLevel = 'warning' | 'error';
-
-export type TacticalOverlayDateWarning = {
-  level: TacticalOverlayDateLevel;
-  message: string;
-  assetClass?: string;
-  reviewDate?: string;
-  expiryDate?: string;
-};
+export type {
+  TacticalOverlayDateLevel,
+  TacticalOverlayDateWarning,
+} from '../../domain/types/overlay-governance';
 
 function toDateOnly(value: string): Date | null {
   const parsed = new Date(value);

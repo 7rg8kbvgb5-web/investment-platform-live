@@ -1,4 +1,4 @@
-import type { GuardrailWarning } from '../../lib/engines/check-portfolio-guardrails';
+import type { GuardrailWarning } from '../../domain/types/guardrails';
 import StatusBox from './StatusBox';
 
 type GuardrailsPanelProps = {

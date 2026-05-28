@@ -1,47 +1,18 @@
 import type {
-  AllocationWithOverlay,
-  StrategicAllocation,
-  TacticalOverlay,
-} from '../../domain/types/allocation';
+  BuildPortfolioStateInput,
+  PortfolioState,
+} from '../../domain/types/portfolio';
+import type { GuardrailWarning } from '../../domain/types/guardrails';
 import { applyTacticalOverlays } from './apply-tactical-overlays';
 import { calculateGrowthDefensiveTotals } from './calculate-growth-defensive-totals';
-import {
-  checkPortfolioGuardrails,
-  type GuardrailWarning,
-} from './check-portfolio-guardrails';
-import {
-  checkTacticalOverlayDates,
-  type TacticalOverlayDateWarning,
-} from './check-tactical-overlay-dates';
+import { checkPortfolioGuardrails } from './check-portfolio-guardrails';
+import { checkTacticalOverlayDates } from './check-tactical-overlay-dates';
 import { validateAllocationTotal } from './validate-allocation-total';
 
-export type BuildPortfolioStateInput = {
-  riskProfileName: string;
-  strategicAllocations: StrategicAllocation[];
-  tacticalOverlays?: TacticalOverlay[];
-};
-
-export type PortfolioState = {
-  adjustedAllocations: AllocationWithOverlay[];
-  totalWeight: number;
-  growthTotal: number;
-  defensiveTotal: number;
-  status: 'Valid' | 'Check allocation';
-  guardrailWarnings: GuardrailWarning[];
-  tacticalOverlayDateWarnings: TacticalOverlayDateWarning[];
-  hasHardBreaches: boolean;
-  approvalRequired: boolean;
-  warningCount: number;
-  errorCount: number;
-};
-
-type GuardrailWarningWithGovernance = GuardrailWarning & {
-  breachType?: 'soft' | 'hard';
-  requiresApproval?: boolean;
-};
+export type { BuildPortfolioStateInput, PortfolioState } from '../../domain/types/portfolio';
 
 function deriveGovernanceSummaries(
-  guardrailWarnings: GuardrailWarningWithGovernance[]
+  guardrailWarnings: GuardrailWarning[]
 ): Pick<
   PortfolioState,
   'hasHardBreaches' | 'approvalRequired' | 'warningCount' | 'errorCount'
@@ -86,13 +57,7 @@ export function buildPortfolioState({
   };
 
   const guardrailWarnings = checkPortfolioGuardrails({
-    ...portfolioState,
-    guardrailWarnings: [],
-    tacticalOverlayDateWarnings: [],
-    hasHardBreaches: false,
-    approvalRequired: false,
-    warningCount: 0,
-    errorCount: 0,
+    adjustedAllocations: profileAllocations,
   });
 
   const tacticalOverlayDateWarnings = checkTacticalOverlayDates(tacticalOverlays);

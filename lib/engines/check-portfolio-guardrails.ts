@@ -1,15 +1,7 @@
-import type { PortfolioState } from './build-portfolio-state';
+import type { PortfolioGuardrailInput } from '../../domain/types/portfolio';
+import type { GuardrailLevel, GuardrailWarning } from '../../domain/types/guardrails';
 
-export type GuardrailLevel = 'warning' | 'error';
-
-export type GuardrailWarning = {
-  level: GuardrailLevel;
-  message: string;
-  assetClass?: string;
-  currentWeight?: number;
-  minWeight?: number;
-  maxWeight?: number;
-};
+export type { GuardrailLevel, GuardrailWarning } from '../../domain/types/guardrails';
 
 /** Soft breaches (e.g. min/max band drift) — surfaced as warnings. */
 const SOFT_GUARDRAIL_LEVEL: GuardrailLevel = 'warning';
@@ -27,7 +19,7 @@ function parseWeight(value: number | string | null | undefined): number | null {
 }
 
 function checkSoftMinMaxBreaches(
-  portfolioState: PortfolioState
+  portfolioState: PortfolioGuardrailInput
 ): GuardrailWarning[] {
   const warnings: GuardrailWarning[] = [];
 
@@ -62,7 +54,9 @@ function checkSoftMinMaxBreaches(
   return warnings;
 }
 
-function checkHardLimitBreaches(_portfolioState: PortfolioState): GuardrailWarning[] {
+function checkHardLimitBreaches(
+  _portfolioState: PortfolioGuardrailInput
+): GuardrailWarning[] {
   // Reserved for future hard-limit rules (e.g. regulatory caps, absolute ceilings).
   // Return warnings with level: HARD_GUARDRAIL_LEVEL when implemented.
   void HARD_GUARDRAIL_LEVEL;
@@ -70,7 +64,7 @@ function checkHardLimitBreaches(_portfolioState: PortfolioState): GuardrailWarni
 }
 
 export function checkPortfolioGuardrails(
-  portfolioState: PortfolioState
+  portfolioState: PortfolioGuardrailInput
 ): GuardrailWarning[] {
   return [
     ...checkSoftMinMaxBreaches(portfolioState),

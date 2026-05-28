@@ -1,4 +1,4 @@
-import type { TacticalOverlayDateWarning } from '../../lib/engines/check-tactical-overlay-dates';
+import type { TacticalOverlayDateWarning } from '../../domain/types/overlay-governance';
 import StatusBox from './StatusBox';
 
 type OverlayGovernancePanelProps = {

@@ -1,4 +1,5 @@
 import type {
+  AllocationWithOverlay,
   StrategicAllocation,
   TacticalOverlay,
 } from '../../domain/types/allocation';
@@ -15,11 +16,10 @@ function findActiveOverlay(
   );
 }
 
-export type AllocationWithOverlayFields = {
-  tactical_adjustment: number;
-  final_weight: number;
-  overlay_reason: string | null;
-};
+type AllocationWithOverlayFields = Pick<
+  AllocationWithOverlay,
+  'tactical_adjustment' | 'final_weight' | 'overlay_reason'
+>;
 
 export function applyTacticalOverlays<T extends StrategicAllocation>(
   allocations: T[],
