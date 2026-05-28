@@ -25,3 +25,12 @@ export type AllocationWithOverlay = StrategicAllocation & {
   final_weight: number;
   overlay_reason: string | null;
 };
+
+/** UI-only draft overlay used for local simulation (not persisted). */
+export type ProposedOverlayDraft = {
+  assetClass: string;
+  proposedAdjustment: string;
+  reason: string;
+  reviewDate: string;
+  expiryDate: string;
+};

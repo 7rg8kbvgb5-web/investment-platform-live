@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import type { ProposedOverlayDraft } from '../../domain/types/allocation';
 import StatusBox from './StatusBox';
 
-const EMPTY_FORM = {
+const EMPTY_FORM: ProposedOverlayDraft = {
   assetClass: '',
   proposedAdjustment: '',
   reason: '',
@@ -13,12 +14,18 @@ const EMPTY_FORM = {
 
 type TacticalOverlayInputPanelProps = {
   riskProfileName: string;
+  onDraftChange?: (draft: ProposedOverlayDraft) => void;
 };
 
 export default function TacticalOverlayInputPanel({
   riskProfileName,
+  onDraftChange,
 }: TacticalOverlayInputPanelProps) {
   const [form, setForm] = useState(EMPTY_FORM);
+
+  useEffect(() => {
+    onDraftChange?.(form);
+  }, [form, onDraftChange]);
 
   const hasDraftValues = Object.values(form).some((value) => value.trim() !== '');
 

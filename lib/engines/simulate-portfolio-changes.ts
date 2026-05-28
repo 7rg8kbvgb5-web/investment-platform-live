@@ -4,6 +4,7 @@ import type {
   TacticalOverlay,
 } from '../../domain/types/allocation';
 import type { PortfolioGovernanceSummary } from '../../domain/types/portfolio';
+import type { GrowthDefensiveTotals } from './calculate-growth-defensive-totals';
 import { buildPortfolioState } from './build-portfolio-state';
 import { resetToStrategicAllocation } from './reset-to-strategic-allocation';
 
@@ -12,11 +13,6 @@ export type AllocationDifference = {
   originalWeight: number;
   simulatedWeight: number;
   weightDelta: number;
-};
-
-export type GrowthDefensiveSnapshot = {
-  growthTotal: number;
-  defensiveTotal: number;
 };
 
 export type SimulatePortfolioChangesInput = {
@@ -36,8 +32,8 @@ export type SimulatePortfolioChangesResult = {
   originalAllocations: AllocationWithOverlay[];
   simulatedAllocations: AllocationWithOverlay[];
   allocationDifferences: AllocationDifference[];
-  growthDefensiveBefore: GrowthDefensiveSnapshot;
-  growthDefensiveAfter: GrowthDefensiveSnapshot;
+  growthDefensiveBefore: GrowthDefensiveTotals;
+  growthDefensiveAfter: GrowthDefensiveTotals;
   warningSummaryBefore: PortfolioGovernanceSummary;
   warningSummaryAfter: PortfolioGovernanceSummary;
   metadata: SimulatePortfolioChangesMetadata;

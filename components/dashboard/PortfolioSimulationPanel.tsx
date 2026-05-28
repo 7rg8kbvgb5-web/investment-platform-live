@@ -1,8 +1,13 @@
 import type {
+  ProposedOverlayDraft,
   StrategicAllocation,
   TacticalOverlay,
 } from '../../domain/types/allocation';
 import type { PortfolioGovernanceSummary } from '../../domain/types/portfolio';
+import {
+  buildProposedTacticalOverlays,
+  isProposedOverlayDraftComplete,
+} from '../../lib/engines/build-proposed-tactical-overlays';
 import { simulatePortfolioChanges } from '../../lib/engines/simulate-portfolio-changes';
 import StatusBox from './StatusBox';
 
@@ -10,6 +15,7 @@ type PortfolioSimulationPanelProps = {
   strategicAllocations: StrategicAllocation[];
   tacticalOverlays: TacticalOverlay[];
   riskProfileName: string;
+  proposedDraft?: ProposedOverlayDraft | null;
 };
 
 function formatGovernanceChange(
@@ -83,6 +89,7 @@ export default function PortfolioSimulationPanel({
   strategicAllocations,
   tacticalOverlays,
   riskProfileName,
+  proposedDraft = null,
 }: PortfolioSimulationPanelProps) {
   const profileOverlays = tacticalOverlays.filter(
     (overlay) => overlay.risk_profile === riskProfileName
@@ -90,12 +97,15 @@ export default function PortfolioSimulationPanel({
   const hasActiveOverlays = profileOverlays.some(
     (overlay) => overlay.status === 'Active'
   );
+  const hasProposedOverlay =
+    proposedDraft !== null &&
+    isProposedOverlayDraftComplete(proposedDraft);
 
-  if (!hasActiveOverlays) {
+  if (!hasProposedOverlay && !hasActiveOverlays) {
     return (
       <StatusBox variant="success">
-        No portfolio simulation to display — portfolio matches strategic
-        allocation with no active overlays
+        No portfolio simulation to display — enter a proposed overlay above or
+        apply active overlays to preview changes
       </StatusBox>
     );
   }
@@ -104,14 +114,25 @@ export default function PortfolioSimulationPanel({
     riskProfileName,
     strategicAllocations,
     currentTacticalOverlays: tacticalOverlays,
-    resetToStrategic: true,
+    proposedTacticalOverlays: hasProposedOverlay
+      ? buildProposedTacticalOverlays(
+          tacticalOverlays,
+          proposedDraft!,
+          riskProfileName
+        )
+      : undefined,
+    resetToStrategic: !hasProposedOverlay && hasActiveOverlays,
   });
+
+  const simulationMode = hasProposedOverlay
+    ? 'proposed tactical overlay'
+    : 'reset to strategic allocation';
 
   return (
     <div style={panel}>
       <h3 style={title}>Portfolio Simulation</h3>
       <StatusBox variant="neutral">
-        Simulation only — read-only preview of reset to strategic allocation
+        Simulation only — read-only preview of {simulationMode}
       </StatusBox>
 
       <div style={grid}>
