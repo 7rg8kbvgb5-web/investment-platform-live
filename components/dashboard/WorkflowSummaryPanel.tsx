@@ -3,6 +3,7 @@
 import type { ApprovalWorkflow } from '../../domain/types/approval';
 import type { ImplementationChecklist } from '../../domain/types/implementation';
 import type { Scenario } from '../../domain/types/scenario';
+import { formatIsoTimestampDisplay } from '../../lib/format-timestamp';
 import StatusBox from './StatusBox';
 
 type WorkflowSummaryPanelProps = {
@@ -12,17 +13,6 @@ type WorkflowSummaryPanelProps = {
   modelComparisonState: string;
   proposalGenerated: boolean;
 };
-
-function formatTimestamp(iso: string | null | undefined): string {
-  if (!iso) {
-    return '—';
-  }
-  try {
-    return new Date(iso).toLocaleString();
-  } catch {
-    return iso;
-  }
-}
 
 function checklistCompletionPercent(checklist: ImplementationChecklist): number {
   if (checklist.items.length === 0) {
@@ -106,7 +96,7 @@ export default function WorkflowSummaryPanel({
         <div style={metadataItem}>
           <span style={metadataLabel}>Last updated</span>
           <span style={metadataValue}>
-            {formatTimestamp(displayTimestamp)}
+            {formatIsoTimestampDisplay(displayTimestamp)}
           </span>
         </div>
       </div>

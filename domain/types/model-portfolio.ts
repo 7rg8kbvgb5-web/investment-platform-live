@@ -1,4 +1,5 @@
 import type { StrategicAllocation } from './allocation';
+import { PREVIEW_DATE } from '../../lib/format-timestamp';
 
 /** Allocation row within a model portfolio (reuses strategic allocation shape). */
 export type ModelPortfolioAllocationRow = StrategicAllocation;
@@ -33,6 +34,6 @@ export function buildModelPortfolioFromStrategic({
     riskProfile: riskProfileName,
     allocationRows,
     version,
-    createdDate: createdDate ?? new Date().toISOString().slice(0, 10),
+    createdDate: createdDate ?? PREVIEW_DATE,
   };
 }

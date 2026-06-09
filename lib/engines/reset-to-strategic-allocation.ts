@@ -3,6 +3,7 @@ import type {
   StrategicAllocation,
   TacticalOverlay,
 } from '../../domain/types/allocation';
+import { PREVIEW_TIMESTAMP } from '../format-timestamp';
 import { applyTacticalOverlays } from './apply-tactical-overlays';
 
 export type ResetToStrategicAllocationInput = {
@@ -38,7 +39,7 @@ export function resetToStrategicAllocation({
     metadata: {
       resetApplied: overlaysRemoved > 0,
       overlaysRemoved,
-      timestamp: new Date().toISOString(),
+      timestamp: PREVIEW_TIMESTAMP,
     },
   };
 }

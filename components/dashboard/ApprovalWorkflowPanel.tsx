@@ -1,22 +1,12 @@
 'use client';
 
 import type { ApprovalWorkflow } from '../../domain/types/approval';
+import { formatIsoTimestampDisplay } from '../../lib/format-timestamp';
 import StatusBox from './StatusBox';
 
 type ApprovalWorkflowPanelProps = {
   workflow: ApprovalWorkflow;
 };
-
-function formatTimestamp(iso: string | null): string {
-  if (!iso) {
-    return '—';
-  }
-  try {
-    return new Date(iso).toLocaleString();
-  } catch {
-    return iso;
-  }
-}
 
 export default function ApprovalWorkflowPanel({
   workflow,
@@ -53,7 +43,7 @@ export default function ApprovalWorkflowPanel({
         <div style={metadataItem}>
           <span style={metadataLabel}>Last updated</span>
           <span style={metadataValue}>
-            {formatTimestamp(workflow.timestamp)}
+            {formatIsoTimestampDisplay(workflow.timestamp)}
           </span>
         </div>
       </div>

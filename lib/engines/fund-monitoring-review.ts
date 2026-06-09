@@ -4,6 +4,7 @@ import type {
   FundMonitoringReviewInput,
   FundScoreProfile,
 } from '../../domain/types/fund-monitoring';
+import { PREVIEW_TIMESTAMP } from '../format-timestamp';
 
 /** Default lead (composite points) before an alternative triggers a review recommendation. */
 const DEFAULT_REVIEW_THRESHOLD = 5;
@@ -123,7 +124,7 @@ export function reviewFundMonitoring({
       requiresAdviserReview: true,
       currentCompositeScore,
       bestAlternativeCompositeScore,
-      timestamp: timestamp ?? new Date().toISOString(),
+      timestamp: timestamp ?? PREVIEW_TIMESTAMP,
     };
   }
 
@@ -142,6 +143,6 @@ export function reviewFundMonitoring({
     requiresAdviserReview: false,
     currentCompositeScore,
     bestAlternativeCompositeScore,
-    timestamp: timestamp ?? new Date().toISOString(),
+    timestamp: timestamp ?? PREVIEW_TIMESTAMP,
   };
 }

@@ -4,6 +4,7 @@ import type {
   TacticalOverlay,
 } from '../../domain/types/allocation';
 import type { PortfolioGovernanceSummary } from '../../domain/types/portfolio';
+import { PREVIEW_TIMESTAMP } from '../format-timestamp';
 import type { GrowthDefensiveTotals } from './calculate-growth-defensive-totals';
 import { buildPortfolioState } from './build-portfolio-state';
 import { resetToStrategicAllocation } from './reset-to-strategic-allocation';
@@ -191,7 +192,7 @@ export function simulatePortfolioChanges(
     warningSummaryAfter: toGovernanceSummary(simulatedState),
     metadata: {
       simulationApplied,
-      timestamp: new Date().toISOString(),
+      timestamp: PREVIEW_TIMESTAMP,
     },
   };
 }

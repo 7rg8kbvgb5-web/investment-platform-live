@@ -9,6 +9,7 @@ import {
   isProposedOverlayDraftComplete,
 } from '../../lib/engines/build-proposed-tactical-overlays';
 import { simulatePortfolioChanges } from '../../lib/engines/simulate-portfolio-changes';
+import { formatIsoTimestampDisplay } from '../../lib/format-timestamp';
 import StatusBox from './StatusBox';
 
 type PortfolioSimulationPanelProps = {
@@ -192,9 +193,9 @@ export default function PortfolioSimulationPanel({
         <StatusBox variant="success">No allocation weight changes</StatusBox>
       )}
 
-      <p style={timestamp}>
+      <p style={timestampStyle}>
         Simulated at:{' '}
-        {new Date(simulation.metadata.timestamp).toLocaleString()}
+        {formatIsoTimestampDisplay(simulation.metadata.timestamp)}
         {simulation.metadata.simulationApplied
           ? ' · changes would apply'
           : ' · no effective changes'}
@@ -294,7 +295,7 @@ const tableCell = {
   border: '1px solid #2d4a6b',
 };
 
-const timestamp = {
+const timestampStyle = {
   margin: '8px 0 0 0',
   fontSize: '14px',
   color: '#94a3b8',

@@ -1,20 +1,13 @@
 'use client';
 
 import type { Scenario, ScenarioStatus } from '../../domain/types/scenario';
+import { formatIsoTimestampDisplay } from '../../lib/format-timestamp';
 import StatusBox from './StatusBox';
 
 type ScenarioManagerPanelProps = {
   currentScenario: Scenario;
   savedScenarios?: Scenario[];
 };
-
-function formatTimestamp(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString();
-  } catch {
-    return iso;
-  }
-}
 
 export default function ScenarioManagerPanel({
   currentScenario,
@@ -48,7 +41,7 @@ export default function ScenarioManagerPanel({
         <div style={metadataItem}>
           <span style={metadataLabel}>Created</span>
           <span style={metadataValue}>
-            {formatTimestamp(currentScenario.createdTimestamp)}
+            {formatIsoTimestampDisplay(currentScenario.createdTimestamp)}
           </span>
         </div>
         <div style={metadataItem}>
@@ -67,7 +60,7 @@ export default function ScenarioManagerPanel({
         <div style={summaryBox}>
           <span style={metadataLabel}>Last simulation</span>
           <span style={metadataValue}>
-            {formatTimestamp(currentScenario.simulationSummary.timestamp)}
+            {formatIsoTimestampDisplay(currentScenario.simulationSummary.timestamp)}
           </span>
           <span style={summaryDetail}>
             {currentScenario.simulationSummary.allocationDifferenceCount}{' '}
@@ -107,7 +100,7 @@ export default function ScenarioManagerPanel({
                 <td style={tableCell}>{scenario.riskProfile}</td>
                 <td style={tableCell}>{scenario.status}</td>
                 <td style={tableCell}>
-                  {formatTimestamp(scenario.createdTimestamp)}
+                  {formatIsoTimestampDisplay(scenario.createdTimestamp)}
                 </td>
               </tr>
             ))}

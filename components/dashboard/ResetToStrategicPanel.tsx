@@ -3,6 +3,7 @@ import type {
   TacticalOverlay,
 } from '../../domain/types/allocation';
 import { resetToStrategicAllocation } from '../../lib/engines/reset-to-strategic-allocation';
+import { formatIsoTimestampDisplay } from '../../lib/format-timestamp';
 import StatusBox from './StatusBox';
 
 type ResetToStrategicPanelProps = {
@@ -49,8 +50,8 @@ export default function ResetToStrategicPanel({
         Reset available: {metadata.overlaysRemoved} active overlay
         {metadata.overlaysRemoved === 1 ? '' : 's'} would be removed
       </StatusBox>
-      <p style={timestamp}>
-        Simulated at: {new Date(metadata.timestamp).toLocaleString()}
+      <p style={timestampStyle}>
+        Simulated at: {formatIsoTimestampDisplay(metadata.timestamp)}
       </p>
     </div>
   );
@@ -66,7 +67,7 @@ const title = {
   fontWeight: 600,
 };
 
-const timestamp = {
+const timestampStyle = {
   margin: '0',
   fontSize: '14px',
   color: '#94a3b8',

@@ -1,5 +1,6 @@
 import type { ProposedOverlayDraft } from './allocation';
 import type { PortfolioGovernanceSummary } from './portfolio';
+import { PREVIEW_TIMESTAMP } from '../../lib/format-timestamp';
 
 export type ScenarioStatus = 'draft' | 'reviewed' | 'approved';
 
@@ -37,7 +38,7 @@ export function createDraftScenario({
     riskProfile,
     proposedOverlayDraft,
     simulationSummary,
-    createdTimestamp: new Date().toISOString(),
+    createdTimestamp: PREVIEW_TIMESTAMP,
     status: 'draft',
   };
 }
