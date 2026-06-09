@@ -11,6 +11,10 @@ import ResetToStrategicPanel from '../components/dashboard/ResetToStrategicPanel
 import PortfolioSimulationWorkflow from '../components/dashboard/PortfolioSimulationWorkflow';
 import StatusBox from '../components/dashboard/StatusBox';
 import FundMonitoringPanel from '../components/FundMonitoringPanel';
+import HouseViewPanel from '../components/HouseViewPanel';
+import MultiFundReviewDashboardPanel from '../components/MultiFundReviewDashboardPanel';
+import GovernanceAuditTrailPanel from '../components/GovernanceAuditTrailPanel';
+import InvestmentCommitteeDashboard from '../components/InvestmentCommitteeDashboard';
 
 export default async function Home() {
   const { data: profiles } = await supabase
@@ -97,6 +101,10 @@ export default async function Home() {
 
       <section style={profileCard}>
         <FundMonitoringPanel />
+        <HouseViewPanel />
+        <MultiFundReviewDashboardPanel />
+        <GovernanceAuditTrailPanel />
+        <InvestmentCommitteeDashboard />
       </section>
     </main>
   );

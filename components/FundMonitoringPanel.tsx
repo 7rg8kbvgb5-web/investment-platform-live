@@ -2,13 +2,32 @@
 
 import { useMemo, useState } from 'react';
 import type {
+  DeferredReview,
   FundAlternative,
   FundHolding,
   FundReviewAction,
-  FundReviewDecision,
+  FundReviewLifecycle,
+  FundReviewStatus,
 } from '../domain/types/fund-monitoring';
+import {
+  analyzeDeferredReviewQueue,
+  completeOpenDeferredReviews,
+  createDeferredReview,
+  formatDeferredReviewStatus,
+} from '../lib/engines/deferred-review-queue';
+import { analyzeFundReviewDecisionHistory } from '../lib/engines/fund-review-decision-history';
+import {
+  applyFundReviewDecision,
+  createFundReviewLifecycle,
+  formatFundReviewAction,
+  formatFundReviewStatus,
+} from '../lib/engines/fund-review-lifecycle';
 import { reviewFundMonitoring } from '../lib/engines/fund-monitoring-review';
-import { formatIsoTimestampDisplay } from '../lib/format-timestamp';
+import {
+  formatIsoTimestampDisplay,
+  PREVIEW_DATE,
+  PREVIEW_TIMESTAMP,
+} from '../lib/format-timestamp';
 import StatusBox from './dashboard/StatusBox';
 
 const MOCK_CURRENT_FUND: FundHolding = {
@@ -65,31 +84,48 @@ function formatRecommendation(
     : 'Retain current fund';
 }
 
-function formatReviewStatus(
-  requiresAdviserReview: boolean,
-  decision: FundReviewDecision | null
-): string {
-  if (decision) {
-    switch (decision.action) {
-      case 'accept':
-        return 'Accepted — pending implementation (local preview)';
-      case 'reject':
-        return 'Rejected — retain current fund (local preview)';
-      case 'defer':
-        return 'Deferred — review postponed (local preview)';
-      case 'request_more_research':
-        return 'More research requested (local preview)';
-    }
+function statusVariantForDeferredReview(
+  status: DeferredReview['status']
+): 'success' | 'warning' | 'neutral' {
+  switch (status) {
+    case 'Completed':
+      return 'success';
+    case 'Due Soon':
+    case 'Overdue':
+      return 'warning';
+    case 'Deferred':
+      return 'neutral';
   }
+}
 
-  return requiresAdviserReview
-    ? 'Pending adviser review'
-    : 'No review required';
+function statusVariantForLifecycle(
+  status: FundReviewStatus
+): 'success' | 'warning' | 'neutral' {
+  switch (status) {
+    case 'Accepted':
+    case 'Closed':
+      return 'success';
+    case 'Open':
+    case 'Under Review':
+    case 'Deferred':
+    case 'Research Requested':
+      return 'warning';
+    case 'Rejected':
+      return 'neutral';
+  }
+}
+
+function nextDecisionTimestamp(decisionCount: number): string {
+  const base = new Date(PREVIEW_TIMESTAMP);
+  base.setUTCMinutes(base.getUTCMinutes() + decisionCount);
+  return base.toISOString();
 }
 
 export default function FundMonitoringPanel() {
   const [rationale, setRationale] = useState('');
-  const [decision, setDecision] = useState<FundReviewDecision | null>(null);
+  const [selectedAction, setSelectedAction] = useState<FundReviewAction | null>(
+    null
+  );
 
   const review = useMemo(
     () =>
@@ -100,27 +136,68 @@ export default function FundMonitoringPanel() {
     []
   );
 
-  const reviewStatusVariant = decision
-    ? decision.action === 'accept'
-      ? 'success'
-      : decision.action === 'reject'
-        ? 'neutral'
-        : 'warning'
-    : review.requiresAdviserReview
-      ? 'warning'
-      : 'success';
+  const [lifecycle, setLifecycle] = useState<FundReviewLifecycle>(() =>
+    createFundReviewLifecycle(review)
+  );
+  const [deferredReviews, setDeferredReviews] = useState<DeferredReview[]>(
+    []
+  );
 
-  function handleAction(action: FundReviewAction) {
-    if (!rationale.trim()) {
+  const decisionHistory = useMemo(
+    () =>
+      analyzeFundReviewDecisionHistory({
+        decisions: lifecycle.decisions,
+        initialStatus: lifecycle.currentStatus,
+      }),
+    [lifecycle.decisions, lifecycle.currentStatus]
+  );
+
+  const deferredReviewQueue = useMemo(
+    () =>
+      analyzeDeferredReviewQueue({
+        reviews: deferredReviews,
+        currentDate: PREVIEW_DATE,
+      }),
+    [deferredReviews]
+  );
+
+  const actionsDisabled = decisionHistory.isLocked;
+
+  const reviewStatusVariant = statusVariantForLifecycle(lifecycle.currentStatus);
+
+  function handleRecordDecision() {
+    if (!selectedAction || !rationale.trim() || actionsDisabled) {
       return;
     }
 
-    setDecision({
-      action,
-      rationale: rationale.trim(),
-      decidedAt: new Date().toISOString(),
-      decidedBy: null,
-    });
+    const decisionTimestamp = nextDecisionTimestamp(lifecycle.decisions.length);
+
+    setLifecycle((current) =>
+      applyFundReviewDecision(current, {
+        action: selectedAction,
+        rationale: rationale.trim(),
+        timestamp: decisionTimestamp,
+      })
+    );
+
+    if (selectedAction === 'defer') {
+      setDeferredReviews((current) => [
+        ...current,
+        createDeferredReview({
+          reviewTitle: 'Best-in-Class Fund Review',
+          fundOrRecommendationName:
+            review.recommendedAlternativeName ?? review.currentFund.fundName,
+          deferralReason: rationale.trim(),
+          deferredDate: decisionTimestamp,
+          id: `deferred-${decisionTimestamp}-${current.length}`,
+        }),
+      ]);
+    } else if (deferredReviewQueue.openReviews.length > 0) {
+      setDeferredReviews((current) => completeOpenDeferredReviews(current));
+    }
+
+    setRationale('');
+    setSelectedAction(null);
   }
 
   return (
@@ -144,9 +221,9 @@ export default function FundMonitoringPanel() {
           </span>
         </div>
         <div style={metadataItem}>
-          <span style={metadataLabel}>Review status</span>
+          <span style={metadataLabel}>Current status</span>
           <span style={metadataValue}>
-            {formatReviewStatus(review.requiresAdviserReview, decision)}
+            {formatFundReviewStatus(lifecycle.currentStatus)}
           </span>
         </div>
         <div style={metadataItem}>
@@ -187,63 +264,159 @@ export default function FundMonitoringPanel() {
         </div>
       ) : null}
 
-      {decision ? (
+      {decisionHistory.sortedDecisions.length > 0 ? (
+        <div style={historySection}>
+          <h4 style={sectionTitle}>Decision history</h4>
+          <div style={tableWrap}>
+            <table style={table}>
+              <thead>
+                <tr>
+                  <th style={th}>Timestamp</th>
+                  <th style={th}>Action</th>
+                  <th style={th}>Status</th>
+                  <th style={th}>Rationale</th>
+                </tr>
+              </thead>
+              <tbody>
+                {decisionHistory.sortedDecisions.map((entry, index) => (
+                  <tr key={`${entry.decidedAt}-${entry.action}-${index}`}>
+                    <td style={td}>
+                      {formatIsoTimestampDisplay(entry.decidedAt)}
+                    </td>
+                    <td style={td}>{formatFundReviewAction(entry.action)}</td>
+                    <td style={td}>
+                      {formatFundReviewStatus(entry.status)}
+                    </td>
+                    <td style={td}>{entry.rationale}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
         <StatusBox variant="neutral">
-          Decision recorded locally: <strong>{decision.action}</strong> —{' '}
-          {decision.rationale} ({formatIsoTimestampDisplay(decision.decidedAt)})
+          No adviser decisions recorded yet — select an action and provide
+          rationale below.
         </StatusBox>
-      ) : null}
+      )}
 
-      <h4 style={sectionTitle}>Adviser workflow</h4>
-      <label style={fieldLabel}>
-        Rationale (required for all actions)
-        <textarea
-          style={textarea}
-          placeholder="Document rationale for client file or compliance..."
-          value={rationale}
-          onChange={(event) => setRationale(event.target.value)}
-          rows={3}
-        />
-      </label>
-
-      <div style={actionsRow}>
-        <button
-          type="button"
-          style={actionButtonAccept}
-          onClick={() => handleAction('accept')}
-          disabled={!rationale.trim()}
-        >
-          Accept
-        </button>
-        <button
-          type="button"
-          style={actionButtonReject}
-          onClick={() => handleAction('reject')}
-          disabled={!rationale.trim()}
-        >
-          Reject
-        </button>
-        <button
-          type="button"
-          style={actionButtonDefer}
-          onClick={() => handleAction('defer')}
-          disabled={!rationale.trim()}
-        >
-          Defer
-        </button>
-        <button
-          type="button"
-          style={actionButtonResearch}
-          onClick={() => handleAction('request_more_research')}
-          disabled={!rationale.trim()}
-        >
-          Request More Research
-        </button>
+      <div style={historySection}>
+        <h4 style={sectionTitle}>Deferred review queue</h4>
+        {deferredReviewQueue.sortedReviews.length > 0 ? (
+          <div style={tableWrap}>
+            <table style={table}>
+              <thead>
+                <tr>
+                  <th style={th}>Review</th>
+                  <th style={th}>Fund / recommendation</th>
+                  <th style={th}>Deferral reason</th>
+                  <th style={th}>Deferred date</th>
+                  <th style={th}>Review again</th>
+                  <th style={th}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {deferredReviewQueue.sortedReviews.map((entry) => (
+                  <tr key={entry.id}>
+                    <td style={td}>{entry.reviewTitle}</td>
+                    <td style={td}>{entry.fundOrRecommendationName}</td>
+                    <td style={td}>{entry.deferralReason}</td>
+                    <td style={td}>
+                      {formatIsoTimestampDisplay(entry.deferredDate)}
+                    </td>
+                    <td style={td}>{entry.reviewAgainDate}</td>
+                    <td style={td}>
+                      <span
+                        style={{
+                          color:
+                            statusVariantForDeferredReview(entry.status) ===
+                            'warning'
+                              ? '#fbbf24'
+                              : statusVariantForDeferredReview(entry.status) ===
+                                  'success'
+                                ? '#86efac'
+                                : '#94a3b8',
+                        }}
+                      >
+                        {formatDeferredReviewStatus(entry.status)}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <StatusBox variant="neutral">
+            No deferred reviews — choosing Defer with a rationale adds an item
+            to this queue for follow-up.
+          </StatusBox>
+        )}
       </div>
 
+      <h4 style={sectionTitle}>Adviser workflow</h4>
+
+      {actionsDisabled ? (
+        <StatusBox variant="success">
+          Review lifecycle is {formatFundReviewStatus(lifecycle.currentStatus)} —
+          no further actions available in this local preview.
+        </StatusBox>
+      ) : (
+        <>
+          <fieldset style={actionFieldset}>
+            <legend style={fieldLegend}>Select action</legend>
+            <div style={actionChoices}>
+              {(
+                [
+                  'accept',
+                  'reject',
+                  'defer',
+                  'request_more_research',
+                ] as FundReviewAction[]
+              ).map((action) => (
+                <label key={action} style={actionChoiceLabel}>
+                  <input
+                    type="radio"
+                    name="fund-review-action"
+                    value={action}
+                    checked={selectedAction === action}
+                    onChange={() => setSelectedAction(action)}
+                  />
+                  {formatFundReviewAction(action)}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          <label style={fieldLabel}>
+            Rationale (required)
+            <textarea
+              style={textarea}
+              placeholder="Document rationale for client file or compliance..."
+              value={rationale}
+              onChange={(event) => setRationale(event.target.value)}
+              rows={3}
+            />
+          </label>
+
+          <div style={actionsRow}>
+            <button
+              type="button"
+              style={recordButton}
+              onClick={handleRecordDecision}
+              disabled={!selectedAction || !rationale.trim()}
+            >
+              Record decision
+            </button>
+          </div>
+        </>
+      )}
+
       <p style={footnote}>
-        Last reviewed at {formatIsoTimestampDisplay(review.timestamp)} · decisions are
-        not persisted yet
+        Review generated at {formatIsoTimestampDisplay(review.timestamp)} · last
+        updated {formatIsoTimestampDisplay(lifecycle.lastUpdatedAt)} · decisions
+        are not persisted yet
       </p>
     </div>
   );
@@ -320,6 +493,64 @@ const alternativeNote = {
   color: '#94a3b8',
 };
 
+const historySection = {
+  marginBottom: '16px',
+};
+
+const tableWrap = {
+  overflowX: 'auto' as const,
+};
+
+const table = {
+  width: '100%',
+  borderCollapse: 'collapse' as const,
+  fontSize: '13px',
+};
+
+const th = {
+  textAlign: 'left' as const,
+  padding: '10px 12px',
+  borderBottom: '1px solid #334155',
+  color: '#94a3b8',
+  fontWeight: 600,
+  fontSize: '12px',
+  textTransform: 'uppercase' as const,
+  letterSpacing: '0.04em',
+};
+
+const td = {
+  padding: '10px 12px',
+  borderBottom: '1px solid #1e293b',
+  verticalAlign: 'top' as const,
+};
+
+const actionFieldset = {
+  border: '1px solid #334155',
+  borderRadius: '8px',
+  padding: '12px 16px',
+  margin: '0 0 16px 0',
+};
+
+const fieldLegend = {
+  padding: '0 6px',
+  fontSize: '13px',
+  color: '#94a3b8',
+};
+
+const actionChoices = {
+  display: 'flex',
+  flexWrap: 'wrap' as const,
+  gap: '12px 20px',
+};
+
+const actionChoiceLabel = {
+  display: 'flex',
+  alignItems: 'center' as const,
+  gap: '8px',
+  fontSize: '14px',
+  cursor: 'pointer',
+};
+
 const fieldLabel = {
   display: 'flex',
   flexDirection: 'column' as const,
@@ -346,40 +577,14 @@ const actionsRow = {
   gap: '10px',
 };
 
-const actionButtonBase = {
+const recordButton = {
   padding: '10px 16px',
   borderRadius: '8px',
   fontSize: '14px',
-  border: '1px solid',
-  cursor: 'pointer',
-};
-
-const actionButtonAccept = {
-  ...actionButtonBase,
-  background: '#0f3d2e',
-  borderColor: '#10b981',
-  color: '#86efac',
-};
-
-const actionButtonReject = {
-  ...actionButtonBase,
-  background: '#4a1520',
-  borderColor: '#ef4444',
-  color: '#fca5a5',
-};
-
-const actionButtonDefer = {
-  ...actionButtonBase,
-  background: '#5b2b12',
-  borderColor: '#d97706',
-  color: '#fcd34d',
-};
-
-const actionButtonResearch = {
-  ...actionButtonBase,
+  border: '1px solid #2d4a6b',
   background: '#12345b',
-  borderColor: '#2d4a6b',
   color: '#93c5fd',
+  cursor: 'pointer',
 };
 
 const footnote = {

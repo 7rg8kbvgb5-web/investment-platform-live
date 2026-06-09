@@ -31,11 +31,28 @@ export type FundReviewAction =
   | 'defer'
   | 'request_more_research';
 
+export type FundReviewStatus =
+  | 'Open'
+  | 'Under Review'
+  | 'Deferred'
+  | 'Accepted'
+  | 'Rejected'
+  | 'Research Requested'
+  | 'Closed';
+
 export type FundReviewDecision = {
   action: FundReviewAction;
   rationale: string;
   decidedAt: string;
+  status: FundReviewStatus;
   decidedBy?: string | null;
+};
+
+/** Tracks adviser decision lifecycle for a single fund monitoring review. */
+export type FundReviewLifecycle = {
+  currentStatus: FundReviewStatus;
+  decisions: FundReviewDecision[];
+  lastUpdatedAt: string;
 };
 
 export type FundMonitoringReview = {
@@ -59,4 +76,21 @@ export type FundMonitoringReviewInput = {
   /** Minimum composite score lead required to flag an alternative for review. */
   reviewThreshold?: number;
   timestamp?: string;
+};
+
+export type DeferredReviewStatus =
+  | 'Deferred'
+  | 'Due Soon'
+  | 'Overdue'
+  | 'Completed';
+
+/** A fund review deferred by an adviser for follow-up at a later date. */
+export type DeferredReview = {
+  id: string;
+  reviewTitle: string;
+  fundOrRecommendationName: string;
+  deferralReason: string;
+  deferredDate: string;
+  reviewAgainDate: string;
+  status: DeferredReviewStatus;
 };
