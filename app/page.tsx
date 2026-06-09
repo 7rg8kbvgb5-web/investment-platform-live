@@ -10,6 +10,7 @@ import OverlayGovernancePanel from '../components/dashboard/OverlayGovernancePan
 import ResetToStrategicPanel from '../components/dashboard/ResetToStrategicPanel';
 import PortfolioSimulationWorkflow from '../components/dashboard/PortfolioSimulationWorkflow';
 import StatusBox from '../components/dashboard/StatusBox';
+import FundMonitoringPanel from '../components/FundMonitoringPanel';
 
 export default async function Home() {
   const { data: profiles } = await supabase
@@ -93,6 +94,10 @@ export default async function Home() {
           </section>
         );
       })}
+
+      <section style={profileCard}>
+        <FundMonitoringPanel />
+      </section>
     </main>
   );
 }
