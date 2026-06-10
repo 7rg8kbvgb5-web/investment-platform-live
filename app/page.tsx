@@ -15,6 +15,8 @@ import HouseViewPanel from '../components/HouseViewPanel';
 import MultiFundReviewDashboardPanel from '../components/MultiFundReviewDashboardPanel';
 import GovernanceAuditTrailPanel from '../components/GovernanceAuditTrailPanel';
 import InvestmentCommitteeDashboard from '../components/InvestmentCommitteeDashboard';
+import AlertSummaryPanel from '../components/AlertSummaryPanel';
+import ResearchInboxPanel from '../components/ResearchInboxPanel';
 
 export default async function Home() {
   const { data: profiles } = await supabase
@@ -105,6 +107,8 @@ export default async function Home() {
         <MultiFundReviewDashboardPanel />
         <GovernanceAuditTrailPanel />
         <InvestmentCommitteeDashboard />
+        <AlertSummaryPanel />
+        <ResearchInboxPanel />
       </section>
     </main>
   );
