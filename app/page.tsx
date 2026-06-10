@@ -15,7 +15,9 @@ import HouseViewPanel from '../components/HouseViewPanel';
 import MultiFundReviewDashboardPanel from '../components/MultiFundReviewDashboardPanel';
 import GovernanceAuditTrailPanel from '../components/GovernanceAuditTrailPanel';
 import InvestmentCommitteeDashboard from '../components/InvestmentCommitteeDashboard';
+import MonitoringSummaryPanel from '../components/MonitoringSummaryPanel';
 import AlertSummaryPanel from '../components/AlertSummaryPanel';
+import AlertRulesPanel from '../components/AlertRulesPanel';
 import ResearchInboxPanel from '../components/ResearchInboxPanel';
 
 export default async function Home() {
@@ -107,7 +109,9 @@ export default async function Home() {
         <MultiFundReviewDashboardPanel />
         <GovernanceAuditTrailPanel />
         <InvestmentCommitteeDashboard />
+        <MonitoringSummaryPanel />
         <AlertSummaryPanel />
+        <AlertRulesPanel />
         <ResearchInboxPanel />
       </section>
     </main>

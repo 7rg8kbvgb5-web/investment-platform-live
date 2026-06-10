@@ -1,19 +1,17 @@
 'use client';
 
 import { useMemo } from 'react';
-import type { AlertSeverity, AlertStatus } from '../domain/types/alert';
+import type { AlertSeverity } from '../domain/types/alert';
 import {
-  formatAlertCategory,
-  formatAlertOrigin,
-  formatAlertSeverity,
-  formatAlertStatus,
-  generateCombinedAlerts,
-  summariseAlerts,
-} from '../lib/engines/alert-engine';
-import { formatIsoTimestampDisplay } from '../lib/format-timestamp';
+  formatAlertRuleEnabled,
+  formatAlertRuleKind,
+  getMockAlertRules,
+  summariseAlertRules,
+} from '../lib/engines/alert-rules-engine';
+import { formatAlertCategory, formatAlertSeverity } from '../lib/engines/alert-engine';
 import StatusBox from './dashboard/StatusBox';
 
-function severityVariantForAlert(
+function severityVariantForRule(
   severity: AlertSeverity
 ): 'success' | 'warning' | 'neutral' {
   switch (severity) {
@@ -27,118 +25,102 @@ function severityVariantForAlert(
   }
 }
 
-function statusVariantForAlert(
-  status: AlertStatus
-): 'success' | 'warning' | 'neutral' {
-  switch (status) {
-    case 'Resolved':
-      return 'success';
-    case 'Open':
-    case 'Acknowledged':
-      return 'warning';
-    case 'Dismissed':
-      return 'neutral';
-  }
+function enabledVariantForRule(enabled: boolean): 'success' | 'warning' | 'neutral' {
+  return enabled ? 'success' : 'neutral';
 }
 
-export default function AlertSummaryPanel() {
-  const alertResult = useMemo(() => {
-    const alerts = generateCombinedAlerts();
-    return summariseAlerts({ alerts });
+export default function AlertRulesPanel() {
+  const rulesResult = useMemo(() => {
+    const rules = getMockAlertRules();
+    return summariseAlertRules({ rules });
   }, []);
 
   return (
     <div style={panel}>
-      <h3 style={title}>Alert Summary</h3>
+      <h3 style={title}>Alert Rules</h3>
 
       <StatusBox variant="neutral">
-        Mock alert engine — local preview only. Combines static mock alerts with
-        rule-generated alerts from the alert rules engine. Items can feed the
-        research inbox workflow. No persistence or live external data feeds.
+        Configurable alert-generation rules — local preview only. Rules define
+        thresholds and review frequency for mock evaluation. No persistence or
+        live external data feeds.
       </StatusBox>
 
       <div style={summaryGrid}>
         <div style={summaryItem}>
-          <span style={summaryLabel}>Total alerts</span>
-          <span style={summaryValue}>{alertResult.summary.totalAlerts}</span>
+          <span style={summaryLabel}>Total rules</span>
+          <span style={summaryValue}>{rulesResult.summary.totalRules}</span>
         </div>
         <div style={summaryItem}>
-          <span style={summaryLabel}>Static mock</span>
-          <span style={summaryValue}>
-            {alertResult.summary.staticMockAlerts}
+          <span style={summaryLabel}>Enabled rules</span>
+          <span style={{ ...summaryValue, color: '#86efac' }}>
+            {rulesResult.summary.enabledRules}
           </span>
         </div>
         <div style={summaryItem}>
-          <span style={summaryLabel}>Rule-generated</span>
-          <span style={{ ...summaryValue, color: '#93c5fd' }}>
-            {alertResult.summary.ruleGeneratedAlerts}
+          <span style={summaryLabel}>Disabled rules</span>
+          <span style={{ ...summaryValue, color: '#94a3b8' }}>
+            {rulesResult.summary.disabledRules}
           </span>
         </div>
         <div style={summaryItem}>
-          <span style={summaryLabel}>Critical alerts</span>
-          <span style={{ ...summaryValue, color: '#f87171' }}>
-            {alertResult.summary.criticalAlerts}
-          </span>
-        </div>
-        <div style={summaryItem}>
-          <span style={summaryLabel}>High alerts</span>
+          <span style={summaryLabel}>Critical / high severity</span>
           <span style={{ ...summaryValue, color: '#fbbf24' }}>
-            {alertResult.summary.highAlerts}
-          </span>
-        </div>
-        <div style={summaryItem}>
-          <span style={summaryLabel}>Open alerts</span>
-          <span style={{ ...summaryValue, color: '#93c5fd' }}>
-            {alertResult.summary.openAlerts}
+            {rulesResult.summary.criticalOrHighSeverityRules}
           </span>
         </div>
       </div>
 
-      <h4 style={sectionTitle}>Active alerts</h4>
+      <h4 style={sectionTitle}>Rule catalogue</h4>
 
       <div style={tableWrap}>
         <table style={table}>
           <thead>
             <tr>
-              <th style={th}>Alert</th>
-              <th style={th}>Origin</th>
+              <th style={th}>Rule name</th>
               <th style={th}>Category</th>
               <th style={th}>Severity</th>
-              <th style={th}>Created date</th>
-              <th style={th}>Status</th>
+              <th style={th}>Enabled</th>
+              <th style={th}>Threshold / frequency</th>
+              <th style={th}>Description</th>
             </tr>
           </thead>
           <tbody>
-            {alertResult.sortedAlerts.map((alert) => (
-              <tr key={alert.id}>
+            {rulesResult.sortedRules.map((rule) => (
+              <tr key={rule.id}>
                 <td style={td}>
-                  <div style={alertCell}>
-                    <span style={alertTitle}>{alert.title}</span>
-                    <span style={alertSummary}>{alert.summary}</span>
+                  <div style={ruleCell}>
+                    <span style={ruleName}>{rule.name}</span>
+                    <span style={ruleKind}>{formatAlertRuleKind(rule.kind)}</span>
+                  </div>
+                </td>
+                <td style={td}>{formatAlertCategory(rule.category)}</td>
+                <td style={td}>
+                  <span style={badge(severityVariantForRule(rule.severity))}>
+                    {formatAlertSeverity(rule.severity)}
+                  </span>
+                </td>
+                <td style={td}>
+                  <span style={badge(enabledVariantForRule(rule.enabled))}>
+                    {formatAlertRuleEnabled(rule.enabled)}
+                  </span>
+                </td>
+                <td style={td}>
+                  <div style={thresholdCell}>
+                    {rule.threshold ? (
+                      <span style={thresholdLine}>Threshold: {rule.threshold}</span>
+                    ) : null}
+                    {rule.reviewFrequency ? (
+                      <span style={thresholdLine}>
+                        Frequency: {rule.reviewFrequency}
+                      </span>
+                    ) : null}
+                    {!rule.threshold && !rule.reviewFrequency ? (
+                      <span style={thresholdLine}>—</span>
+                    ) : null}
                   </div>
                 </td>
                 <td style={td}>
-                  <span
-                    style={badge(
-                      alert.origin === 'rule_generated' ? 'neutral' : 'success'
-                    )}
-                  >
-                    {formatAlertOrigin(alert.origin)}
-                  </span>
-                </td>
-                <td style={td}>{formatAlertCategory(alert.category)}</td>
-                <td style={td}>
-                  <span style={badge(severityVariantForAlert(alert.severity))}>
-                    {formatAlertSeverity(alert.severity)}
-                  </span>
-                </td>
-                <td style={td}>
-                  {formatIsoTimestampDisplay(alert.createdAt)}
-                </td>
-                <td style={td}>
-                  <span style={badge(statusVariantForAlert(alert.status))}>
-                    {formatAlertStatus(alert.status)}
-                  </span>
+                  <span style={descriptionText}>{rule.description}</span>
                 </td>
               </tr>
             ))}
@@ -222,19 +204,37 @@ const td = {
   verticalAlign: 'top' as const,
 };
 
-const alertCell = {
+const ruleCell = {
   display: 'flex',
   flexDirection: 'column' as const,
-  gap: '6px',
+  gap: '4px',
 };
 
-const alertTitle = {
+const ruleName = {
   fontWeight: 600,
 };
 
-const alertSummary = {
+const ruleKind = {
+  fontSize: '12px',
+  color: '#64748b',
+};
+
+const thresholdCell = {
+  display: 'flex',
+  flexDirection: 'column' as const,
+  gap: '4px',
   fontSize: '12px',
   color: '#94a3b8',
+};
+
+const thresholdLine = {
+  display: 'block',
+};
+
+const descriptionText = {
+  fontSize: '13px',
+  color: '#cbd5e1',
+  lineHeight: 1.5,
 };
 
 function badge(variant: 'success' | 'warning' | 'neutral') {

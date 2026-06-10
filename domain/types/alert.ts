@@ -14,6 +14,9 @@ export type AlertSeverity = 'Low' | 'Medium' | 'High' | 'Critical';
 /** Lifecycle status of an alert before inbox conversion. */
 export type AlertStatus = 'Open' | 'Acknowledged' | 'Resolved' | 'Dismissed';
 
+/** How the alert was produced by the alert engine. */
+export type AlertOrigin = 'static_mock' | 'rule_generated';
+
 /** A platform alert that may feed the research inbox workflow. */
 export type Alert = {
   id: string;
@@ -22,9 +25,13 @@ export type Alert = {
   category: AlertCategory;
   severity: AlertSeverity;
   status: AlertStatus;
+  /** Static mock data or output from alert rule evaluation. */
+  origin: AlertOrigin;
   /** ISO timestamp when the alert was created. */
   createdAt: string;
   relatedEntityId?: string | null;
+  /** When origin is rule_generated, the source alert rule id. */
+  sourceRuleId?: string | null;
 };
 
 export type AlertInput = {
@@ -39,6 +46,8 @@ export type AlertSummary = {
   acknowledgedAlerts: number;
   resolvedAlerts: number;
   dismissedAlerts: number;
+  staticMockAlerts: number;
+  ruleGeneratedAlerts: number;
 };
 
 export type AlertEngineResult = {

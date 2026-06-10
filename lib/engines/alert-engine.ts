@@ -3,6 +3,7 @@ import type {
   AlertCategory,
   AlertEngineResult,
   AlertInput,
+  AlertOrigin,
   AlertSeverity,
   AlertStatus,
   AlertSummary,
@@ -14,6 +15,10 @@ import type {
   ResearchInboxSourceType,
   ResearchInboxStatus,
 } from '../../domain/types/research-inbox';
+import {
+  evaluateAlertRules,
+  getMockAlertRules,
+} from './alert-rules-engine';
 
 /** Stable mock alerts for local preview. */
 export const MOCK_ALERTS: Alert[] = [
@@ -25,6 +30,7 @@ export const MOCK_ALERTS: Alert[] = [
     category: 'Fund Performance',
     severity: 'High',
     status: 'Open',
+    origin: 'static_mock',
     createdAt: '2026-06-09T07:15:00.000Z',
     relatedEntityId: 'fr-global-quality',
   },
@@ -36,6 +42,7 @@ export const MOCK_ALERTS: Alert[] = [
     category: 'House View Review',
     severity: 'Medium',
     status: 'Open',
+    origin: 'static_mock',
     createdAt: '2026-06-08T09:00:00.000Z',
     relatedEntityId: 'hv-australian-equities',
   },
@@ -47,6 +54,7 @@ export const MOCK_ALERTS: Alert[] = [
     category: 'Portfolio Drift',
     severity: 'Critical',
     status: 'Open',
+    origin: 'static_mock',
     createdAt: '2026-06-08T11:30:00.000Z',
     relatedEntityId: 'portfolio-balanced',
   },
@@ -58,6 +66,7 @@ export const MOCK_ALERTS: Alert[] = [
     category: 'Governance Review',
     severity: 'High',
     status: 'Open',
+    origin: 'static_mock',
     createdAt: '2026-06-07T14:00:00.000Z',
     relatedEntityId: 'fr-private-credit',
   },
@@ -69,6 +78,7 @@ export const MOCK_ALERTS: Alert[] = [
     category: 'Fund Manager Change',
     severity: 'Critical',
     status: 'Acknowledged',
+    origin: 'static_mock',
     createdAt: '2026-06-06T16:45:00.000Z',
     relatedEntityId: 'fr-infrastructure',
   },
@@ -80,6 +90,7 @@ export const MOCK_ALERTS: Alert[] = [
     category: 'Compliance Review',
     severity: 'Medium',
     status: 'Open',
+    origin: 'static_mock',
     createdAt: '2026-06-05T10:00:00.000Z',
     relatedEntityId: null,
   },
@@ -91,6 +102,7 @@ export const MOCK_ALERTS: Alert[] = [
     category: 'Research Review',
     severity: 'Low',
     status: 'Resolved',
+    origin: 'static_mock',
     createdAt: '2026-06-04T08:20:00.000Z',
     relatedEntityId: 'hv-gold',
   },
@@ -115,6 +127,47 @@ function severityRank(severity: AlertSeverity): number {
 
 export function generateMockAlerts(): Alert[] {
   return MOCK_ALERTS.map((alert) => ({ ...alert }));
+}
+
+function getAlertDedupKey(alert: Alert): string {
+  return `${alert.category}|${alert.relatedEntityId ?? alert.id}`;
+}
+
+/**
+ * Merges static mock alerts with rule-generated alerts.
+ * Skips rule alerts that duplicate an existing static alert by category and entity.
+ * Does not mutate inputs.
+ */
+export function mergeStaticAndRuleGeneratedAlerts(
+  staticAlerts: Alert[],
+  ruleGeneratedAlerts: Alert[]
+): Alert[] {
+  const staticKeys = new Set(staticAlerts.map(getAlertDedupKey));
+  const uniqueRuleAlerts = ruleGeneratedAlerts.filter(
+    (alert) => !staticKeys.has(getAlertDedupKey(alert))
+  );
+
+  return [
+    ...staticAlerts.map((alert) => ({ ...alert })),
+    ...uniqueRuleAlerts.map((alert) => ({ ...alert })),
+  ];
+}
+
+/**
+ * Returns static mock alerts combined with alerts generated from enabled alert rules.
+ * Rule output is evaluated via the alert rules engine. Duplicates are excluded.
+ */
+export function generateCombinedAlerts(): Alert[] {
+  const staticAlerts = generateMockAlerts();
+  const { generatedAlerts } = evaluateAlertRules({
+    rules: getMockAlertRules(),
+  });
+
+  return mergeStaticAndRuleGeneratedAlerts(staticAlerts, generatedAlerts);
+}
+
+export function formatAlertOrigin(origin: AlertOrigin): string {
+  return origin === 'static_mock' ? 'Static Mock Alert' : 'Rule-Generated Alert';
 }
 
 export function formatAlertCategory(category: AlertCategory): string {
@@ -162,6 +215,11 @@ function buildAlertSummary(alerts: Alert[]): AlertSummary {
       .length,
     dismissedAlerts: alerts.filter((alert) => alert.status === 'Dismissed')
       .length,
+    staticMockAlerts: alerts.filter((alert) => alert.origin === 'static_mock')
+      .length,
+    ruleGeneratedAlerts: alerts.filter(
+      (alert) => alert.origin === 'rule_generated'
+    ).length,
   };
 }
 

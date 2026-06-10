@@ -11,7 +11,7 @@ import type {
 } from '../../domain/types/research-inbox';
 import {
   convertAlertToResearchInboxItem,
-  generateMockAlerts,
+  generateCombinedAlerts,
 } from './alert-engine';
 
 /** Stable mock research inbox items for local preview. */
@@ -178,7 +178,7 @@ export function mergeAlertsIntoResearchInbox(
 export function getCombinedResearchInboxItems(): ResearchInboxItem[] {
   return mergeAlertsIntoResearchInbox(
     getMockResearchInboxItems(),
-    generateMockAlerts()
+    generateCombinedAlerts()
   );
 }
 
