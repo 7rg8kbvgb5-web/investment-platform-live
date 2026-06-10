@@ -1,140 +1,21 @@
-import { supabase } from '../lib/supabase';
-import { buildPortfolioState } from '../lib/engines/build-portfolio-state';
-import DashboardHero from '../components/dashboard/DashboardHero';
-import ProfileCardHeader from '../components/dashboard/ProfileCardHeader';
-import ProfileSummaryGrid from '../components/dashboard/ProfileSummaryGrid';
-import ProfileChartsSection from '../components/dashboard/ProfileChartsSection';
-import ProfileAllocationTable from '../components/dashboard/ProfileAllocationTable';
-import GuardrailsPanel from '../components/dashboard/GuardrailsPanel';
-import OverlayGovernancePanel from '../components/dashboard/OverlayGovernancePanel';
-import ResetToStrategicPanel from '../components/dashboard/ResetToStrategicPanel';
-import PortfolioSimulationWorkflow from '../components/dashboard/PortfolioSimulationWorkflow';
-import StatusBox from '../components/dashboard/StatusBox';
-import FundMonitoringPanel from '../components/FundMonitoringPanel';
-import FundReviewResearchWorkflow from '../components/FundReviewResearchWorkflow';
-import FundReviewAuditTrailPanel from '../components/FundReviewAuditTrailPanel';
-import HouseViewPanel from '../components/HouseViewPanel';
-import MultiFundReviewDashboardPanel from '../components/MultiFundReviewDashboardPanel';
-import GovernanceAuditTrailPanel from '../components/GovernanceAuditTrailPanel';
-import InvestmentCommitteeDashboard from '../components/InvestmentCommitteeDashboard';
+import PageContent from '../components/PageContent';
+import FundResearchLifecyclePanel from '../components/FundResearchLifecyclePanel';
 import MonitoringSummaryPanel from '../components/MonitoringSummaryPanel';
-import AlertSummaryPanel from '../components/AlertSummaryPanel';
-import AlertRulesPanel from '../components/AlertRulesPanel';
-import ResearchInboxPanel from '../components/ResearchInboxPanel';
+import SystemStatusPanel from '../components/SystemStatusPanel';
+import DashboardHero from '../components/dashboard/DashboardHero';
 
-export default async function Home() {
-  const { data: profiles } = await supabase
-    .from('risk_profiles')
-    .select('*')
-    .order('id');
-
-  const { data: overlays } = await supabase
-    .from('tactical_overlays')
-    .select('*')
-    .order('id');
-
-  const { data: allocations } = await supabase
-    .from('strategic_allocations')
-    .select('*')
-    .order('id');
-
+export default function Home() {
   return (
-    <main style={page}>
+    <>
       <DashboardHero />
-
-      {profiles?.map((profile) => {
-        const {
-          adjustedAllocations: profileAllocations,
-          totalWeight,
-          growthTotal,
-          defensiveTotal,
-          status,
-          guardrailWarnings,
-          tacticalOverlayDateWarnings,
-        } = buildPortfolioState({
-          riskProfileName: profile.name,
-          strategicAllocations: allocations || [],
-          tacticalOverlays: overlays || [],
-        });
-
-        return (
-          <section key={profile.id} style={profileCard}>
-            <ProfileCardHeader
-              name={profile.name}
-              description={profile.description}
-              growthAssets={profile.growth_assets}
-              defensiveAssets={profile.defensive_assets}
-            />
-
-            <ProfileSummaryGrid
-              totalWeight={totalWeight}
-              growthTotal={growthTotal}
-              defensiveTotal={defensiveTotal}
-              status={status}
-            />
-
-            {profileAllocations.length === 0 ? (
-              <StatusBox variant="warning">
-                No allocation rows found for this risk profile.
-              </StatusBox>
-            ) : (
-              <>
-                <ProfileChartsSection
-                  allocations={profileAllocations}
-                  growthTotal={growthTotal}
-                  defensiveTotal={defensiveTotal}
-                />
-
-                <ProfileAllocationTable allocations={profileAllocations} />
-              </>
-            )}
-
-            <GuardrailsPanel warnings={guardrailWarnings} />
-            <OverlayGovernancePanel warnings={tacticalOverlayDateWarnings} />
-            <ResetToStrategicPanel
-              strategicAllocations={allocations || []}
-              tacticalOverlays={overlays || []}
-              riskProfileName={profile.name}
-            />
-            <PortfolioSimulationWorkflow
-              strategicAllocations={allocations || []}
-              tacticalOverlays={overlays || []}
-              riskProfileName={profile.name}
-            />
-          </section>
-        );
-      })}
-
-      <section style={profileCard}>
-        <HouseViewPanel />
-        <MultiFundReviewDashboardPanel />
-        <GovernanceAuditTrailPanel />
-        <InvestmentCommitteeDashboard />
-        <FundMonitoringPanel />
-        <FundReviewResearchWorkflow />
-        <FundReviewAuditTrailPanel />
+      <PageContent
+        title="Dashboard Overview"
+        description="Executive snapshot of fund research lifecycle and unified monitoring status."
+      >
+        <SystemStatusPanel />
         <MonitoringSummaryPanel />
-        <AlertSummaryPanel />
-        <AlertRulesPanel />
-        <ResearchInboxPanel />
-      </section>
-    </main>
+        <FundResearchLifecyclePanel />
+      </PageContent>
+    </>
   );
 }
-
-const page = {
-  padding: '40px',
-  fontFamily: 'Arial',
-  background: '#04142b',
-  minHeight: '100vh',
-  color: 'white',
-};
-
-const profileCard = {
-  marginBottom: '35px',
-  padding: '30px',
-  background: '#0b2342',
-  borderRadius: '18px',
-  border: '1px solid #2d4a6b',
-};
-
