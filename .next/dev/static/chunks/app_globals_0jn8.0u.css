@@ -24,6 +24,7 @@ body {
 }
 
 .shell {
+  background: linear-gradient(135deg, #080d1a, #111a31);
   min-height: 100vh;
   display: flex;
 }
@@ -31,36 +32,142 @@ body {
 .sidebar {
   border-right: 1px solid var(--line);
   background: #091022;
-  width: 260px;
+  flex-direction: column;
+  width: 280px;
+  min-width: 280px;
   height: 100vh;
-  padding: 24px;
+  padding: 24px 18px;
+  display: flex;
   position: sticky;
   top: 0;
+  overflow-y: auto;
+}
+
+.sidebar-header {
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 24px;
+  padding: 0 6px 20px;
 }
 
 .brand {
-  margin-bottom: 28px;
-  font-size: 22px;
+  letter-spacing: -.01em;
+  font-size: 20px;
   font-weight: 700;
+  line-height: 1.25;
 }
 
-.nav a {
+.brand-tagline {
   color: var(--muted);
-  border-radius: 10px;
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.nav-section-label {
+  color: var(--muted);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  margin: 0 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.nav-link {
+  color: var(--muted);
+  border: 1px solid #0000;
+  border-radius: 12px;
+  align-items: flex-start;
+  gap: 12px;
   margin: 4px 0;
-  padding: 12px 10px;
+  padding: 10px 12px;
   text-decoration: none;
+  transition: background .15s, border-color .15s, color .15s;
+  display: flex;
+  position: relative;
+}
+
+.nav-link-icon {
+  opacity: .85;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+}
+
+.nav-link-icon svg {
+  width: 100%;
+  height: 100%;
   display: block;
 }
 
-.nav a.active, .nav a:hover {
+.nav-link-text {
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  display: flex;
+}
+
+.nav-link-label {
+  color: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.nav-link-description {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.nav-link:hover {
   background: var(--panel2);
+  border-color: var(--line);
   color: var(--text);
+}
+
+.nav-link:hover .nav-link-description {
+  color: #b8c0d0;
+}
+
+.nav-link.active {
+  color: var(--text);
+  box-shadow: inset 3px 0 0 var(--blue);
+  background: linear-gradient(135deg, #19233d, #1f2d4d);
+  border-color: #3d5a8a;
+}
+
+.nav-link.active .nav-link-icon {
+  color: var(--blue);
+  opacity: 1;
+}
+
+.nav-link.active .nav-link-description {
+  color: #b8c8e8;
+}
+
+.nav-link-indicator {
+  background: var(--blue);
+  border-radius: 999px;
+  width: 8px;
+  height: 8px;
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  box-shadow: 0 0 0 3px #6ea8fe33;
 }
 
 .main {
   flex: 1;
-  padding: 28px;
+  min-width: 0;
+  padding: 28px 32px 48px;
+}
+
+.main-inner {
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
 }
 
 .topbar {
@@ -176,14 +283,81 @@ textarea {
   margin-bottom: 18px;
 }
 
+@media (max-width: 1100px) {
+  .sidebar {
+    width: 240px;
+    min-width: 240px;
+  }
+
+  .nav-link-description {
+    display: none;
+  }
+}
+
 @media (max-width: 900px) {
   .shell {
-    display: block;
+    flex-direction: column;
   }
 
   .sidebar {
-    width: auto;
+    z-index: 10;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    width: 100%;
+    min-width: 0;
     height: auto;
+    padding: 16px;
+    position: sticky;
+    top: 0;
+  }
+
+  .sidebar-header {
+    margin-bottom: 12px;
+    padding: 0 4px 12px;
+  }
+
+  .brand {
+    font-size: 18px;
+  }
+
+  .brand-tagline {
+    font-size: 12px;
+  }
+
+  .nav-section-label {
+    display: none;
+  }
+
+  .nav {
+    scrollbar-width: thin;
+    gap: 8px;
+    padding-bottom: 4px;
+    display: flex;
+    overflow-x: auto;
+  }
+
+  .nav-link {
+    min-width: 140px;
+    box-shadow: none;
+    flex: none;
+    margin: 0;
+    padding: 10px 12px;
+  }
+
+  .nav-link.active {
+    box-shadow: inset 0 -3px 0 var(--blue);
+  }
+
+  .nav-link-indicator {
+    display: none;
+  }
+
+  .nav-link-description {
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    max-width: 120px;
+    display: block;
+    overflow: hidden;
   }
 
   .grid.cols3, .grid.cols2 {
@@ -191,7 +365,22 @@ textarea {
   }
 
   .main {
-    padding: 18px;
+    padding: 18px 16px 32px;
+  }
+}
+
+@media (max-width: 600px) {
+  .nav-link {
+    min-width: 120px;
+    padding: 8px 10px;
+  }
+
+  .nav-link-label {
+    font-size: 13px;
+  }
+
+  .nav-link-description {
+    display: none;
   }
 }
 

@@ -1,6 +1,2 @@
-{"timestamp":"00:00:02.578","source":"Server","level":"LOG","message":""}
-{"timestamp":"00:00:13.633","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
-{"timestamp":"00:03:34.156","source":"Server","level":"LOG","message":"✓ Compiled in 121ms"}
-{"timestamp":"00:03:35.573","source":"Server","level":"LOG","message":"✓ Compiled in 435ms"}
-{"timestamp":"00:03:37.548","source":"Server","level":"LOG","message":"✓ Compiled in 133ms"}
-{"timestamp":"00:03:38.667","source":"Browser","level":"ERROR","message":"uncaughtError: SyntaxError: Unexpected identifier 'color'"}
+{"timestamp":"00:00:01.900","source":"Server","level":"LOG","message":""}
+{"timestamp":"00:00:03.059","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
