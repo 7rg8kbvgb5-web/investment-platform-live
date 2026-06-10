@@ -1,4 +1,4 @@
-import type { Alert } from '../../domain/types/alert';
+import type { Alert, AlertOrigin } from '../../domain/types/alert';
 import type {
   ResearchInboxItem,
   ResearchInboxInput,
@@ -13,6 +13,11 @@ import {
   convertAlertToResearchInboxItem,
   generateCombinedAlerts,
 } from './alert-engine';
+import {
+  convertResearchRequestToInboxItem,
+  getMockResearchRequests,
+} from './research-request';
+import type { ResearchRequest } from '../../domain/types/research-request';
 
 /** Stable mock research inbox items for local preview. */
 export const MOCK_RESEARCH_INBOX_ITEMS: ResearchInboxItem[] = [
@@ -155,6 +160,20 @@ function collectCoveredAlertIds(items: ResearchInboxItem[]): Set<string> {
   return covered;
 }
 
+function collectCoveredResearchRequestIds(
+  items: ResearchInboxItem[]
+): Set<string> {
+  const covered = new Set<string>();
+
+  for (const item of items) {
+    if (item.sourceResearchRequestId) {
+      covered.add(item.sourceResearchRequestId);
+    }
+  }
+
+  return covered;
+}
+
 /**
  * Merges manual inbox items with alert-generated items.
  * Skips alerts already represented by a manual item via sourceAlertId.
@@ -173,12 +192,41 @@ export function mergeAlertsIntoResearchInbox(
 }
 
 /**
- * Returns mock manual items combined with alert-engine generated inbox items.
+ * Merges research-request-generated items into the inbox.
+ * Skips requests already represented by a manual item via sourceResearchRequestId.
+ * Excludes completed and cancelled requests from active inbox flow.
+ * Does not mutate inputs.
+ */
+export function mergeResearchRequestsIntoResearchInbox(
+  items: ResearchInboxItem[],
+  requests: ResearchRequest[]
+): ResearchInboxItem[] {
+  const coveredRequestIds = collectCoveredResearchRequestIds(items);
+  const requestItems = requests
+    .filter(
+      (request) =>
+        request.status !== 'Completed' &&
+        request.status !== 'Cancelled' &&
+        !coveredRequestIds.has(request.id)
+    )
+    .map((request) => convertResearchRequestToInboxItem(request));
+
+  return [...items.map((item) => ({ ...item })), ...requestItems];
+}
+
+/**
+ * Returns mock manual items combined with alert-engine and research-request
+ * generated inbox items.
  */
 export function getCombinedResearchInboxItems(): ResearchInboxItem[] {
-  return mergeAlertsIntoResearchInbox(
+  const withAlerts = mergeAlertsIntoResearchInbox(
     getMockResearchInboxItems(),
     generateCombinedAlerts()
+  );
+
+  return mergeResearchRequestsIntoResearchInbox(
+    withAlerts,
+    getMockResearchRequests()
   );
 }
 
@@ -205,9 +253,27 @@ export function formatResearchInboxItemType(
 }
 
 export function formatResearchInboxItemOrigin(
-  origin: ResearchInboxItemOrigin
+  origin: ResearchInboxItemOrigin,
+  sourceAlertOrigin?: AlertOrigin | null,
+  sourceResearchRequestId?: string | null
 ): string {
-  return origin === 'system' ? 'Alert Engine' : 'Manual';
+  if (origin === 'manual') {
+    return 'Manual';
+  }
+
+  if (sourceResearchRequestId) {
+    return 'Research Request';
+  }
+
+  if (sourceAlertOrigin === 'fund_monitoring') {
+    return 'Fund Monitoring';
+  }
+
+  if (sourceAlertOrigin === 'rule_generated') {
+    return 'Rule-Generated Alert';
+  }
+
+  return 'Alert Engine';
 }
 
 /**
@@ -248,6 +314,9 @@ export function analyzeResearchInbox({
         .length,
       manualItems: sortedItems.filter((item) => item.origin === 'manual')
         .length,
+      researchRequestItems: sortedItems.filter(
+        (item) => item.sourceResearchRequestId != null
+      ).length,
     },
   };
 }

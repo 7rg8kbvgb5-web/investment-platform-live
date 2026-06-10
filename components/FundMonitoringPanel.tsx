@@ -5,10 +5,19 @@ import type {
   DeferredReview,
   FundAlternative,
   FundHolding,
+  FundMonitoringStatus,
   FundReviewAction,
   FundReviewLifecycle,
+  FundReviewPriority,
   FundReviewStatus,
 } from '../domain/types/fund-monitoring';
+import {
+  assessMonitoredFunds,
+  formatFundMonitoringStatus,
+  formatFundReviewPriority,
+  formatFundReviewReason,
+  getMockMonitoredFunds,
+} from '../lib/engines/fund-monitoring';
 import {
   analyzeDeferredReviewQueue,
   completeOpenDeferredReviews,
@@ -98,6 +107,35 @@ function statusVariantForDeferredReview(
   }
 }
 
+function statusVariantForMonitoringStatus(
+  status: FundMonitoringStatus
+): 'success' | 'warning' | 'neutral' {
+  switch (status) {
+    case 'Current':
+    case 'Archived':
+      return 'success';
+    case 'Watch':
+    case 'Review Required':
+      return 'warning';
+    case 'Replacement Candidate':
+      return 'neutral';
+  }
+}
+
+function statusVariantForReviewPriority(
+  priority: FundReviewPriority
+): 'success' | 'warning' | 'neutral' {
+  switch (priority) {
+    case 'Low':
+      return 'success';
+    case 'Medium':
+      return 'neutral';
+    case 'High':
+    case 'Critical':
+      return 'warning';
+  }
+}
+
 function statusVariantForLifecycle(
   status: FundReviewStatus
 ): 'success' | 'warning' | 'neutral' {
@@ -125,6 +163,11 @@ export default function FundMonitoringPanel() {
   const [rationale, setRationale] = useState('');
   const [selectedAction, setSelectedAction] = useState<FundReviewAction | null>(
     null
+  );
+
+  const monitoredFundsResult = useMemo(
+    () => assessMonitoredFunds(getMockMonitoredFunds(), PREVIEW_DATE),
+    []
   );
 
   const review = useMemo(
@@ -202,7 +245,113 @@ export default function FundMonitoringPanel() {
 
   return (
     <div style={panel}>
-      <h3 style={title}>Fund Monitoring & Best-in-Class Review</h3>
+      <h3 style={title}>Model Portfolio Fund Monitoring</h3>
+
+      <StatusBox variant="neutral">
+        Monitors funds used in model portfolios for ongoing suitability and
+        best-in-class review. Mock data only — recommendations require adviser
+        sign-off; no automatic fund replacement.
+      </StatusBox>
+
+      <div style={summaryGrid}>
+        <div style={summaryItem}>
+          <span style={summaryLabel}>Total monitored funds</span>
+          <span style={summaryValue}>
+            {monitoredFundsResult.summary.totalMonitoredFunds}
+          </span>
+        </div>
+        <div style={summaryItem}>
+          <span style={summaryLabel}>Funds on watch</span>
+          <span style={{ ...summaryValue, color: '#fbbf24' }}>
+            {monitoredFundsResult.summary.fundsOnWatch}
+          </span>
+        </div>
+        <div style={summaryItem}>
+          <span style={summaryLabel}>Review required</span>
+          <span style={{ ...summaryValue, color: '#fbbf24' }}>
+            {monitoredFundsResult.summary.reviewRequired}
+          </span>
+        </div>
+        <div style={summaryItem}>
+          <span style={summaryLabel}>Replacement candidates</span>
+          <span style={{ ...summaryValue, color: '#93c5fd' }}>
+            {monitoredFundsResult.summary.replacementCandidates}
+          </span>
+        </div>
+        <div style={summaryItem}>
+          <span style={summaryLabel}>Critical / high priority</span>
+          <span style={{ ...summaryValue, color: '#f87171' }}>
+            {monitoredFundsResult.summary.criticalPriorityReviews} /{' '}
+            {monitoredFundsResult.summary.highPriorityReviews}
+          </span>
+        </div>
+      </div>
+
+      <h4 style={sectionTitle}>Monitored funds</h4>
+
+      <div style={tableWrap}>
+        <table style={table}>
+          <thead>
+            <tr>
+              <th style={th}>Fund</th>
+              <th style={th}>Asset class</th>
+              <th style={th}>Status</th>
+              <th style={th}>Review priority</th>
+              <th style={th}>Review reason</th>
+              <th style={th}>Last reviewed</th>
+              <th style={th}>Next review</th>
+              <th style={th}>Suggested replacement</th>
+            </tr>
+          </thead>
+          <tbody>
+            {monitoredFundsResult.assessments.map(({ fund, isReviewOverdue }) => (
+              <tr key={fund.fundId}>
+                <td style={td}>
+                  <span style={fundNameCell}>{fund.fundName}</span>
+                </td>
+                <td style={td}>{fund.assetClass}</td>
+                <td style={td}>
+                  <span
+                    style={badge(
+                      statusVariantForMonitoringStatus(fund.status)
+                    )}
+                  >
+                    {formatFundMonitoringStatus(fund.status)}
+                  </span>
+                </td>
+                <td style={td}>
+                  <span
+                    style={badge(
+                      statusVariantForReviewPriority(fund.reviewPriority)
+                    )}
+                  >
+                    {formatFundReviewPriority(fund.reviewPriority)}
+                  </span>
+                </td>
+                <td style={td}>{formatFundReviewReason(fund.reviewReason)}</td>
+                <td style={td}>{fund.lastReviewed}</td>
+                <td style={td}>
+                  <span
+                    style={{
+                      color: isReviewOverdue ? '#f87171' : undefined,
+                    }}
+                  >
+                    {fund.nextReview}
+                    {isReviewOverdue ? ' (overdue)' : ''}
+                  </span>
+                </td>
+                <td style={td}>
+                  {fund.replacementCandidate?.fundName ?? '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <h3 style={{ ...title, marginTop: '32px' }}>
+        Fund Monitoring & Best-in-Class Review
+      </h3>
 
       <StatusBox variant="neutral">
         Mock data preview — fund comparisons use placeholder scores only. No
@@ -431,6 +580,58 @@ const title = {
   fontSize: '18px',
   fontWeight: 600,
 };
+
+const summaryGrid = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+  gap: '12px',
+  marginBottom: '20px',
+};
+
+const summaryItem = {
+  display: 'flex',
+  flexDirection: 'column' as const,
+  gap: '4px',
+  padding: '12px',
+  background: '#12345b',
+  borderRadius: '8px',
+  border: '1px solid #2d4a6b',
+};
+
+const summaryLabel = {
+  fontSize: '12px',
+  color: '#94a3b8',
+  textTransform: 'uppercase' as const,
+  letterSpacing: '0.04em',
+};
+
+const summaryValue = {
+  fontSize: '20px',
+  fontWeight: 700,
+};
+
+const fundNameCell = {
+  fontWeight: 600,
+};
+
+function badge(variant: 'success' | 'warning' | 'neutral') {
+  const colors = {
+    success: { bg: '#14532d', text: '#86efac', border: '#166534' },
+    warning: { bg: '#713f12', text: '#fbbf24', border: '#854d0e' },
+    neutral: { bg: '#1e3a5f', text: '#93c5fd', border: '#2d4a6b' },
+  };
+  const { bg, text, border } = colors[variant];
+  return {
+    display: 'inline-block' as const,
+    padding: '2px 8px',
+    borderRadius: '4px',
+    fontSize: '12px',
+    fontWeight: 600,
+    background: bg,
+    color: text,
+    border: `1px solid ${border}`,
+  };
+}
 
 const metadataGrid = {
   display: 'grid',

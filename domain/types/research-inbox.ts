@@ -24,6 +24,8 @@ export type ResearchInboxItemType =
   | 'House View Update'
   | 'Adviser Review Task';
 
+import type { AlertOrigin } from './alert';
+
 /** Whether the inbox item was created manually or by the alert engine. */
 export type ResearchInboxItemOrigin = 'manual' | 'system';
 
@@ -44,6 +46,10 @@ export type ResearchInboxItem = {
   assignedTo?: string | null;
   /** When origin is system, the source alert id from the alert engine. */
   sourceAlertId?: string | null;
+  /** When converted from an alert, the alert origin for display (e.g. fund monitoring). */
+  sourceAlertOrigin?: AlertOrigin | null;
+  /** When converted from a research request, the source research request id. */
+  sourceResearchRequestId?: string | null;
 };
 
 export type ResearchInboxInput = {
@@ -61,6 +67,7 @@ export type ResearchInboxSummary = {
   highPriority: number;
   systemGeneratedItems: number;
   manualItems: number;
+  researchRequestItems: number;
 };
 
 export type ResearchInboxResult = {

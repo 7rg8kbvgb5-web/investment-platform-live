@@ -27,6 +27,19 @@ function severityVariantForAlert(
   }
 }
 
+function alertOriginBadgeVariant(
+  origin: import('../domain/types/alert').AlertOrigin
+): 'success' | 'warning' | 'neutral' {
+  switch (origin) {
+    case 'fund_monitoring':
+      return 'warning';
+    case 'rule_generated':
+      return 'neutral';
+    case 'static_mock':
+      return 'success';
+  }
+}
+
 function statusVariantForAlert(
   status: AlertStatus
 ): 'success' | 'warning' | 'neutral' {
@@ -52,9 +65,9 @@ export default function AlertSummaryPanel() {
       <h3 style={title}>Alert Summary</h3>
 
       <StatusBox variant="neutral">
-        Mock alert engine — local preview only. Combines static mock alerts with
-        rule-generated alerts from the alert rules engine. Items can feed the
-        research inbox workflow. No persistence or live external data feeds.
+        Mock alert engine — local preview only. Combines static mock alerts,
+        rule-generated alerts, and fund monitoring assessments. Items can feed
+        the research inbox workflow. No persistence or live external data feeds.
       </StatusBox>
 
       <div style={summaryGrid}>
@@ -72,6 +85,12 @@ export default function AlertSummaryPanel() {
           <span style={summaryLabel}>Rule-generated</span>
           <span style={{ ...summaryValue, color: '#93c5fd' }}>
             {alertResult.summary.ruleGeneratedAlerts}
+          </span>
+        </div>
+        <div style={summaryItem}>
+          <span style={summaryLabel}>Fund monitoring</span>
+          <span style={{ ...summaryValue, color: '#c4b5fd' }}>
+            {alertResult.summary.fundMonitoringAlerts}
           </span>
         </div>
         <div style={summaryItem}>
@@ -118,11 +137,7 @@ export default function AlertSummaryPanel() {
                   </div>
                 </td>
                 <td style={td}>
-                  <span
-                    style={badge(
-                      alert.origin === 'rule_generated' ? 'neutral' : 'success'
-                    )}
-                  >
+                  <span style={badge(alertOriginBadgeVariant(alert.origin))}>
                     {formatAlertOrigin(alert.origin)}
                   </span>
                 </td>

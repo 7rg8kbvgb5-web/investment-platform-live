@@ -9,6 +9,10 @@ import type {
   AlertSummary,
 } from '../../domain/types/alert';
 import type {
+  FundReviewReason,
+  MonitoredFund,
+} from '../../domain/types/fund-monitoring';
+import type {
   ResearchInboxItem,
   ResearchInboxItemType,
   ResearchInboxPriority,
@@ -19,6 +23,11 @@ import {
   evaluateAlertRules,
   getMockAlertRules,
 } from './alert-rules-engine';
+import {
+  assessMonitoredFunds,
+  getMockMonitoredFunds,
+} from './fund-monitoring';
+import { PREVIEW_TIMESTAMP } from '../format-timestamp';
 
 /** Stable mock alerts for local preview. */
 export const MOCK_ALERTS: Alert[] = [
@@ -133,6 +142,174 @@ function getAlertDedupKey(alert: Alert): string {
   return `${alert.category}|${alert.relatedEntityId ?? alert.id}`;
 }
 
+function fundNameAppearsInAlert(fundName: string, alert: Alert): boolean {
+  return alert.title.toLowerCase().includes(fundName.toLowerCase());
+}
+
+function fundAlreadyCoveredByAlerts(
+  fund: MonitoredFund,
+  existingAlerts: Alert[]
+): boolean {
+  return existingAlerts.some(
+    (alert) =>
+      alert.relatedEntityId === fund.fundId ||
+      fundNameAppearsInAlert(fund.fundName, alert)
+  );
+}
+
+function shouldGenerateFundMonitoringAlert(fund: MonitoredFund): boolean {
+  if (fund.status === 'Review Required' || fund.status === 'Replacement Candidate') {
+    return true;
+  }
+
+  if (fund.reviewPriority === 'Critical' || fund.reviewPriority === 'High') {
+    return true;
+  }
+
+  return (
+    fund.reviewReason === 'Better Alternative Available' ||
+    fund.reviewReason === 'Manager Change' ||
+    fund.reviewReason === 'Rating Change' ||
+    fund.reviewReason === 'Underperformance'
+  );
+}
+
+function mapReviewReasonToCategory(reason: FundReviewReason): AlertCategory {
+  switch (reason) {
+    case 'Manager Change':
+      return 'Fund Manager Change';
+    case 'Underperformance':
+    case 'Rating Change':
+    case 'Fee Concern':
+    case 'Style Drift':
+    case 'Better Alternative Available':
+      return 'Fund Performance';
+    default:
+      return 'Governance Review';
+  }
+}
+
+function mapFundMonitoringToSeverity(
+  fund: MonitoredFund
+): AlertSeverity {
+  if (fund.status === 'Replacement Candidate') {
+    return fund.reviewPriority === 'Critical' ? 'Critical' : 'High';
+  }
+
+  if (fund.reviewPriority === 'Critical') {
+    return 'Critical';
+  }
+
+  if (fund.reviewPriority === 'High' || fund.status === 'Review Required') {
+    return 'High';
+  }
+
+  if (fund.status === 'Watch') {
+    return 'Medium';
+  }
+
+  return 'Low';
+}
+
+function buildFundMonitoringAlertTitle(fund: MonitoredFund): string {
+  if (fund.status === 'Replacement Candidate' && fund.replacementCandidate) {
+    return `${fund.fundName} — replacement candidate identified`;
+  }
+
+  if (fund.reviewReason === 'Manager Change') {
+    return `${fund.fundName} — manager change review required`;
+  }
+
+  if (fund.reviewReason === 'Underperformance') {
+    return `${fund.fundName} — underperformance review required`;
+  }
+
+  if (fund.reviewReason === 'Rating Change') {
+    return `${fund.fundName} — rating change review required`;
+  }
+
+  if (fund.reviewReason === 'Better Alternative Available') {
+    return `${fund.fundName} — better alternative available`;
+  }
+
+  if (fund.status === 'Review Required') {
+    return `${fund.fundName} — fund review required`;
+  }
+
+  return `${fund.fundName} — fund monitoring alert`;
+}
+
+function buildFundMonitoringAlertSummary(fund: MonitoredFund): string {
+  const reason = fund.reviewReason;
+  const statusNote =
+    fund.status === 'Replacement Candidate'
+      ? ' Flagged as a replacement candidate.'
+      : fund.status === 'Review Required'
+        ? ' Requires adviser review before any portfolio change.'
+        : '';
+
+  const alternativeNote =
+    fund.replacementCandidate != null
+      ? ` Suggested alternative: ${fund.replacementCandidate.fundName}.`
+      : '';
+
+  return `Fund monitoring assessment (${reason}). Priority: ${fund.reviewPriority}.${statusNote}${alternativeNote} Adviser review required — no automatic replacement.`;
+}
+
+function buildFundMonitoringAlert(fund: MonitoredFund): Alert {
+  return {
+    id: `alert-fund-monitoring-${fund.fundId}`,
+    title: buildFundMonitoringAlertTitle(fund),
+    summary: buildFundMonitoringAlertSummary(fund),
+    category: mapReviewReasonToCategory(fund.reviewReason),
+    severity: mapFundMonitoringToSeverity(fund),
+    status: 'Open',
+    origin: 'fund_monitoring',
+    createdAt: PREVIEW_TIMESTAMP,
+    relatedEntityId: fund.fundId,
+    sourceFundId: fund.fundId,
+  };
+}
+
+/**
+ * Generates alerts from fund monitoring assessments.
+ * Skips funds already covered by existing static or rule-generated alerts.
+ * Does not mutate inputs.
+ */
+export function generateFundMonitoringAlerts(
+  existingAlerts: Alert[] = []
+): Alert[] {
+  const { assessments } = assessMonitoredFunds(getMockMonitoredFunds());
+
+  return assessments
+    .map((assessment) => assessment.fund)
+    .filter((fund) => shouldGenerateFundMonitoringAlert(fund))
+    .filter((fund) => !fundAlreadyCoveredByAlerts(fund, existingAlerts))
+    .map((fund) => buildFundMonitoringAlert(fund));
+}
+
+/**
+ * Merges alert lists while excluding duplicates by category and entity key.
+ * Does not mutate inputs.
+ */
+export function mergeAlertSources(...alertSources: Alert[][]): Alert[] {
+  const merged: Alert[] = [];
+  const seenKeys = new Set<string>();
+
+  for (const source of alertSources) {
+    for (const alert of source) {
+      const key = getAlertDedupKey(alert);
+      if (seenKeys.has(key)) {
+        continue;
+      }
+      seenKeys.add(key);
+      merged.push({ ...alert });
+    }
+  }
+
+  return merged;
+}
+
 /**
  * Merges static mock alerts with rule-generated alerts.
  * Skips rule alerts that duplicate an existing static alert by category and entity.
@@ -154,20 +331,32 @@ export function mergeStaticAndRuleGeneratedAlerts(
 }
 
 /**
- * Returns static mock alerts combined with alerts generated from enabled alert rules.
- * Rule output is evaluated via the alert rules engine. Duplicates are excluded.
+ * Returns static mock alerts combined with rule-generated and fund-monitoring alerts.
+ * Duplicates are excluded across all sources.
  */
 export function generateCombinedAlerts(): Alert[] {
   const staticAlerts = generateMockAlerts();
   const { generatedAlerts } = evaluateAlertRules({
     rules: getMockAlertRules(),
   });
+  const mergedStaticAndRules = mergeStaticAndRuleGeneratedAlerts(
+    staticAlerts,
+    generatedAlerts
+  );
+  const fundMonitoringAlerts = generateFundMonitoringAlerts(mergedStaticAndRules);
 
-  return mergeStaticAndRuleGeneratedAlerts(staticAlerts, generatedAlerts);
+  return mergeAlertSources(mergedStaticAndRules, fundMonitoringAlerts);
 }
 
 export function formatAlertOrigin(origin: AlertOrigin): string {
-  return origin === 'static_mock' ? 'Static Mock Alert' : 'Rule-Generated Alert';
+  switch (origin) {
+    case 'static_mock':
+      return 'Static Mock Alert';
+    case 'rule_generated':
+      return 'Rule-Generated Alert';
+    case 'fund_monitoring':
+      return 'Fund Monitoring';
+  }
 }
 
 export function formatAlertCategory(category: AlertCategory): string {
@@ -219,6 +408,9 @@ function buildAlertSummary(alerts: Alert[]): AlertSummary {
       .length,
     ruleGeneratedAlerts: alerts.filter(
       (alert) => alert.origin === 'rule_generated'
+    ).length,
+    fundMonitoringAlerts: alerts.filter(
+      (alert) => alert.origin === 'fund_monitoring'
     ).length,
   };
 }
@@ -295,5 +487,6 @@ export function convertAlertToResearchInboxItem(alert: Alert): ResearchInboxItem
     relatedEntityId: alert.relatedEntityId ?? null,
     assignedTo: null,
     sourceAlertId: alert.id,
+    sourceAlertOrigin: alert.origin,
   };
 }

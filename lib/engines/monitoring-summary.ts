@@ -7,6 +7,10 @@ import type {
 import { getMockAlertRules, summariseAlertRules } from './alert-rules-engine';
 import { generateCombinedAlerts, summariseAlerts } from './alert-engine';
 import {
+  assessMonitoredFunds,
+  getMockMonitoredFunds,
+} from './fund-monitoring';
+import {
   analyzeResearchInbox,
   getCombinedResearchInboxItems,
 } from './research-inbox';
@@ -109,7 +113,12 @@ function buildActionRequiredSummaryText(
 export function buildMonitoringSummary(
   input: MonitoringSummaryInput
 ): MonitoringSummaryResult {
-  const { researchInboxSummary, alertSummary, alertRulesSummary } = input;
+  const {
+    researchInboxSummary,
+    alertSummary,
+    alertRulesSummary,
+    fundMonitoringSummary,
+  } = input;
   const overallMonitoringStatus = determineOverallMonitoringStatus(input);
 
   const summary: MonitoringSummary = {
@@ -127,6 +136,10 @@ export function buildMonitoringSummary(
       input,
       overallMonitoringStatus
     ),
+    totalMonitoredFunds: fundMonitoringSummary.totalMonitoredFunds,
+    fundsOnWatch: fundMonitoringSummary.fundsOnWatch,
+    fundsRequiringReview: fundMonitoringSummary.reviewRequired,
+    replacementCandidates: fundMonitoringSummary.replacementCandidates,
   };
 
   return { summary };
@@ -145,11 +158,15 @@ export function getCombinedMonitoringSummary(): MonitoringSummaryResult {
   const alertRulesSummary = summariseAlertRules({
     rules: getMockAlertRules(),
   }).summary;
+  const fundMonitoringSummary = assessMonitoredFunds(
+    getMockMonitoredFunds()
+  ).summary;
 
   return buildMonitoringSummary({
     researchInboxSummary,
     alertSummary,
     alertRulesSummary,
+    fundMonitoringSummary,
   });
 }
 

@@ -15,7 +15,7 @@ export type AlertSeverity = 'Low' | 'Medium' | 'High' | 'Critical';
 export type AlertStatus = 'Open' | 'Acknowledged' | 'Resolved' | 'Dismissed';
 
 /** How the alert was produced by the alert engine. */
-export type AlertOrigin = 'static_mock' | 'rule_generated';
+export type AlertOrigin = 'static_mock' | 'rule_generated' | 'fund_monitoring';
 
 /** A platform alert that may feed the research inbox workflow. */
 export type Alert = {
@@ -32,6 +32,8 @@ export type Alert = {
   relatedEntityId?: string | null;
   /** When origin is rule_generated, the source alert rule id. */
   sourceRuleId?: string | null;
+  /** When origin is fund_monitoring, the monitored fund id. */
+  sourceFundId?: string | null;
 };
 
 export type AlertInput = {
@@ -48,6 +50,7 @@ export type AlertSummary = {
   dismissedAlerts: number;
   staticMockAlerts: number;
   ruleGeneratedAlerts: number;
+  fundMonitoringAlerts: number;
 };
 
 export type AlertEngineResult = {

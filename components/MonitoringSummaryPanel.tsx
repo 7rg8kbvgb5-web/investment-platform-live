@@ -31,8 +31,9 @@ export default function MonitoringSummaryPanel() {
       <h3 style={title}>Monitoring Summary</h3>
 
       <StatusBox variant="neutral">
-        Unified monitoring view — aggregates research inbox, alerts, and alert
-        rules. Local preview only. No persistence or live external data feeds.
+        Unified monitoring view — aggregates research inbox, alerts, alert
+        rules, and fund monitoring. Local preview only. No persistence or live
+        external data feeds.
       </StatusBox>
 
       <div style={statusBanner(statusVariantForMonitoring(summary.overallMonitoringStatus))}>
@@ -94,6 +95,28 @@ export default function MonitoringSummaryPanel() {
           <span style={summaryLabel}>Disabled rules</span>
           <span style={{ ...summaryValue, color: '#94a3b8' }}>
             {summary.disabledRules}
+          </span>
+        </div>
+        <div style={summaryItem}>
+          <span style={summaryLabel}>Monitored funds</span>
+          <span style={summaryValue}>{summary.totalMonitoredFunds}</span>
+        </div>
+        <div style={summaryItem}>
+          <span style={summaryLabel}>Funds on watch</span>
+          <span style={{ ...summaryValue, color: '#fbbf24' }}>
+            {summary.fundsOnWatch}
+          </span>
+        </div>
+        <div style={summaryItem}>
+          <span style={summaryLabel}>Review required</span>
+          <span style={{ ...summaryValue, color: '#f87171' }}>
+            {summary.fundsRequiringReview}
+          </span>
+        </div>
+        <div style={summaryItem}>
+          <span style={summaryLabel}>Replacement candidates</span>
+          <span style={{ ...summaryValue, color: '#c4b5fd' }}>
+            {summary.replacementCandidates}
           </span>
         </div>
       </div>

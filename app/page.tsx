@@ -11,6 +11,8 @@ import ResetToStrategicPanel from '../components/dashboard/ResetToStrategicPanel
 import PortfolioSimulationWorkflow from '../components/dashboard/PortfolioSimulationWorkflow';
 import StatusBox from '../components/dashboard/StatusBox';
 import FundMonitoringPanel from '../components/FundMonitoringPanel';
+import FundReviewResearchWorkflow from '../components/FundReviewResearchWorkflow';
+import FundReviewAuditTrailPanel from '../components/FundReviewAuditTrailPanel';
 import HouseViewPanel from '../components/HouseViewPanel';
 import MultiFundReviewDashboardPanel from '../components/MultiFundReviewDashboardPanel';
 import GovernanceAuditTrailPanel from '../components/GovernanceAuditTrailPanel';
@@ -104,11 +106,13 @@ export default async function Home() {
       })}
 
       <section style={profileCard}>
-        <FundMonitoringPanel />
         <HouseViewPanel />
         <MultiFundReviewDashboardPanel />
         <GovernanceAuditTrailPanel />
         <InvestmentCommitteeDashboard />
+        <FundMonitoringPanel />
+        <FundReviewResearchWorkflow />
+        <FundReviewAuditTrailPanel />
         <MonitoringSummaryPanel />
         <AlertSummaryPanel />
         <AlertRulesPanel />

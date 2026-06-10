@@ -120,8 +120,9 @@ export default function ResearchInboxPanel() {
 
       <StatusBox variant="neutral">
         Mock research inbox — local preview only. Combines manual inbox items
-        with alert-engine generated items. Adviser actions update local state
-        only; no persistence or live external data feeds.
+        with alert-engine, fund monitoring, and research-request generated
+        items. Adviser actions update local state only; no persistence or live
+        external data feeds.
       </StatusBox>
 
       <div style={summaryGrid}>
@@ -130,9 +131,15 @@ export default function ResearchInboxPanel() {
           <span style={summaryValue}>{inbox.summary.totalItems}</span>
         </div>
         <div style={summaryItem}>
-          <span style={summaryLabel}>Alert engine</span>
+          <span style={summaryLabel}>System generated</span>
           <span style={{ ...summaryValue, color: '#93c5fd' }}>
             {inbox.summary.systemGeneratedItems}
+          </span>
+        </div>
+        <div style={summaryItem}>
+          <span style={summaryLabel}>Research requests</span>
+          <span style={{ ...summaryValue, color: '#c4b5fd' }}>
+            {inbox.summary.researchRequestItems}
           </span>
         </div>
         <div style={summaryItem}>
@@ -204,8 +211,18 @@ export default function ResearchInboxPanel() {
                         <div style={titleRow}>
                           <span style={itemTitle}>{item.title}</span>
                           {item.origin === 'system' ? (
-                            <span style={originBadge('system')}>
-                              {formatResearchInboxItemOrigin(item.origin)}
+                            <span
+                              style={originBadge(
+                                item.origin,
+                                item.sourceAlertOrigin,
+                                item.sourceResearchRequestId
+                              )}
+                            >
+                              {formatResearchInboxItemOrigin(
+                                item.origin,
+                                item.sourceAlertOrigin,
+                                item.sourceResearchRequestId
+                              )}
                             </span>
                           ) : null}
                         </div>
@@ -227,8 +244,18 @@ export default function ResearchInboxPanel() {
                       </div>
                     </td>
                     <td style={td}>
-                      <span style={originBadge(item.origin)}>
-                        {formatResearchInboxItemOrigin(item.origin)}
+                      <span
+                        style={originBadge(
+                          item.origin,
+                          item.sourceAlertOrigin,
+                          item.sourceResearchRequestId
+                        )}
+                      >
+                        {formatResearchInboxItemOrigin(
+                          item.origin,
+                          item.sourceAlertOrigin,
+                          item.sourceResearchRequestId
+                        )}
                       </span>
                     </td>
                     <td style={td}>
@@ -600,8 +627,70 @@ const historyRationaleMuted = {
   fontStyle: 'italic' as const,
 };
 
-function originBadge(origin: 'manual' | 'system') {
-  const isSystem = origin === 'system';
+function originBadge(
+  origin: 'manual' | 'system',
+  sourceAlertOrigin?: import('../domain/types/alert').AlertOrigin | null,
+  sourceResearchRequestId?: string | null
+) {
+  if (origin === 'manual') {
+    return {
+      display: 'inline-block',
+      padding: '3px 8px',
+      borderRadius: '999px',
+      fontSize: '11px',
+      fontWeight: 600,
+      textTransform: 'uppercase' as const,
+      letterSpacing: '0.04em',
+      background: '#12345b',
+      border: '1px solid #334155',
+      color: '#94a3b8',
+    };
+  }
+
+  if (sourceResearchRequestId) {
+    return {
+      display: 'inline-block',
+      padding: '3px 8px',
+      borderRadius: '999px',
+      fontSize: '11px',
+      fontWeight: 600,
+      textTransform: 'uppercase' as const,
+      letterSpacing: '0.04em',
+      background: '#312e81',
+      border: '1px solid #a5b4fc',
+      color: '#a5b4fc',
+    };
+  }
+
+  if (sourceAlertOrigin === 'fund_monitoring') {
+    return {
+      display: 'inline-block',
+      padding: '3px 8px',
+      borderRadius: '999px',
+      fontSize: '11px',
+      fontWeight: 600,
+      textTransform: 'uppercase' as const,
+      letterSpacing: '0.04em',
+      background: '#3b1d5c',
+      border: '1px solid #c4b5fd',
+      color: '#c4b5fd',
+    };
+  }
+
+  if (sourceAlertOrigin === 'rule_generated') {
+    return {
+      display: 'inline-block',
+      padding: '3px 8px',
+      borderRadius: '999px',
+      fontSize: '11px',
+      fontWeight: 600,
+      textTransform: 'uppercase' as const,
+      letterSpacing: '0.04em',
+      background: '#12345b',
+      border: '1px solid #93c5fd',
+      color: '#93c5fd',
+    };
+  }
 
   return {
     display: 'inline-block',
@@ -611,9 +700,9 @@ function originBadge(origin: 'manual' | 'system') {
     fontWeight: 600,
     textTransform: 'uppercase' as const,
     letterSpacing: '0.04em',
-    background: isSystem ? '#1e3a5f' : '#12345b',
-    border: `1px solid ${isSystem ? '#93c5fd' : '#334155'}`,
-    color: isSystem ? '#93c5fd' : '#94a3b8',
+    background: '#1e3a5f',
+    border: '1px solid #93c5fd',
+    color: '#93c5fd',
   };
 }
 
