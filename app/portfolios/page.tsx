@@ -12,6 +12,7 @@ import ResetToStrategicPanel from '../../components/dashboard/ResetToStrategicPa
 import PortfolioSimulationWorkflow from '../../components/dashboard/PortfolioSimulationWorkflow';
 import StatusBox from '../../components/dashboard/StatusBox';
 import { PortfolioCandidatesPanel } from '../../components/PortfolioCandidatesPanel';
+import { ChampionChallengerPortfolioPanel } from '../../components/ChampionChallengerPortfolioPanel';
 
 export default async function PortfoliosPage() {
   const { data: profiles } = await supabase
@@ -37,7 +38,9 @@ export default async function PortfoliosPage() {
         description="Strategic allocations, tactical overlays, guardrails, and portfolio simulation workflows by risk profile."
       >
         <PortfolioCandidatesPanel />
-        
+
+        <ChampionChallengerPortfolioPanel />
+
         {profiles?.map((profile) => {
           const {
             adjustedAllocations: profileAllocations,
