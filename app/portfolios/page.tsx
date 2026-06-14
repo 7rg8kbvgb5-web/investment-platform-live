@@ -13,6 +13,7 @@ import PortfolioSimulationWorkflow from '../../components/dashboard/PortfolioSim
 import StatusBox from '../../components/dashboard/StatusBox';
 import { PortfolioCandidatesPanel } from '../../components/PortfolioCandidatesPanel';
 import { ChampionChallengerPortfolioPanel } from '../../components/ChampionChallengerPortfolioPanel';
+import { SectorConstructionPanel } from '../../components/SectorConstructionPanel';
 
 export default async function PortfoliosPage() {
   const { data: profiles } = await supabase
@@ -40,6 +41,8 @@ export default async function PortfoliosPage() {
         <PortfolioCandidatesPanel />
 
         <ChampionChallengerPortfolioPanel />
+
+        <SectorConstructionPanel />
 
         {profiles?.map((profile) => {
           const {
