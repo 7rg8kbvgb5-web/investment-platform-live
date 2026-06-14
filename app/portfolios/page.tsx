@@ -11,6 +11,7 @@ import OverlayGovernancePanel from '../../components/dashboard/OverlayGovernance
 import ResetToStrategicPanel from '../../components/dashboard/ResetToStrategicPanel';
 import PortfolioSimulationWorkflow from '../../components/dashboard/PortfolioSimulationWorkflow';
 import StatusBox from '../../components/dashboard/StatusBox';
+import { PortfolioCandidatesPanel } from '../../components/PortfolioCandidatesPanel';
 
 export default async function PortfoliosPage() {
   const { data: profiles } = await supabase
@@ -35,6 +36,8 @@ export default async function PortfoliosPage() {
         title="Portfolios"
         description="Strategic allocations, tactical overlays, guardrails, and portfolio simulation workflows by risk profile."
       >
+        <PortfolioCandidatesPanel />
+        
         {profiles?.map((profile) => {
           const {
             adjustedAllocations: profileAllocations,

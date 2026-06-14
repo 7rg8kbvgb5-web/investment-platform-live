@@ -1,5 +1,6 @@
 'use client';
 
+import { SyncPreviewPanel } from './SyncPreviewPanel';
 import type { ApprovalWorkflow } from '../domain/types/approval';
 import ApprovalWorkflowPanel from './dashboard/ApprovalWorkflowPanel';
 import DeferredReviewQueuePanel from './DeferredReviewQueuePanel';
@@ -21,6 +22,7 @@ export default function GovernancePageContent() {
     <>
       <GovernanceAuditTrailPanel />
       <InvestmentCasePanel />
+      <SyncPreviewPanel />
       <InvestmentCaseLifecyclePanel />
       <ApprovalWorkflowPanel workflow={MOCK_APPROVAL_WORKFLOW} />
       <DeferredReviewQueuePanel />

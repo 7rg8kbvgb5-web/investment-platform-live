@@ -2,6 +2,8 @@ import PageContent from "../../components/PageContent";
 import ResearchInboxPanel from "../../components/ResearchInboxPanel";
 import ResearchRequestPanel from "../../components/ResearchRequestPanel";
 import InvestmentCaseLifecyclePanel from "../../components/InvestmentCaseLifecyclePanel";
+import { SecurityMasterPanel } from "../../components/SecurityMasterPanel";
+import { ApprovedListPanel } from "../../components/ApprovedListPanel";
 
 export default function ResearchPage() {
   return (
@@ -13,6 +15,10 @@ export default function ResearchPage() {
 
       <ResearchRequestPanel />
 
+      <SecurityMasterPanel />
+      
+      <ApprovedListPanel />
+      
       <div style={{ marginTop: "32px", padding: "24px", border: "2px solid red" }}>
   <h2>Investment Case Lifecycle Test</h2>
   <p>If this text appears, Step 62 wiring is active.</p>
