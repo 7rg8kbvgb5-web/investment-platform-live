@@ -15,6 +15,7 @@ import { PortfolioCandidatesPanel } from '../../components/PortfolioCandidatesPa
 import { ChampionChallengerPortfolioPanel } from '../../components/ChampionChallengerPortfolioPanel';
 import { SectorConstructionPanel } from '../../components/SectorConstructionPanel';
 import { RiskProfilePortfolioPanel } from '../../components/RiskProfilePortfolioPanel';
+import { ClientPortfolioMappingPanel } from '../../components/ClientPortfolioMappingPanel';
 
 export default async function PortfoliosPage() {
   const { data: profiles } = await supabase
@@ -46,6 +47,8 @@ export default async function PortfoliosPage() {
         <SectorConstructionPanel />
 
         <RiskProfilePortfolioPanel />
+
+        <ClientPortfolioMappingPanel />
 
         {profiles?.map((profile) => {
           const {
