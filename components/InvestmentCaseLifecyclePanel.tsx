@@ -42,7 +42,7 @@ export default function InvestmentCaseLifecyclePanel({
 
   return (
     <div style={panel}>
-      <p style={eyebrow}>Investment Case</p>
+      <p style={eyebrow}>Investment Case Lifecycle</p>
       <h3 style={heading}>{investmentCase.title}</h3>
       <p style={fundName}>{investmentCase.fundName}</p>
 

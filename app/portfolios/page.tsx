@@ -18,6 +18,9 @@ import { RiskProfilePortfolioPanel } from '../../components/RiskProfilePortfolio
 import { ClientPortfolioMappingPanel } from '../../components/ClientPortfolioMappingPanel';
 import { PortfolioDriftMonitoringPanel } from '../../components/PortfolioDriftMonitoringPanel';
 import { DriftAlertsPanel } from '../../components/DriftAlertsPanel';
+import { ModelPortfolioVersioningPanel } from '../../components/ModelPortfolioVersioningPanel';
+import { ModelPortfolioApprovalPanel } from '../../components/ModelPortfolioApprovalPanel';
+import { ModelPortfolioChangeAuditPanel } from '../../components/ModelPortfolioChangeAuditPanel';
 
 export default async function PortfoliosPage() {
   const { data: profiles } = await supabase
@@ -50,11 +53,17 @@ export default async function PortfoliosPage() {
 
         <RiskProfilePortfolioPanel />
 
+        <ModelPortfolioVersioningPanel />
+
+        <ModelPortfolioApprovalPanel />
+
+        <ModelPortfolioChangeAuditPanel />
+
+        <ClientPortfolioMappingPanel />
+
         <PortfolioDriftMonitoringPanel />
 
         <DriftAlertsPanel />
-
-        <ClientPortfolioMappingPanel />
 
         {profiles?.map((profile) => {
           const {

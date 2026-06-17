@@ -1,28 +1,31 @@
 import PageContent from "../../components/PageContent";
 import ResearchInboxPanel from "../../components/ResearchInboxPanel";
 import ResearchRequestPanel from "../../components/ResearchRequestPanel";
+import InvestmentCasePanel from "../../components/InvestmentCasePanel";
 import InvestmentCaseLifecyclePanel from "../../components/InvestmentCaseLifecyclePanel";
 import { SecurityMasterPanel } from "../../components/SecurityMasterPanel";
 import { ApprovedListPanel } from "../../components/ApprovedListPanel";
+import { SyncPreviewPanel } from "../../components/SyncPreviewPanel";
 
 export default function ResearchPage() {
   return (
     <PageContent
       title="Research"
-      description="Research inbox workflow and research request management."
+      description="Research inbox workflow, investment cases, security master, approved list, and research request management."
     >
       <ResearchInboxPanel />
 
       <ResearchRequestPanel />
 
+      <InvestmentCasePanel />
+
+      <InvestmentCaseLifecyclePanel />
+
       <SecurityMasterPanel />
-      
+
       <ApprovedListPanel />
-      
-      <div style={{ marginTop: "32px", padding: "24px", border: "2px solid red" }}>
-  <h2>Investment Case Lifecycle Test</h2>
-  <p>If this text appears, Step 62 wiring is active.</p>
-</div>
+
+      <SyncPreviewPanel />
     </PageContent>
   );
 }
