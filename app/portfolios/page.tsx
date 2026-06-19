@@ -22,6 +22,7 @@ import { ModelPortfolioVersioningPanel } from '../../components/ModelPortfolioVe
 import { ModelPortfolioApprovalPanel } from '../../components/ModelPortfolioApprovalPanel';
 import { ModelPortfolioChangeAuditPanel } from '../../components/ModelPortfolioChangeAuditPanel';
 import SectorHealthScorePanel from "../../components/SectorHealthScorePanel";
+import SecurityRankingPanel from "../../components/SecurityRankingPanel";
 
 export default async function PortfoliosPage() {
   const { data: profiles } = await supabase
@@ -47,6 +48,8 @@ export default async function PortfoliosPage() {
         description="Strategic allocations, tactical overlays, guardrails, and portfolio simulation workflows by risk profile."
       >
         <SectorHealthScorePanel />
+
+        <SecurityRankingPanel />
         
         <PortfolioCandidatesPanel />
 
