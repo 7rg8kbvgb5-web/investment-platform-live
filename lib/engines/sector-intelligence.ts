@@ -56,36 +56,15 @@ export interface SectorHealthScore {
   }
   
   export const sectorHealthScores: SectorHealthScore[] = [
-    calculateSectorHealthScore(
-      "Financials",
-      85,
-      80,
-      75,
-      65,
-      90
-    ),
-    calculateSectorHealthScore(
-      "Materials",
-      70,
-      65,
-      75,
-      80,
-      70
-    ),
-    calculateSectorHealthScore(
-      "Industrials",
-      75,
-      70,
-      72,
-      65,
-      75
-    ),
-    calculateSectorHealthScore(
-      "Healthcare",
-      35,
-      40,
-      45,
-      60,
-      50
-    ),
+    calculateSectorHealthScore("Financials", 85, 80, 75, 65, 90),
+    calculateSectorHealthScore("Materials", 70, 65, 75, 80, 70),
+    calculateSectorHealthScore("Industrials", 75, 70, 72, 65, 75),
+    calculateSectorHealthScore("Consumer Discretionary", 68, 65, 70, 60, 70),
+    calculateSectorHealthScore("Consumer Staples", 50, 55, 45, 50, 55),
+    calculateSectorHealthScore("Healthcare", 35, 40, 45, 60, 50),
+    calculateSectorHealthScore("Information Technology", 80, 75, 85, 55, 80),
+    calculateSectorHealthScore("Communication Services", 72, 68, 74, 60, 70),
+    calculateSectorHealthScore("Energy", 65, 60, 68, 75, 65),
+    calculateSectorHealthScore("Utilities", 40, 45, 42, 55, 50),
+    calculateSectorHealthScore("Real Estate", 55, 58, 52, 70, 60),
   ];
