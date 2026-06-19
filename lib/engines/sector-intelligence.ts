@@ -68,3 +68,6 @@ export interface SectorHealthScore {
     calculateSectorHealthScore("Utilities", 40, 45, 42, 55, 50),
     calculateSectorHealthScore("Real Estate", 55, 58, 52, 70, 60),
   ];
+  export const rankedSectorHealthScores = [...sectorHealthScores].sort(
+    (a, b) => b.totalScore - a.totalScore
+  );
