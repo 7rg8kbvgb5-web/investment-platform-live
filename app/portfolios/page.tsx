@@ -23,6 +23,7 @@ import { ModelPortfolioApprovalPanel } from '../../components/ModelPortfolioAppr
 import { ModelPortfolioChangeAuditPanel } from '../../components/ModelPortfolioChangeAuditPanel';
 import SectorHealthScorePanel from "../../components/SectorHealthScorePanel";
 import SecurityRankingPanel from "../../components/SecurityRankingPanel";
+import SectorAllocationPanel from "../../components/SectorAllocationPanel";
 
 export default async function PortfoliosPage() {
   const { data: profiles } = await supabase
@@ -50,6 +51,8 @@ export default async function PortfoliosPage() {
         <SectorHealthScorePanel />
 
         <SecurityRankingPanel />
+
+        <SectorAllocationPanel />
         
         <PortfolioCandidatesPanel />
 
