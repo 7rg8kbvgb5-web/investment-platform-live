@@ -25,6 +25,11 @@ import SectorHealthScorePanel from "../../components/SectorHealthScorePanel";
 import SecurityRankingPanel from "../../components/SecurityRankingPanel";
 import SectorAllocationPanel from "../../components/SectorAllocationPanel";
 import { PortfolioConstructionAuditPanel } from "../../components/PortfolioConstructionAuditPanel";
+import { PortfolioValidationPanel } from "../../components/PortfolioValidationPanel";
+import { PortfolioApprovalReadinessPanel } from "../../components/PortfolioApprovalReadinessPanel";
+import { ClientPortfolioAnalysisPanel } from "../../components/ClientPortfolioAnalysisPanel";
+import { ClientRebalanceRecommendationsPanel } from "../../components/ClientRebalanceRecommendationsPanel";
+import { InvestmentProposalPanel } from "../../components/InvestmentProposalPanel";
 
 export default async function PortfoliosPage() {
   const { data: profiles } = await supabase
@@ -63,6 +68,10 @@ export default async function PortfoliosPage() {
 
         <PortfolioConstructionAuditPanel />
 
+        <PortfolioValidationPanel />
+
+        <PortfolioApprovalReadinessPanel />
+
         <RiskProfilePortfolioPanel />
 
         <ModelPortfolioVersioningPanel />
@@ -70,6 +79,12 @@ export default async function PortfoliosPage() {
         <ModelPortfolioApprovalPanel />
 
         <ModelPortfolioChangeAuditPanel />
+
+        <ClientPortfolioAnalysisPanel />
+
+        <ClientRebalanceRecommendationsPanel />
+
+        <InvestmentProposalPanel />
 
         <ClientPortfolioMappingPanel />
 
