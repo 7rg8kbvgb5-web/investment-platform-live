@@ -1,5 +1,6 @@
 import { analyseClientPortfolio } from "./client-portfolio-analysis";
 import { generateClientRebalanceRecommendations } from "./client-rebalance-recommendations";
+import { buildProposalEvidence } from "./proposal-evidence";
 
 export type ProposalSection = {
   id: string;
@@ -15,11 +16,22 @@ export type InvestmentProposal = {
   sections: ProposalSection[];
 };
 
+function formatStatus(status: string) {
+  return status.replaceAll("-", " ");
+}
+
 function formatTradeSummary() {
   const recommendations = generateClientRebalanceRecommendations();
 
-  return recommendations
-    .filter((recommendation) => recommendation.action !== "hold")
+  const activeRecommendations = recommendations.filter(
+    (recommendation) => recommendation.action !== "hold"
+  );
+
+  if (activeRecommendations.length === 0) {
+    return "No material security-level changes are currently required.";
+  }
+
+  return activeRecommendations
     .map((recommendation) => {
       const action = recommendation.action.toUpperCase();
       const change =
@@ -27,7 +39,7 @@ function formatTradeSummary() {
           ? `+${recommendation.changeWeight}%`
           : `${recommendation.changeWeight}%`;
 
-      return `${action} ${recommendation.ticker}: ${change} target adjustment`;
+      return `• ${action} ${recommendation.ticker}: ${change} target adjustment. ${recommendation.rationale}`;
     })
     .join("\n");
 }
@@ -35,9 +47,73 @@ function formatTradeSummary() {
 function formatGapSummary() {
   const analysis = analyseClientPortfolio();
 
+  if (analysis.gaps.length === 0) {
+    return "No material portfolio gaps have been identified against the approved model.";
+  }
+
   return analysis.gaps
-    .slice(0, 6)
+    .slice(0, 8)
     .map((gap) => `• ${gap.title}: ${gap.recommendation}`)
+    .join("\n");
+}
+
+function formatRiskSummary() {
+  const analysis = analyseClientPortfolio();
+
+  const highSeverityGaps = analysis.gaps.filter(
+    (gap) => gap.severity === "high"
+  );
+
+  const mediumSeverityGaps = analysis.gaps.filter(
+    (gap) => gap.severity === "medium"
+  );
+
+  if (highSeverityGaps.length === 0 && mediumSeverityGaps.length === 0) {
+    return "The portfolio does not currently show material high or medium severity gaps against the approved model.";
+  }
+
+  return [
+    `High severity gaps identified: ${highSeverityGaps.length}.`,
+    `Medium severity gaps identified: ${mediumSeverityGaps.length}.`,
+    "The main risks relate to model drift, sector imbalance, non-model holdings, and missing approved model exposures.",
+  ].join("\n");
+}
+
+function formatImplementationSummary() {
+  const recommendations = generateClientRebalanceRecommendations();
+
+  const buys = recommendations.filter(
+    (recommendation) => recommendation.action === "buy"
+  );
+
+  const sells = recommendations.filter(
+    (recommendation) => recommendation.action === "sell"
+  );
+
+  const reviews = recommendations.filter(
+    (recommendation) => recommendation.action === "review"
+  );
+
+  return [
+    `Buy recommendations: ${buys.length}.`,
+    `Sell recommendations: ${sells.length}.`,
+    `Review recommendations: ${reviews.length}.`,
+    "Implementation should be staged with consideration for tax outcomes, brokerage, liquidity, client preferences, and any existing advice constraints.",
+  ].join("\n");
+}
+
+function formatEvidenceSummary() {
+  const evidenceItems = buildProposalEvidence();
+
+  if (evidenceItems.length === 0) {
+    return "No investment committee evidence has been attached to this proposal.";
+  }
+
+  return evidenceItems
+    .map(
+      (evidence) =>
+        `• ${evidence.security}: House View ${evidence.houseView}, Sector Health Score ${evidence.sectorHealthScore}/100, Security Ranking ${evidence.securityRanking}/100. ${evidence.rationale}`
+    )
     .join("\n");
 }
 
@@ -45,6 +121,9 @@ export function generateInvestmentProposal(): InvestmentProposal {
   const analysis = analyseClientPortfolio();
   const tradeSummary = formatTradeSummary();
   const gapSummary = formatGapSummary();
+  const riskSummary = formatRiskSummary();
+  const implementationSummary = formatImplementationSummary();
+  const evidenceSummary = formatEvidenceSummary();
 
   return {
     clientName: analysis.clientName,
@@ -53,14 +132,26 @@ export function generateInvestmentProposal(): InvestmentProposal {
     status: analysis.status,
     sections: [
       {
-        id: "summary",
-        title: "Proposal Summary",
+        id: "executive-summary",
+        title: "Executive Summary",
         content:
           `The client portfolio has been reviewed against the approved ${analysis.modelName}. ` +
-          `The current alignment score is ${analysis.alignmentScore}/100, indicating ${analysis.status.replaceAll(
-            "-",
-            " "
-          )}. The proposed changes are designed to improve alignment with the approved model portfolio while reducing unintended sector and security-level risks.`,
+          `The current portfolio alignment score is ${analysis.alignmentScore}/100, which indicates ${formatStatus(
+            analysis.status
+          )}. ` +
+          "The recommended changes are intended to improve alignment with the approved model portfolio, reduce unintended risks, and provide a clearer basis for adviser review.",
+      },
+      {
+        id: "current-portfolio-review",
+        title: "Current Portfolio Review",
+        content:
+          "The current portfolio has been assessed against approved model holdings and sector exposures. " +
+          "The review identifies areas where the portfolio is overweight, underweight, missing preferred model holdings, or retaining positions outside the approved model framework.",
+      },
+      {
+        id: "key-risks",
+        title: "Key Risks Identified",
+        content: riskSummary,
       },
       {
         id: "portfolio-gaps",
@@ -68,27 +159,31 @@ export function generateInvestmentProposal(): InvestmentProposal {
         content: gapSummary,
       },
       {
-        id: "recommended-trades",
+        id: "recommended-changes",
         title: "Recommended Portfolio Changes",
         content: tradeSummary,
       },
       {
-        id: "investment-rationale",
-        title: "Investment Rationale",
-        content:
-          "The recommended changes seek to reduce portfolio drift, improve exposure to approved model holdings, and replace non-model holdings with securities supported by the current investment framework.",
+        id: "investment-committee-evidence",
+        title: "Investment Committee Evidence",
+        content: evidenceSummary,
       },
       {
-        id: "expected-benefits",
-        title: "Expected Benefits",
-        content:
-          "Expected benefits include improved model alignment, stronger consistency with approved house views, clearer sector balance, and a more repeatable portfolio construction process.",
+        id: "implementation-summary",
+        title: "Implementation Summary",
+        content: implementationSummary,
       },
       {
-        id: "adviser-note",
-        title: "Adviser Review Note",
+        id: "expected-client-outcomes",
+        title: "Expected Client Outcomes",
         content:
-          "This proposal output is intended as a first-draft adviser review tool. Final recommendations should consider client objectives, tax consequences, transaction costs, income requirements, and suitability before implementation.",
+          "Expected outcomes include improved model alignment, reduced portfolio drift, clearer sector balance, stronger consistency with approved house views, and a more repeatable basis for future client reviews.",
+      },
+      {
+        id: "adviser-review-note",
+        title: "Adviser Review / SOA Note",
+        content:
+          "This proposal is an adviser review draft and should not be treated as final personal advice without further review. Before implementation, the adviser should consider client objectives, risk profile, tax position, transaction costs, income needs, liquidity requirements, product suitability, and compliance requirements.",
       },
     ],
   };

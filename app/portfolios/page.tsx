@@ -30,6 +30,7 @@ import { PortfolioApprovalReadinessPanel } from "../../components/PortfolioAppro
 import { ClientPortfolioAnalysisPanel } from "../../components/ClientPortfolioAnalysisPanel";
 import { ClientRebalanceRecommendationsPanel } from "../../components/ClientRebalanceRecommendationsPanel";
 import { InvestmentProposalPanel } from "../../components/InvestmentProposalPanel";
+import { buildClientAdviceWorkflow } from "../../lib/engines/client-advice-workflow";
 
 export default async function PortfoliosPage() {
   const { data: profiles } = await supabase
@@ -46,6 +47,8 @@ export default async function PortfoliosPage() {
     .from('strategic_allocations')
     .select('*')
     .order('id');
+
+    const clientAdviceWorkflow = buildClientAdviceWorkflow();
 
   return (
     <>
@@ -80,11 +83,13 @@ export default async function PortfoliosPage() {
 
         <ModelPortfolioChangeAuditPanel />
 
-        <ClientPortfolioAnalysisPanel />
+        <ClientPortfolioAnalysisPanel analysis={clientAdviceWorkflow.analysis} />
 
-        <ClientRebalanceRecommendationsPanel />
+        <ClientRebalanceRecommendationsPanel
+        recommendations={clientAdviceWorkflow.rebalanceRecommendations}
+        />
 
-        <InvestmentProposalPanel />
+        <InvestmentProposalPanel proposal={clientAdviceWorkflow.proposal} />
 
         <ClientPortfolioMappingPanel />
 

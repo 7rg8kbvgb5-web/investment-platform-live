@@ -1,8 +1,12 @@
-import { generateInvestmentProposal } from "../lib/engines/investment-proposal-generator";
+import type { InvestmentProposal } from "../lib/engines/investment-proposal-generator";
 
-export function InvestmentProposalPanel() {
-  const proposal = generateInvestmentProposal();
+type InvestmentProposalPanelProps = {
+  proposal: InvestmentProposal;
+};
 
+export function InvestmentProposalPanel({
+  proposal,
+}: InvestmentProposalPanelProps) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="mb-4">

@@ -1,8 +1,12 @@
-import { generateClientRebalanceRecommendations } from "../lib/engines/client-rebalance-recommendations";
+import type { ClientRebalanceRecommendation } from "../lib/engines/client-rebalance-recommendations";
 
-export function ClientRebalanceRecommendationsPanel() {
-  const recommendations = generateClientRebalanceRecommendations();
+type ClientRebalanceRecommendationsPanelProps = {
+  recommendations: ClientRebalanceRecommendation[];
+};
 
+export function ClientRebalanceRecommendationsPanel({
+  recommendations,
+}: ClientRebalanceRecommendationsPanelProps) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="mb-4">

@@ -1,8 +1,12 @@
-import { analyseClientPortfolio } from "../lib/engines/client-portfolio-analysis";
+import type { ClientPortfolioAnalysis } from "../lib/engines/client-portfolio-analysis";
 
-export function ClientPortfolioAnalysisPanel() {
-  const analysis = analyseClientPortfolio();
+type ClientPortfolioAnalysisPanelProps = {
+  analysis: ClientPortfolioAnalysis;
+};
 
+export function ClientPortfolioAnalysisPanel({
+  analysis,
+}: ClientPortfolioAnalysisPanelProps) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="mb-4">
