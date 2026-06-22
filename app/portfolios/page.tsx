@@ -89,7 +89,10 @@ export default async function PortfoliosPage() {
         recommendations={clientAdviceWorkflow.rebalanceRecommendations}
         />
 
-        <InvestmentProposalPanel proposal={clientAdviceWorkflow.proposal} />
+        <InvestmentProposalPanel
+         proposal={clientAdviceWorkflow.proposal}
+         approvalReadiness={clientAdviceWorkflow.approvalReadiness}
+        />
 
         <ClientPortfolioMappingPanel />
 

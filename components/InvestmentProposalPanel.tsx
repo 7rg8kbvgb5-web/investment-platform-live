@@ -1,7 +1,9 @@
 import type { InvestmentProposal } from "../lib/engines/investment-proposal-generator";
+import type { PortfolioApprovalReadiness } from "../lib/engines/portfolio-approval-readiness";
 
 type InvestmentProposalPanelProps = {
   proposal: InvestmentProposal;
+  approvalReadiness: PortfolioApprovalReadiness;
 };
 
 function getStatusLabel(status: string) {
@@ -9,11 +11,11 @@ function getStatusLabel(status: string) {
 }
 
 function getStatusClass(status: string) {
-  if (status === "aligned") {
+  if (status === "aligned" || status === "approved") {
     return "bg-emerald-100 text-emerald-700";
   }
 
-  if (status === "minor-adjustments") {
+  if (status === "minor-adjustments" || status === "conditional-approval") {
     return "bg-amber-100 text-amber-700";
   }
 
@@ -22,6 +24,7 @@ function getStatusClass(status: string) {
 
 export function InvestmentProposalPanel({
   proposal,
+  approvalReadiness,
 }: InvestmentProposalPanelProps) {
   const evidenceSection = proposal.sections.find(
     (section) => section.id === "investment-committee-evidence"
@@ -45,8 +48,8 @@ export function InvestmentProposalPanel({
 
           <p className="mt-2 max-w-3xl text-sm text-slate-600">
             Generates an adviser-grade proposal summary using the shared client
-            advice workflow, portfolio analysis, rebalance recommendations and
-            investment committee evidence.
+            advice workflow, portfolio analysis, rebalance recommendations,
+            investment committee evidence and approval readiness checks.
           </p>
         </div>
 
@@ -59,7 +62,7 @@ export function InvestmentProposalPanel({
         </span>
       </div>
 
-      <div className="mb-6 grid gap-4 md:grid-cols-4">
+      <div className="mb-6 grid gap-4 md:grid-cols-5">
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
           <p className="text-sm text-slate-500">Client</p>
           <p className="mt-1 text-lg font-semibold text-slate-900">
@@ -82,14 +85,25 @@ export function InvestmentProposalPanel({
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <p className="text-sm text-slate-500">Proposal Sections</p>
+          <p className="text-sm text-slate-500">Approval Score</p>
           <p className="mt-1 text-3xl font-bold text-slate-900">
-            {proposal.sections.length}
+            {approvalReadiness.score}/100
           </p>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-sm text-slate-500">Approval Status</p>
+          <span
+            className={`mt-2 inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${getStatusClass(
+              approvalReadiness.status
+            )}`}
+          >
+            {getStatusLabel(approvalReadiness.status)}
+          </span>
         </div>
       </div>
 
-      <div className="mb-6 grid gap-4 md:grid-cols-2">
+      <div className="mb-6 grid gap-4 md:grid-cols-3">
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
           <p className="text-sm font-semibold text-slate-900">
             Recommended Changes Snapshot
@@ -109,6 +123,28 @@ export function InvestmentProposalPanel({
             {evidenceSection?.content ||
               "No investment committee evidence attached."}
           </p>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-sm font-semibold text-slate-900">
+            Approval Readiness Snapshot
+          </p>
+
+          <p className="mt-2 text-sm leading-6 text-slate-700">
+            {approvalReadiness.rationale}
+          </p>
+
+          {approvalReadiness.requiredActions.length > 0 ? (
+            <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-700">
+              {approvalReadiness.requiredActions.map((action) => (
+                <li key={action}>{action}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-3 text-sm font-semibold text-slate-700">
+              No outstanding approval actions.
+            </p>
+          )}
         </div>
       </div>
 
