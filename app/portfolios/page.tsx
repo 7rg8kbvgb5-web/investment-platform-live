@@ -31,6 +31,7 @@ import { ClientPortfolioAnalysisPanel } from "../../components/ClientPortfolioAn
 import { ClientRebalanceRecommendationsPanel } from "../../components/ClientRebalanceRecommendationsPanel";
 import { InvestmentProposalPanel } from "../../components/InvestmentProposalPanel";
 import { buildClientAdviceWorkflow } from "../../lib/engines/client-advice-workflow";
+import PortfolioWorkspace from "../../components/PortfolioWorkspace";
 
 export default async function PortfoliosPage() {
   const { data: profiles } = await supabase
@@ -57,49 +58,67 @@ export default async function PortfoliosPage() {
         title="Portfolios"
         description="Strategic allocations, tactical overlays, guardrails, and portfolio simulation workflows by risk profile."
       >
-        <SectorHealthScorePanel />
+        <PortfolioWorkspace
+  construction={
+    <>
+      <SectorHealthScorePanel />
 
-        <SecurityRankingPanel />
+      <SecurityRankingPanel />
 
-        <SectorAllocationPanel />
-        
-        <PortfolioCandidatesPanel />
+      <SectorAllocationPanel />
 
-        <ChampionChallengerPortfolioPanel />
+      <PortfolioCandidatesPanel />
 
-        <SectorConstructionPanel />
+      <ChampionChallengerPortfolioPanel />
 
-        <PortfolioConstructionAuditPanel />
+      <SectorConstructionPanel />
 
-        <PortfolioValidationPanel />
+      <PortfolioConstructionAuditPanel />
 
-        <PortfolioApprovalReadinessPanel />
+      <PortfolioValidationPanel />
+    </>
+  }
 
-        <RiskProfilePortfolioPanel />
+  riskProfiles={
+    <>
+      <RiskProfilePortfolioPanel />
+  
+      <PortfolioDriftMonitoringPanel />
+  
+      <DriftAlertsPanel />
+    </>
+  }
 
-        <ModelPortfolioVersioningPanel />
+  clientAdvice={
+    <>
+    <ClientPortfolioAnalysisPanel analysis={clientAdviceWorkflow.analysis} />
 
-        <ModelPortfolioApprovalPanel />
+    <ClientPortfolioMappingPanel />
 
-        <ModelPortfolioChangeAuditPanel />
+<ClientRebalanceRecommendationsPanel
+recommendations={clientAdviceWorkflow.rebalanceRecommendations}
+/>
 
-        <ClientPortfolioAnalysisPanel analysis={clientAdviceWorkflow.analysis} />
+<InvestmentProposalPanel
+ proposal={clientAdviceWorkflow.proposal}
+ approvalReadiness={clientAdviceWorkflow.approvalReadiness}
+/>
 
-        <ClientRebalanceRecommendationsPanel
-        recommendations={clientAdviceWorkflow.rebalanceRecommendations}
-        />
+      <PortfolioApprovalReadinessPanel />
+    </>
+  }
 
-        <InvestmentProposalPanel
-         proposal={clientAdviceWorkflow.proposal}
-         approvalReadiness={clientAdviceWorkflow.approvalReadiness}
-        />
+  governance={
+    <>
+      <ModelPortfolioVersioningPanel />
 
-        <ClientPortfolioMappingPanel />
+      <ModelPortfolioApprovalPanel />
 
-        <PortfolioDriftMonitoringPanel />
-
-        <DriftAlertsPanel />
-
+      <ModelPortfolioChangeAuditPanel />
+    </>
+  }
+/>      
+      
         {profiles?.map((profile) => {
           const {
             adjustedAllocations: profileAllocations,
