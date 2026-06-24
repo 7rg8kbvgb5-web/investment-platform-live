@@ -32,6 +32,7 @@ import { ClientRebalanceRecommendationsPanel } from "../../components/ClientReba
 import { InvestmentProposalPanel } from "../../components/InvestmentProposalPanel";
 import { buildClientAdviceWorkflow } from "../../lib/engines/client-advice-workflow";
 import PortfolioWorkspace from "../../components/PortfolioWorkspace";
+import ClientPortfolioUploadPanel from "../../components/ClientPortfolioUploadPanel";
 
 export default async function PortfoliosPage() {
   const { data: profiles } = await supabase
@@ -91,7 +92,9 @@ export default async function PortfoliosPage() {
 
   clientAdvice={
     <>
-    <ClientPortfolioAnalysisPanel analysis={clientAdviceWorkflow.analysis} />
+      <ClientPortfolioUploadPanel />
+  
+      <ClientPortfolioAnalysisPanel analysis={clientAdviceWorkflow.analysis} />
 
     <ClientPortfolioMappingPanel />
 
