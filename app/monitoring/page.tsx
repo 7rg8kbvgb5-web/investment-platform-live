@@ -8,7 +8,7 @@ export default function MonitoringPage() {
   return (
     <PageContent
       title="Monitoring"
-      description="Unified monitoring status, alert engine, configurable rules, and fund assessments."
+      description="Monitor portfolios, review alerts, assess managed funds, and identify investment issues requiring attention."
     >
       <MonitoringSummaryPanel />
       <AlertSummaryPanel />
