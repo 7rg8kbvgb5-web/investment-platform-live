@@ -52,7 +52,6 @@ const tabWrap = {
 } as const
 
 const tabButton = {
-  border: '1px solid #2b5c95',
   borderRadius: '999px',
   padding: '10px 18px',
   fontSize: '14px',
@@ -63,10 +62,11 @@ const tabButton = {
 const activeTabButton = {
   background: '#2563eb',
   color: '#ffffff',
-  borderColor: '#60a5fa',
+  border: '1px solid #60a5fa',
 } as const
 
 const inactiveTabButton = {
   background: '#0b1f3a',
   color: '#bfdbfe',
+  border: '1px solid #2b5c95',
 } as const

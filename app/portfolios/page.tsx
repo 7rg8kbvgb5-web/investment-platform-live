@@ -1,5 +1,16 @@
+import { supabase } from '../../lib/supabase';
+import { buildPortfolioState } from '../../lib/engines/build-portfolio-state';
 import PageContent from '../../components/PageContent';
 import DashboardHero from '../../components/dashboard/DashboardHero';
+import ProfileCardHeader from '../../components/dashboard/ProfileCardHeader';
+import ProfileSummaryGrid from '../../components/dashboard/ProfileSummaryGrid';
+import ProfileChartsSection from '../../components/dashboard/ProfileChartsSection';
+import ProfileAllocationTable from '../../components/dashboard/ProfileAllocationTable';
+import GuardrailsPanel from '../../components/dashboard/GuardrailsPanel';
+import OverlayGovernancePanel from '../../components/dashboard/OverlayGovernancePanel';
+import ResetToStrategicPanel from '../../components/dashboard/ResetToStrategicPanel';
+import PortfolioSimulationWorkflow from '../../components/dashboard/PortfolioSimulationWorkflow';
+import StatusBox from '../../components/dashboard/StatusBox';
 import { PortfolioCandidatesPanel } from '../../components/PortfolioCandidatesPanel';
 import { ChampionChallengerPortfolioPanel } from '../../components/ChampionChallengerPortfolioPanel';
 import { SectorConstructionPanel } from '../../components/SectorConstructionPanel';
@@ -22,6 +33,21 @@ import PortfolioWorkspace from '../../components/PortfolioWorkspace';
 import ClientPortfolioUploadPanel from '../../components/ClientPortfolioUploadPanel';
 
 export default async function PortfoliosPage() {
+  const { data: profiles } = await supabase
+    .from('risk_profiles')
+    .select('*')
+    .order('id');
+
+  const { data: overlays } = await supabase
+    .from('tactical_overlays')
+    .select('*')
+    .order('id');
+
+  const { data: allocations } = await supabase
+    .from('strategic_allocations')
+    .select('*')
+    .order('id');
+
   const clientAdviceWorkflow = buildClientAdviceWorkflow();
 
   return (
@@ -48,6 +74,69 @@ export default async function PortfoliosPage() {
           riskProfiles={
             <>
               <RiskProfilePortfolioPanel />
+
+              {profiles?.map((profile) => {
+                const {
+                  adjustedAllocations: profileAllocations,
+                  totalWeight,
+                  growthTotal,
+                  defensiveTotal,
+                  status,
+                  guardrailWarnings,
+                  tacticalOverlayDateWarnings,
+                } = buildPortfolioState({
+                  riskProfileName: profile.name,
+                  strategicAllocations: allocations || [],
+                  tacticalOverlays: overlays || [],
+                });
+
+                return (
+                  <section key={profile.id} style={profileCard}>
+                    <ProfileCardHeader
+                      name={profile.name}
+                      description={profile.description}
+                      growthAssets={profile.growth_assets}
+                      defensiveAssets={profile.defensive_assets}
+                    />
+
+                    <ProfileSummaryGrid
+                      totalWeight={totalWeight}
+                      growthTotal={growthTotal}
+                      defensiveTotal={defensiveTotal}
+                      status={status}
+                    />
+
+                    {profileAllocations.length === 0 ? (
+                      <StatusBox variant="warning">
+                        No allocation rows found for this risk profile.
+                      </StatusBox>
+                    ) : (
+                      <>
+                        <ProfileChartsSection
+                          allocations={profileAllocations}
+                          growthTotal={growthTotal}
+                          defensiveTotal={defensiveTotal}
+                        />
+
+                        <ProfileAllocationTable allocations={profileAllocations} />
+                      </>
+                    )}
+
+                    <GuardrailsPanel warnings={guardrailWarnings} />
+                    <OverlayGovernancePanel warnings={tacticalOverlayDateWarnings} />
+                    <ResetToStrategicPanel
+                      strategicAllocations={allocations || []}
+                      tacticalOverlays={overlays || []}
+                      riskProfileName={profile.name}
+                    />
+                    <PortfolioSimulationWorkflow
+                      strategicAllocations={allocations || []}
+                      tacticalOverlays={overlays || []}
+                      riskProfileName={profile.name}
+                    />
+                  </section>
+                );
+              })}
             </>
           }
           clientAdvice={
@@ -84,3 +173,11 @@ export default async function PortfoliosPage() {
     </>
   );
 }
+
+const profileCard = {
+  marginBottom: '35px',
+  padding: '30px',
+  background: '#04142b',
+  borderRadius: '18px',
+  border: '1px solid #1e3a5f',
+};
