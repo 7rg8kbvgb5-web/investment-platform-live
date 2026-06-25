@@ -31,6 +31,9 @@ import { InvestmentProposalPanel } from '../../components/InvestmentProposalPane
 import { buildClientAdviceWorkflow } from '../../lib/engines/client-advice-workflow';
 import PortfolioWorkspace from '../../components/PortfolioWorkspace';
 import ClientPortfolioUploadPanel from '../../components/ClientPortfolioUploadPanel';
+import { PortfolioDriftMonitoringPanel } from '../../components/PortfolioDriftMonitoringPanel';
+import { DriftAlertsPanel } from '../../components/DriftAlertsPanel';
+import RiskProfileWorkspace from '../../components/RiskProfileWorkspace';
 
 export default async function PortfoliosPage() {
   const { data: profiles } = await supabase
@@ -71,93 +74,30 @@ export default async function PortfoliosPage() {
               <PortfolioValidationPanel />
             </>
           }
-          riskProfiles={
-            <>
-              <RiskProfilePortfolioPanel />
-
-              {profiles?.map((profile) => {
-                const {
-                  adjustedAllocations: profileAllocations,
-                  totalWeight,
-                  growthTotal,
-                  defensiveTotal,
-                  status,
-                  guardrailWarnings,
-                  tacticalOverlayDateWarnings,
-                } = buildPortfolioState({
-                  riskProfileName: profile.name,
-                  strategicAllocations: allocations || [],
-                  tacticalOverlays: overlays || [],
-                });
-
-                return (
-                  <section key={profile.id} style={profileCard}>
-                    <ProfileCardHeader
-                      name={profile.name}
-                      description={profile.description}
-                      growthAssets={profile.growth_assets}
-                      defensiveAssets={profile.defensive_assets}
-                    />
-
-                    <ProfileSummaryGrid
-                      totalWeight={totalWeight}
-                      growthTotal={growthTotal}
-                      defensiveTotal={defensiveTotal}
-                      status={status}
-                    />
-
-                    {profileAllocations.length === 0 ? (
-                      <StatusBox variant="warning">
-                        No allocation rows found for this risk profile.
-                      </StatusBox>
-                    ) : (
-                      <>
-                        <ProfileChartsSection
-                          allocations={profileAllocations}
-                          growthTotal={growthTotal}
-                          defensiveTotal={defensiveTotal}
-                        />
-
-                        <ProfileAllocationTable allocations={profileAllocations} />
-                      </>
-                    )}
-
-                    <GuardrailsPanel warnings={guardrailWarnings} />
-                    <OverlayGovernancePanel warnings={tacticalOverlayDateWarnings} />
-                    <ResetToStrategicPanel
-                      strategicAllocations={allocations || []}
-                      tacticalOverlays={overlays || []}
-                      riskProfileName={profile.name}
-                    />
-                    <PortfolioSimulationWorkflow
-                      strategicAllocations={allocations || []}
-                      tacticalOverlays={overlays || []}
-                      riskProfileName={profile.name}
-                    />
-                  </section>
-                );
-              })}
-            </>
-          }
+          riskProfiles={<RiskProfileWorkspace />}
           clientAdvice={
             <>
               <ClientPortfolioUploadPanel />
-
+          
               <ClientPortfolioMappingPanel />
-
+          
               <ClientPortfolioAnalysisPanel
                 analysis={clientAdviceWorkflow.analysis}
               />
-
+          
+              <PortfolioDriftMonitoringPanel />
+          
+              <DriftAlertsPanel />
+          
               <ClientRebalanceRecommendationsPanel
                 recommendations={clientAdviceWorkflow.rebalanceRecommendations}
               />
-
+          
               <InvestmentProposalPanel
                 proposal={clientAdviceWorkflow.proposal}
                 approvalReadiness={clientAdviceWorkflow.approvalReadiness}
               />
-
+          
               <PortfolioApprovalReadinessPanel />
             </>
           }
