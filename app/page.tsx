@@ -9,17 +9,18 @@ export default function Home() {
   return (
     <>
       <DashboardHero />
+
       <PageContent
         title="Dashboard Overview"
-        description="Executive command centre for investment committee priorities, monitoring status, fund research lifecycle, and system readiness."
+        description="Daily command centre for investment committee priorities, monitoring alerts, research progress, and platform readiness."
       >
-        <SystemStatusPanel />
-
         <InvestmentCommitteeDashboard />
 
         <MonitoringSummaryPanel />
 
         <FundResearchLifecyclePanel />
+
+        <SystemStatusPanel />
       </PageContent>
     </>
   );
