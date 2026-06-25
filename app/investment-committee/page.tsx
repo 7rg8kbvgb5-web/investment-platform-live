@@ -7,7 +7,7 @@ export default function InvestmentCommitteePage() {
   return (
     <PageContent
       title="Investment Committee"
-      description="Executive summary of house views, fund reviews, governance health, and committee priorities."
+      description="Review house views, committee decisions, portfolio priorities, and investment governance health."
     >
       <InvestmentCommitteeDashboard />
       <DecisionHistoryPanel />

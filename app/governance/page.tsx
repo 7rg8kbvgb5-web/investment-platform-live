@@ -5,7 +5,7 @@ export default function GovernancePage() {
   return (
     <PageContent
       title="Governance"
-      description="Audit trail, investment cases, approval workflow, and deferred review queue."
+      description="Audit trail, approval workflow, deferred reviews, and governance evidence for investment decisions."
     >
       <GovernancePageContent />
     </PageContent>
