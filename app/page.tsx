@@ -4,10 +4,14 @@ import InvestmentCommitteeDashboard from '../components/InvestmentCommitteeDashb
 import MonitoringSummaryPanel from '../components/MonitoringSummaryPanel';
 import SystemStatusPanel from '../components/SystemStatusPanel';
 import DashboardHero from '../components/dashboard/DashboardHero';
+import { AdviserDashboardPanel } from '../components/AdviserDashboardPanel';
 
 export default function Home() {
   return (
     <>
+
+      <AdviserDashboardPanel />
+
       <DashboardHero />
 
       <PageContent
