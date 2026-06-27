@@ -1,60 +1,102 @@
 'use client'
 
 import { useState } from 'react'
+import {
+  buildRiskProfilePortfolio,
+  type RiskProfileName,
+} from '../lib/engines/risk-profile-portfolio'
 
-const profiles = [
+const profiles: RiskProfileName[] = [
   'Conservative',
   'Moderate',
   'Balanced',
   'Growth',
   'High Growth',
-] as const
+]
 
 export default function RiskProfileWorkspace() {
   const [selectedProfile, setSelectedProfile] =
-    useState<(typeof profiles)[number]>('Balanced')
+    useState<RiskProfileName>('Balanced')
+
+  const holdings = buildRiskProfilePortfolio(selectedProfile)
+
+  const totalWeight = holdings.reduce(
+    (total, holding) => total + holding.portfolioWeight,
+    0
+  )
 
   return (
-    <div className="space-y-6">
-
-      <div>
-        <h2 className="text-2xl font-bold">Risk Profiles</h2>
-
-        <p className="text-slate-400 mt-2">
-          Select a model portfolio to review its asset allocation,
-          sector exposures, guardrails and simulation.
+    <section className="card">
+      <div className="section">
+        <p className="eyebrow">Risk Profile Portfolios</p>
+        <h2>{selectedProfile} Model Portfolio</h2>
+        <p className="muted">
+          Select a model portfolio to review its holdings, sector exposure and portfolio weights.
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        {profiles.map((profile) => (
-          <button
-            key={profile}
-            onClick={() => setSelectedProfile(profile)}
-            className={`rounded-xl border px-5 py-3 font-semibold transition ${
-              selectedProfile === profile
-                ? 'bg-blue-600 border-blue-400 text-white'
-                : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-blue-400'
-            }`}
-          >
-            {profile}
-          </button>
-        ))}
+      <div className="risk-tabs">
+  {profiles.map((profile) => (
+    <button
+      key={profile}
+      type="button"
+      className={`risk-tab ${selectedProfile === profile ? 'active' : ''}`}
+      onClick={() => setSelectedProfile(profile)}
+    >
+      {profile}
+    </button>
+  ))}
+</div>
+
+      <div className="kpi-grid">
+        <div className="kpi-card">
+          <span>Selected Profile</span>
+          <strong>{selectedProfile}</strong>
+        </div>
+
+        <div className="kpi-card">
+          <span>Holdings</span>
+          <strong>{holdings.length}</strong>
+        </div>
+
+        <div className="kpi-card">
+          <span>Total Weight</span>
+          <strong>{totalWeight.toFixed(1)}%</strong>
+        </div>
+
+        <div className="kpi-card">
+          <span>Status</span>
+          <strong>Model</strong>
+        </div>
       </div>
 
-      <div className="rounded-xl border border-slate-700 bg-slate-900 p-8">
+      <table>
+        <thead>
+          <tr>
+            <th>Sector</th>
+            <th>Code</th>
+            <th>Name</th>
+            <th>Role</th>
+            <th>Sector Target</th>
+            <th>Sector Split</th>
+            <th>Portfolio Weight</th>
+          </tr>
+        </thead>
 
-        <h3 className="text-xl font-bold text-white">
-          {selectedProfile}
-        </h3>
-
-        <p className="mt-2 text-slate-400">
-          Portfolio information for the {selectedProfile} model
-          will appear here.
-        </p>
-
-      </div>
-
-    </div>
+        <tbody>
+          {holdings.map((holding) => (
+            <tr key={`${selectedProfile}-${holding.code}`}>
+              <td>{holding.sector}</td>
+              <td>{holding.code}</td>
+              <td>{holding.name}</td>
+              <td>{holding.role}</td>
+              <td>{holding.sectorTargetWeight}%</td>
+              <td>{holding.sectorWeight}%</td>
+              <td>{holding.portfolioWeight.toFixed(2)}%</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
   )
 }

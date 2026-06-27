@@ -1,33 +1,78 @@
-'use client'
+import {
+  buildRiskProfilePortfolio,
+  type RiskProfileName,
+} from '../lib/engines/risk-profile-portfolio'
 
 interface Props {
-  profile: string
+  profile: RiskProfileName
 }
 
 export default function RiskProfileContent({ profile }: Props) {
+  const holdings = buildRiskProfilePortfolio(profile)
+  const totalWeight = holdings.reduce(
+    (total, holding) => total + holding.portfolioWeight,
+    0
+  )
+
   return (
-    <div className="mt-6 rounded-xl border border-slate-700 bg-slate-900 p-8">
+    <section className="card">
+      <div className="section">
+        <p className="eyebrow">Risk Profile Portfolio</p>
+        <h2>{profile} Model Portfolio</h2>
+        <p className="muted">
+          Generated model portfolio holdings based on sector construction and risk profile weights.
+        </p>
+      </div>
 
-      <h2 className="text-2xl font-bold text-white">
-        {profile} Portfolio
-      </h2>
+      <div className="kpi-grid">
+        <div className="kpi-card">
+          <span>Selected Profile</span>
+          <strong>{profile}</strong>
+        </div>
 
-      <p className="mt-3 text-slate-400">
-        This workspace will display the complete {profile.toLowerCase()} model
-        portfolio including:
-      </p>
+        <div className="kpi-card">
+          <span>Holdings</span>
+          <strong>{holdings.length}</strong>
+        </div>
 
-      <ul className="mt-6 space-y-3 text-slate-300">
-        <li>• Portfolio Summary</li>
-        <li>• Asset Allocation</li>
-        <li>• Pie Charts</li>
-        <li>• Sector Weightings</li>
-        <li>• Holdings</li>
-        <li>• Guardrails</li>
-        <li>• Overlay Governance</li>
-        <li>• Portfolio Simulation</li>
-      </ul>
+        <div className="kpi-card">
+          <span>Total Weight</span>
+          <strong>{totalWeight.toFixed(1)}%</strong>
+        </div>
 
-    </div>
+        <div className="kpi-card">
+          <span>Status</span>
+          <strong>Model</strong>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Sector</th>
+            <th>Code</th>
+            <th>Name</th>
+            <th>Role</th>
+            <th>Sector Target</th>
+            <th>Sector Split</th>
+            <th>Portfolio Weight</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {holdings.map((holding) => (
+            <tr key={`${profile}-${holding.code}`}>
+              <td>{holding.sector}</td>
+              <td>{holding.code}</td>
+              <td>{holding.name}</td>
+              <td>{holding.role}</td>
+              <td>{holding.sectorTargetWeight}%</td>
+              <td>{holding.sectorWeight}%</td>
+              <td>{holding.portfolioWeight.toFixed(2)}%</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
   )
 }

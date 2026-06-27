@@ -661,4 +661,31 @@ textarea {
   }
 }
 
+.risk-profile-tabs {
+  margin: 16px 0;
+}
+
+.risk-tabs {
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 16px 0;
+  display: flex;
+}
+
+.risk-tab {
+  color: var(--text);
+  cursor: pointer;
+  background: #0b1328;
+  border: 1px solid #3d5a8a;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-weight: 700;
+}
+
+.risk-tab.active {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+}
+
 /*# sourceMappingURL=app_globals_0jn8.0u.css.map*/
