@@ -33,7 +33,6 @@ import PortfolioWorkspace from '../../components/PortfolioWorkspace';
 import ClientPortfolioUploadPanel from '../../components/ClientPortfolioUploadPanel';
 import { PortfolioDriftMonitoringPanel } from '../../components/PortfolioDriftMonitoringPanel';
 import { DriftAlertsPanel } from '../../components/DriftAlertsPanel';
-import RiskProfileWorkspace from '../../components/RiskProfileWorkspace';
 
 export default async function PortfoliosPage() {
   const { data: profiles } = await supabase
@@ -74,30 +73,30 @@ export default async function PortfoliosPage() {
               <PortfolioValidationPanel />
             </>
           }
-          riskProfiles={<RiskProfileWorkspace />}
+          riskProfiles={<RiskProfilePortfolioPanel />}
           clientAdvice={
             <>
               <ClientPortfolioUploadPanel />
-          
+
               <ClientPortfolioMappingPanel />
-          
+
               <ClientPortfolioAnalysisPanel
                 analysis={clientAdviceWorkflow.analysis}
               />
-          
+
               <PortfolioDriftMonitoringPanel />
-          
+
               <DriftAlertsPanel />
-          
+
               <ClientRebalanceRecommendationsPanel
                 recommendations={clientAdviceWorkflow.rebalanceRecommendations}
               />
-          
+
               <InvestmentProposalPanel
                 proposal={clientAdviceWorkflow.proposal}
                 approvalReadiness={clientAdviceWorkflow.approvalReadiness}
               />
-          
+
               <PortfolioApprovalReadinessPanel />
             </>
           }
