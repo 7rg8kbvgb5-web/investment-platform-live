@@ -73,7 +73,6 @@ export default function PortfolioWorkspace({
       {activeTab === 'riskProfiles' && (
   <div className="section">
     <ModelPortfolioBuilderPanel />
-    {riskProfiles}
   </div>
 )}
 
