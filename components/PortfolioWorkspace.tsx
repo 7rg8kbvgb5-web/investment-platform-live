@@ -8,6 +8,11 @@ import ProposalV3Panel from './ProposalV3Panel'
 import ClientRiskProfileSelector, {
   type ClientRiskProfile,
 } from './ClientRiskProfileSelector'
+import {
+  ClientAdviceProvider,
+  useClientAdvice,
+} from './ClientAdviceContext'
+import ModelPortfolioBuilderPanel from "./ModelPortfolioBuilderPanel";
 
 type PortfolioWorkspaceKey =
   | 'construction'
@@ -31,8 +36,6 @@ export default function PortfolioWorkspace({
   const [activeTab, setActiveTab] =
     useState<PortfolioWorkspaceKey>('construction')
 
-  const [selectedRiskProfile, setSelectedRiskProfile] =
-    useState<ClientRiskProfile>('Balanced')
 
   const clientAdviceWorkflow: WorkflowStep[] = [
     {
@@ -67,7 +70,12 @@ export default function PortfolioWorkspace({
 
       {activeTab === 'construction' && construction}
 
-      {activeTab === 'riskProfiles' && riskProfiles}
+      {activeTab === 'riskProfiles' && (
+  <div className="section">
+    <ModelPortfolioBuilderPanel />
+    {riskProfiles}
+  </div>
+)}
 
       {activeTab === 'clientAdvice' && (
         <div className="section">
@@ -77,10 +85,10 @@ export default function PortfolioWorkspace({
             steps={clientAdviceWorkflow}
           />
 
-          <ClientRiskProfileSelector
-            selectedRiskProfile={selectedRiskProfile}
-            onChange={setSelectedRiskProfile}
-          />
+<ClientRiskProfileSelector
+  selectedRiskProfile="Balanced"
+  onChange={() => {}}
+/>
 
           <ClientAdviceDecisionSummary />
 
