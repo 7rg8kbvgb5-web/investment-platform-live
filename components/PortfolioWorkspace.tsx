@@ -13,6 +13,7 @@ import {
   useClientAdvice,
 } from './ClientAdviceContext'
 import ModelPortfolioBuilderPanel from "./ModelPortfolioBuilderPanel";
+import InstitutionalProposalBuilderPanel from "./InstitutionalProposalBuilderPanel";
 
 type PortfolioWorkspaceKey =
   | 'construction'
@@ -94,6 +95,17 @@ export default function PortfolioWorkspace({
           {clientAdvice}
 
           <ProposalV3Panel />
+
+          <InstitutionalProposalBuilderPanel
+  proposal={{
+    executiveSummary:
+      'This proposal summarises the current portfolio position, recommended changes and investment committee evidence supporting the advice.',
+  }}
+  approvalReadiness={{
+    status: 'Draft',
+  }}
+/>
+
         </div>
       )}
 
