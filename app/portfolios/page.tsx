@@ -33,6 +33,12 @@ import PortfolioWorkspace from '../../components/PortfolioWorkspace';
 import ClientPortfolioUploadPanel from '../../components/ClientPortfolioUploadPanel';
 import { PortfolioDriftMonitoringPanel } from '../../components/PortfolioDriftMonitoringPanel';
 import { DriftAlertsPanel } from '../../components/DriftAlertsPanel';
+import AdviserCommandCentreHeader from '../../components/AdviserCommandCentreHeader'
+import AdviserCommandCentreDashboard from '../../components/AdviserCommandCentreDashboard'
+import WorkflowProgressPanel from '../../components/WorkflowProgressPanel';
+import ProposalPipelinePanel from '../../components/ProposalPipelinePanel';
+import DashboardGrid from '../../components/ui/DashboardGrid';
+import AdviserPrioritiesPanel from '../../components/AdviserPrioritiesPanel';
 
 export default async function PortfoliosPage() {
   const { data: profiles } = await supabase
@@ -60,6 +66,13 @@ export default async function PortfoliosPage() {
         title="Portfolios"
         description="Build model portfolios, review risk profiles, analyse client holdings and govern portfolio changes."
       >
+         <AdviserCommandCentreHeader />
+         <AdviserCommandCentreDashboard />
+         <DashboardGrid>
+  <WorkflowProgressPanel />
+  <ProposalPipelinePanel />
+  <AdviserPrioritiesPanel />
+</DashboardGrid>
         <PortfolioWorkspace
           construction={
             <>
