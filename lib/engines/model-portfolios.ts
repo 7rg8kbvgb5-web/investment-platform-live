@@ -118,7 +118,31 @@ const cash = (weight: number): ModelAssetClass => ({
   ],
 });
 
-export const modelPortfolios: ModelPortfolio[] = [
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+/**
+ * Holding weights are computed as fractions of an asset class weight
+ * (e.g. weight * 0.22), which routinely produces binary floating-point
+ * artifacts like 5.949999999999999 instead of 5.95. Rounding once here,
+ * rather than remembering to round in every place that later reads
+ * holding.weight, keeps every consumer clean by construction.
+ */
+function roundPortfolio(portfolio: ModelPortfolio): ModelPortfolio {
+  return {
+    ...portfolio,
+    assetClasses: portfolio.assetClasses.map((assetClass) => ({
+      ...assetClass,
+      holdings: assetClass.holdings.map((holding) => ({
+        ...holding,
+        weight: round2(holding.weight),
+      })),
+    })),
+  };
+}
+
+const rawModelPortfolios: ModelPortfolio[] = [
   {
     riskProfile: "Conservative",
     objective: "Designed for investors prioritising capital stability, liquidity and income, with modest exposure to growth assets.",
@@ -195,6 +219,8 @@ export const modelPortfolios: ModelPortfolio[] = [
     ],
   },
 ];
+
+export const modelPortfolios: ModelPortfolio[] = rawModelPortfolios.map(roundPortfolio);
 
 export function getModelPortfolioByRiskProfile(
   riskProfile: RiskProfile
