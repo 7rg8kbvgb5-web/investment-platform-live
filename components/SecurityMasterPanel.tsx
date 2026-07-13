@@ -1,60 +1,78 @@
 import { securityMasterData } from "../domain/types/security-master-data";
+import Badge, { type BadgeVariant } from "./ui/Badge";
+import Panel from "./ui/Panel";
+
+function houseViewVariant(view: string): BadgeVariant {
+  if (view === "strong-positive" || view === "positive") return "success";
+  if (view === "negative" || view === "strong-negative") return "danger";
+  return "neutral";
+}
+
+function approvalVariant(status: string): BadgeVariant {
+  if (status === "approved") return "success";
+  if (status === "watchlist" || status === "under-review") return "warning";
+  if (status === "restricted" || status === "removed") return "danger";
+  return "neutral";
+}
+
+function championVariant(status: string): BadgeVariant {
+  if (status === "champion") return "primary";
+  if (status === "challenger") return "neutral";
+  return "neutral";
+}
 
 export function SecurityMasterPanel() {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="mb-4">
-        <h2 className="text-xl font-semibold text-slate-900">
-          Security Master
-        </h2>
-        <p className="text-sm text-slate-600">
-          Central register for approved securities, house views, conviction scores and Champion / Challenger status.
-        </p>
-      </div>
+    <Panel
+      eyebrow="Approved List"
+      title="Security Master"
+    >
+      <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", marginTop: "-8px" }}>
+        Central register for approved securities, house views, conviction
+        scores and Champion / Challenger status.
+      </p>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-slate-50 text-slate-600">
+      <div className="ui-table-wrap">
+        <table className="ui-table">
+          <thead>
             <tr>
-              <th className="px-4 py-3">Code</th>
-              <th className="px-4 py-3">Name</th>
-              <th className="px-4 py-3">Sector</th>
-              <th className="px-4 py-3">House View</th>
-              <th className="px-4 py-3">Conviction</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Role</th>
+              <th>Code</th>
+              <th>Name</th>
+              <th>Sector</th>
+              <th>House View</th>
+              <th>Conviction</th>
+              <th>Status</th>
+              <th>Role</th>
             </tr>
           </thead>
 
-          <tbody className="divide-y divide-slate-200">
+          <tbody>
             {securityMasterData.map((security) => (
-              <tr key={security.id} className="bg-white">
-                <td className="px-4 py-3 font-semibold text-slate-900">
-                  {security.code}
+              <tr key={security.id}>
+                <td style={{ fontWeight: 700 }}>{security.code}</td>
+                <td>{security.name}</td>
+                <td>{security.sector}</td>
+                <td>
+                  <Badge variant={houseViewVariant(security.houseView)}>
+                    {security.houseView.replaceAll("-", " ")}
+                  </Badge>
                 </td>
-                <td className="px-4 py-3 text-slate-700">
-                  {security.name}
+                <td>{security.convictionScore}/5</td>
+                <td>
+                  <Badge variant={approvalVariant(security.approvalStatus)}>
+                    {security.approvalStatus.replaceAll("-", " ")}
+                  </Badge>
                 </td>
-                <td className="px-4 py-3 text-slate-700">
-                  {security.sector}
-                </td>
-                <td className="px-4 py-3 text-slate-700">
-                  {security.houseView}
-                </td>
-                <td className="px-4 py-3 text-slate-700">
-                  {security.convictionScore}/5
-                </td>
-                <td className="px-4 py-3 text-slate-700">
-                  {security.approvalStatus}
-                </td>
-                <td className="px-4 py-3 text-slate-700">
-                  {security.championStatus}
+                <td>
+                  <Badge variant={championVariant(security.championStatus)}>
+                    {security.championStatus.replaceAll("-", " ")}
+                  </Badge>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-    </section>
+    </Panel>
   );
 }

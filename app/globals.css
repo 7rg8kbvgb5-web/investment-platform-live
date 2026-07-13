@@ -47,19 +47,22 @@
 
       0 12px 30px rgba(0,0,0,.18);
 
+  /* Legacy aliases — an earlier token set used these shorter names.
+     Kept and mapped onto the canonical values above so nothing that
+     already references them breaks, rather than maintaining two
+     separate, silently-conflicting :root blocks. New work should use
+     the named tokens above, not these. */
+  --bg: var(--bg-page);
+  --panel: var(--bg-panel);
+  --panel2: var(--bg-panel-light);
+  --muted: var(--text-muted);
+  --line: var(--border);
+  --green: var(--success);
+  --amber: var(--warning);
+  --red: var(--danger);
+  --blue: var(--primary);
 }
-:root {
-  --bg: #0b1020;
-  --panel: #121a2f;
-  --panel2: #19233d;
-  --text: #edf2ff;
-  --muted: #98a2b3;
-  --line: #27324f;
-  --green: #55d187;
-  --amber: #f2b84b;
-  --red: #ef6b6b;
-  --blue: #6ea8fe;
-}
+/* (Legacy short-name tokens now live as aliases in the :root block above.) */
 
 * {
   box-sizing: border-box;
@@ -1483,4 +1486,170 @@ textarea {
 
 .priority-info {
   border-left: 4px solid var(--primary);
+}
+/* =====================================
+   Shared UI primitives — table, badges, buttons, empty state
+   One canonical set for every panel to use instead of inventing
+   one-off inline-styled or light-mode variants per component.
+===================================== */
+
+.ui-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.ui-table thead th {
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ui-table tbody td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  vertical-align: top;
+}
+
+.ui-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.ui-table-wrap {
+  overflow-x: auto;
+}
+
+.ui-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.ui-badge-success {
+  background: rgba(36, 179, 107, 0.15);
+  color: var(--success);
+}
+
+.ui-badge-warning {
+  background: rgba(255, 179, 71, 0.15);
+  color: var(--warning);
+}
+
+.ui-badge-danger {
+  background: rgba(240, 93, 93, 0.15);
+  color: var(--danger);
+}
+
+.ui-badge-neutral {
+  background: rgba(183, 204, 230, 0.12);
+  color: var(--text-secondary);
+}
+
+.ui-badge-primary {
+  background: rgba(79, 163, 255, 0.15);
+  color: var(--primary);
+}
+
+.ui-button {
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  background: var(--primary);
+  color: #ffffff;
+  transition: background-color 0.15s ease;
+}
+
+.ui-button:hover {
+  background: var(--primary-hover);
+}
+
+.ui-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ui-button-secondary {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.ui-button-secondary:hover {
+  background: var(--bg-panel-light);
+}
+
+.ui-empty-state {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.ui-field-label {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+.ui-input {
+  width: 100%;
+  background: var(--bg-panel-light);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.ui-input::placeholder {
+  color: var(--text-muted);
+}
+
+.ui-stat-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.ui-stat-card {
+  background: var(--bg-panel-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  padding: 14px 16px;
+}
+
+.ui-stat-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.ui-stat-value {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 4px 0 0;
+}
+
+.ui-item-card {
+  background: var(--bg-panel-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  padding: 14px 16px;
 }

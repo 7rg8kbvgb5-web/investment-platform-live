@@ -1,67 +1,53 @@
 import { evaluateApprovalReadiness } from "../lib/engines/portfolio-approval-readiness";
+import Panel from "./ui/Panel";
 
 export function PortfolioApprovalReadinessPanel() {
   const readiness = evaluateApprovalReadiness();
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="mb-4">
-        <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Approval Readiness
-        </p>
+    <Panel eyebrow="Approval Readiness" title="Model Portfolio Approval Status">
+      <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", marginTop: "-8px" }}>
+        {readiness.rationale}
+      </p>
 
-        <h2 className="text-2xl font-bold text-slate-900">
-          Model Portfolio Approval Status
-        </h2>
-
-        <p className="mt-2 text-sm text-slate-600">{readiness.rationale}</p>
-      </div>
-
-      <div className="mb-6 grid gap-4 md:grid-cols-3">
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <p className="text-sm text-slate-500">Approval Status</p>
-          <p className="mt-1 text-lg font-semibold capitalize text-slate-900">
-            {readiness.status.replaceAll("-", " ")}
-          </p>
+      <div className="ui-stat-grid">
+        <div className="ui-stat-card">
+          <p className="ui-stat-label">Approval Status</p>
+          <p className="ui-stat-value">{readiness.status.replaceAll("-", " ")}</p>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <p className="text-sm text-slate-500">Validation Score</p>
-          <p className="mt-1 text-3xl font-bold text-slate-900">
+        <div className="ui-stat-card">
+          <p className="ui-stat-label">Validation Score</p>
+          <p className="ui-stat-value" style={{ fontSize: "1.6rem" }}>
             {readiness.score}/100
           </p>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <p className="text-sm text-slate-500">Decision Basis</p>
-          <p className="mt-1 text-lg font-semibold text-slate-900">
-            IC Review Gate
-          </p>
+        <div className="ui-stat-card">
+          <p className="ui-stat-label">Decision Basis</p>
+          <p className="ui-stat-value">IC Review Gate</p>
         </div>
       </div>
 
       <div>
-        <h3 className="mb-3 text-lg font-semibold text-slate-900">
+        <h3 style={{ fontSize: "1.05rem", fontWeight: 700, marginBottom: "10px" }}>
           Required Actions
         </h3>
 
         {readiness.requiredActions.length === 0 ? (
-          <p className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+          <p className="ui-item-card" style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
             No required actions. Portfolio is ready for approval workflow.
           </p>
         ) : (
-          <div className="space-y-3">
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             {readiness.requiredActions.map((action) => (
-              <div
-                key={action}
-                className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700"
-              >
+              <div key={action} className="ui-item-card" style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
                 {action}
               </div>
             ))}
           </div>
         )}
       </div>
-    </section>
+    </Panel>
   );
 }

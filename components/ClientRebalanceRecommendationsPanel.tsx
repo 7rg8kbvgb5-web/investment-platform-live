@@ -1,88 +1,76 @@
 import type { ClientRebalanceRecommendation } from "../lib/engines/client-rebalance-recommendations";
+import Badge, { type BadgeVariant } from "./ui/Badge";
+import Panel from "./ui/Panel";
 
 type ClientRebalanceRecommendationsPanelProps = {
   recommendations: ClientRebalanceRecommendation[];
 };
 
+function priorityVariant(priority: string): BadgeVariant {
+  if (priority === "high" || priority === "critical") return "danger";
+  if (priority === "medium") return "warning";
+  return "neutral";
+}
+
 export function ClientRebalanceRecommendationsPanel({
   recommendations,
 }: ClientRebalanceRecommendationsPanelProps) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="mb-4">
-        <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Rebalance Recommendations
-        </p>
+    <Panel eyebrow="Rebalance Recommendations" title="Security-Level Trade Recommendations">
+      <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", marginTop: "-8px" }}>
+        Converts client portfolio gaps into buy, sell, hold and review
+        actions against the approved model portfolio.
+      </p>
 
-        <h2 className="text-2xl font-bold text-slate-900">
-          Security-Level Trade Recommendations
-        </h2>
-
-        <p className="mt-2 text-sm text-slate-600">
-          Converts client portfolio gaps into buy, sell, hold and review actions
-          against the approved model portfolio.
-        </p>
-      </div>
-
-      <div className="space-y-3">
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
         {recommendations.map((recommendation) => (
-          <div
-            key={recommendation.id}
-            className="rounded-xl border border-slate-200 bg-slate-50 p-4"
-          >
-            <div className="flex flex-wrap items-start justify-between gap-3">
+          <div key={recommendation.id} className="ui-item-card">
+            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: "10px", alignItems: "flex-start" }}>
               <div>
-                <p className="text-sm font-semibold text-slate-900">
+                <p style={{ fontWeight: 700, fontSize: "0.9rem" }}>
                   {recommendation.action.toUpperCase()} {recommendation.ticker}
                 </p>
-
-                <p className="mt-1 text-sm text-slate-600">
+                <p style={{ marginTop: "4px", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
                   {recommendation.name} · {recommendation.sector}
                 </p>
               </div>
 
-              <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700">
+              <Badge variant={priorityVariant(recommendation.priority)}>
                 {recommendation.priority}
-              </span>
+              </Badge>
             </div>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <div className="ui-stat-grid" style={{ marginTop: "12px" }}>
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">
-                  Current Weight
-                </p>
-                <p className="text-sm font-semibold text-slate-900">
+                <p className="ui-stat-label">Current Weight</p>
+                <p style={{ fontWeight: 700, fontSize: "0.9rem", marginTop: "2px" }}>
                   {recommendation.currentWeight}%
                 </p>
               </div>
 
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">
-                  Target Weight
-                </p>
-                <p className="text-sm font-semibold text-slate-900">
+                <p className="ui-stat-label">Target Weight</p>
+                <p style={{ fontWeight: 700, fontSize: "0.9rem", marginTop: "2px" }}>
                   {recommendation.targetWeight}%
                 </p>
               </div>
 
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">
-                  Change
-                </p>
-                <p className="text-sm font-semibold text-slate-900">
+                <p className="ui-stat-label">Change</p>
+                <p style={{ fontWeight: 700, fontSize: "0.9rem", marginTop: "2px" }}>
                   {recommendation.changeWeight > 0 ? "+" : ""}
                   {recommendation.changeWeight}%
                 </p>
               </div>
             </div>
 
-            <p className="mt-3 text-sm text-slate-700">
-              <span className="font-semibold">Rationale:</span>{" "}
+            <p style={{ marginTop: "10px", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+              <span style={{ fontWeight: 700, color: "var(--text)" }}>Rationale: </span>
               {recommendation.rationale}
             </p>
           </div>
         ))}
       </div>
-    </section>
+    </Panel>
   );
 }
