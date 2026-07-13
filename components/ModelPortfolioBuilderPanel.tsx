@@ -9,6 +9,7 @@ import {
 } from "../lib/engines/model-portfolios";
 import Badge from "./ui/Badge";
 import Panel from "./ui/Panel";
+import AllocationPieChart from "./AllocationPieChart";
 
 const riskProfiles: RiskProfile[] = [
   "Conservative",
@@ -94,27 +95,41 @@ export default function ModelPortfolioBuilderPanel() {
           <Badge variant="primary">Total {assetClassTotal}%</Badge>
         </div>
 
-        <div className="ui-table-wrap">
-          <table className="ui-table">
-            <thead>
-              <tr>
-                <th>Asset Class</th>
-                <th>Type</th>
-                <th>Target Weight</th>
-                <th>Description</th>
-              </tr>
-            </thead>
-            <tbody>
-              {portfolio.assetClasses.map((assetClass) => (
-                <tr key={assetClass.name}>
-                  <td style={{ fontWeight: 700 }}>{assetClass.name}</td>
-                  <td>{assetClass.type}</td>
-                  <td>{assetClass.targetWeight}%</td>
-                  <td style={{ color: "var(--text-secondary)" }}>{assetClass.description}</td>
+        <div style={{ display: "grid", gap: "16px", gridTemplateColumns: "minmax(0, 1.4fr) minmax(260px, 1fr)", alignItems: "start" }}>
+          <div className="ui-table-wrap">
+            <table className="ui-table">
+              <thead>
+                <tr>
+                  <th>Asset Class</th>
+                  <th>Type</th>
+                  <th>Target Weight</th>
+                  <th>Description</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {portfolio.assetClasses.map((assetClass) => (
+                  <tr key={assetClass.name}>
+                    <td style={{ fontWeight: 700 }}>{assetClass.name}</td>
+                    <td>{assetClass.type}</td>
+                    <td>{assetClass.targetWeight}%</td>
+                    <td style={{ color: "var(--text-secondary)" }}>{assetClass.description}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="ui-item-card">
+            <p style={{ fontSize: "0.7rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", margin: "0 0 4px", textAlign: "center" }}>
+              {portfolio.riskProfile} Asset Allocation
+            </p>
+            <AllocationPieChart
+              allocations={portfolio.assetClasses.map((assetClass) => ({
+                asset_class: assetClass.name,
+                target_weight: assetClass.targetWeight,
+              }))}
+            />
+          </div>
         </div>
       </div>
 
