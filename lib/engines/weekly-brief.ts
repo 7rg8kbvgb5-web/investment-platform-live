@@ -17,7 +17,10 @@ Your job is to produce a concise weekly research brief. Use web search to check 
 Everything you produce is a recommendation for a human adviser to review — never phrase anything as
 an instruction to trade, and never claim an action has been taken.
 
-Respond ONLY with a JSON object (no markdown fences, no preamble) matching this shape:
+You will use the web_search tool to research before answering — that's expected. But your FINAL
+message, after all searching is done, must contain ONLY the JSON object below and nothing else:
+no summary of what you searched for, no markdown fences, no "Here is the brief:" preamble, no
+commentary before or after it. Respond ONLY with a JSON object matching this shape:
 {
   "macroSummary": string,
   "securityAlerts": [{ "ticker": string, "name": string, "headline": string, "detail": string }],
@@ -31,6 +34,23 @@ function getMondayOf(date: Date): string {
   const monday = new Date(date);
   monday.setUTCDate(date.getUTCDate() + diff);
   return monday.toISOString().slice(0, 10);
+}
+
+/**
+ * Extracts a JSON object from model output that may still have markdown
+ * fences or a stray sentence of commentary around it, by stripping fences
+ * and then slicing from the first '{' to the last '}'.
+ */
+function extractJsonObject(text: string): string {
+  const withoutFences = text.replace(/```json|```/g, "").trim();
+  const firstBrace = withoutFences.indexOf("{");
+  const lastBrace = withoutFences.lastIndexOf("}");
+
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace < firstBrace) {
+    return withoutFences;
+  }
+
+  return withoutFences.slice(firstBrace, lastBrace + 1);
 }
 
 export async function generateWeeklyBrief(): Promise<WeeklyBrief> {
@@ -50,7 +70,7 @@ export async function generateWeeklyBrief(): Promise<WeeklyBrief> {
 
   const response = await client.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 4000,
+    max_tokens: 8000,
     system: SYSTEM_PROMPT,
     messages: [
       {
@@ -61,9 +81,16 @@ export async function generateWeeklyBrief(): Promise<WeeklyBrief> {
     tools: [{ type: "web_search_20250305", name: "web_search" }],
   });
 
-  const textBlock = response.content.find((block) => block.type === "text");
-  const rawText = textBlock && "text" in textBlock ? textBlock.text : "{}";
-  const cleaned = rawText.replace(/```json|```/g, "").trim();
+  // When web search is used, the model emits multiple content blocks —
+  // preliminary text, tool calls, tool results, then a final text block
+  // with the actual answer. Grabbing the *first* text block (as this used
+  // to do) picks up preliminary commentary instead of the real output, so
+  // take the last one instead.
+  const textBlocks = response.content.filter(
+    (block): block is Extract<typeof block, { type: "text" }> => block.type === "text"
+  );
+  const rawText = textBlocks.length > 0 ? textBlocks[textBlocks.length - 1].text : "{}";
+  const cleaned = extractJsonObject(rawText);
 
   let parsed: {
     macroSummary?: string;
