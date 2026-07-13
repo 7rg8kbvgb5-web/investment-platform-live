@@ -36,7 +36,7 @@ export default function WeeklyBriefPanel() {
     setRunning(true);
     setError(null);
     try {
-      const response = await fetch('/api/cron/weekly-brief');
+      const response = await fetch('/api/weekly-brief/run-now', { method: 'POST' });
       const data = await response.json();
       if (!data.ok) {
         throw new Error(data.error ?? 'Failed to generate brief.');
