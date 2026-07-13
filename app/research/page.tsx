@@ -6,6 +6,8 @@ import InvestmentCaseLifecyclePanel from "../../components/InvestmentCaseLifecyc
 import { SecurityMasterPanel } from "../../components/SecurityMasterPanel";
 import { ApprovedListPanel } from "../../components/ApprovedListPanel";
 import { SyncPreviewPanel } from "../../components/SyncPreviewPanel";
+import ResearchLibraryPanel from "../../components/ResearchLibraryPanel";
+import WeeklyBriefPanel from "../../components/WeeklyBriefPanel";
 
 export default function ResearchPage() {
   return (
@@ -13,6 +15,10 @@ export default function ResearchPage() {
       title="Research"
       description="Research inbox workflow, investment cases, security master, approved list, and research request management."
     >
+      <WeeklyBriefPanel />
+
+      <ResearchLibraryPanel />
+
       <ResearchInboxPanel />
 
       <ResearchRequestPanel />

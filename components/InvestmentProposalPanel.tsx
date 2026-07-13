@@ -1,3 +1,5 @@
+"use client";
+
 import type { InvestmentProposal } from "../lib/engines/investment-proposal-generator";
 import type { PortfolioApprovalReadiness } from "../lib/engines/portfolio-approval-readiness";
 
@@ -26,6 +28,10 @@ export function InvestmentProposalPanel({
   proposal,
   approvalReadiness,
 }: InvestmentProposalPanelProps) {
+  const handleDownloadPdf = () => {
+    window.open("/api/proposals/pdf", "_blank");
+  };
+
   const evidenceSection = proposal.sections.find(
     (section) => section.id === "investment-committee-evidence"
   );
@@ -53,13 +59,23 @@ export function InvestmentProposalPanel({
           </p>
         </div>
 
-        <span
-          className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide ${getStatusClass(
-            proposal.status
-          )}`}
-        >
-          {getStatusLabel(proposal.status)}
-        </span>
+        <div className="flex flex-col items-end gap-2">
+          <span
+            className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide ${getStatusClass(
+              proposal.status
+            )}`}
+          >
+            {getStatusLabel(proposal.status)}
+          </span>
+
+          <button
+            type="button"
+            onClick={handleDownloadPdf}
+            className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-slate-700"
+          >
+            Download PDF
+          </button>
+        </div>
       </div>
 
       <div className="mb-6 grid gap-4 md:grid-cols-5">
