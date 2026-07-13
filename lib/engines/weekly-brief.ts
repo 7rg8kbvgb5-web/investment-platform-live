@@ -136,6 +136,7 @@ export async function generateWeeklyBrief(): Promise<WeeklyBrief> {
     alternativeFlags: data.alternative_flags ?? [],
     referencedDocumentIds: data.referenced_document_ids ?? [],
     generatedAt: data.generated_at,
+    rawModelOutput: data.raw_model_output ?? null,
   };
 }
 
@@ -163,5 +164,6 @@ export async function getLatestWeeklyBrief(): Promise<WeeklyBrief | null> {
     alternativeFlags: data.alternative_flags ?? [],
     referencedDocumentIds: data.referenced_document_ids ?? [],
     generatedAt: data.generated_at,
+    rawModelOutput: data.raw_model_output ?? null,
   };
 }

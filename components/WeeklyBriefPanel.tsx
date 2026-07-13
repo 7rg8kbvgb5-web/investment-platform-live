@@ -92,6 +92,17 @@ export default function WeeklyBriefPanel() {
 
           <p style={bodyText}>{brief.macroSummary}</p>
 
+          {brief.securityAlerts.length === 0 &&
+          brief.alternativeFlags.length === 0 &&
+          brief.rawModelOutput ? (
+            <details style={rawOutputBox}>
+              <summary style={rawOutputSummary}>
+                Show raw model output (for debugging)
+              </summary>
+              <pre style={rawOutputPre}>{brief.rawModelOutput}</pre>
+            </details>
+          ) : null}
+
           {brief.securityAlerts.length > 0 ? (
             <div style={{ marginTop: '18px' }}>
               <p style={subheading}>Security Alerts</p>
@@ -192,6 +203,31 @@ const bodyText = {
   fontSize: '13px',
   lineHeight: 1.6,
   color: '#e2e8f0',
+};
+
+const rawOutputBox = {
+  marginTop: '12px',
+  padding: '10px 12px',
+  background: '#04142b',
+  border: '1px solid #2d4a6b',
+  borderRadius: '8px',
+};
+
+const rawOutputSummary = {
+  fontSize: '12px',
+  color: '#5eead4',
+  cursor: 'pointer',
+  fontWeight: 600,
+};
+
+const rawOutputPre = {
+  marginTop: '10px',
+  fontSize: '11px',
+  color: '#94a3b8',
+  whiteSpace: 'pre-wrap' as const,
+  wordBreak: 'break-word' as const,
+  maxHeight: '300px',
+  overflowY: 'auto' as const,
 };
 
 const subheading = {

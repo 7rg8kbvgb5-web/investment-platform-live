@@ -20,4 +20,5 @@ export type WeeklyBrief = {
   alternativeFlags: WeeklyBriefAlternativeFlag[];
   referencedDocumentIds: string[];
   generatedAt: string;
+  rawModelOutput: string | null;
 };
