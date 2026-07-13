@@ -7,6 +7,8 @@ import {
   getModelPortfolioByRiskProfile,
   RiskProfile,
 } from "../lib/engines/model-portfolios";
+import Badge from "./ui/Badge";
+import Panel from "./ui/Panel";
 
 const riskProfiles: RiskProfile[] = [
   "Conservative",
@@ -29,17 +31,11 @@ export default function ModelPortfolioBuilderPanel() {
   const holdingTotal = getHoldingTotal(portfolio);
 
   return (
-    <section className="panel model-portfolio-panel">
-      <div className="panel-header">
-        <div>
-          <p className="eyebrow">Model Portfolio Builder</p>
-          <h2>Risk Profile Asset Allocation</h2>
-          <p className="panel-subtitle">
-            Source-of-truth model portfolio structure used by client advice,
-            rebalancing and proposal generation.
-          </p>
-        </div>
-      </div>
+    <Panel eyebrow="Model Portfolio Builder" title="Risk Profile Asset Allocation">
+      <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", marginTop: "-8px" }}>
+        Source-of-truth model portfolio structure used by client advice,
+        rebalancing and proposal generation.
+      </p>
 
       <div className="risk-tabs">
         {riskProfiles.map((profile) => (
@@ -58,44 +54,48 @@ export default function ModelPortfolioBuilderPanel() {
         ))}
       </div>
 
-      <div className="model-summary-grid">
-        <div className="summary-card">
-          <span className="summary-label">Selected Profile</span>
-          <strong>{portfolio.riskProfile}</strong>
+      <div className="ui-stat-grid">
+        <div className="ui-stat-card">
+          <p className="ui-stat-label">Selected Profile</p>
+          <p className="ui-stat-value">{portfolio.riskProfile}</p>
         </div>
 
-        <div className="summary-card">
-          <span className="summary-label">Growth Assets</span>
-          <strong>{portfolio.growthWeight}%</strong>
+        <div className="ui-stat-card">
+          <p className="ui-stat-label">Growth Assets</p>
+          <p className="ui-stat-value">{portfolio.growthWeight}%</p>
         </div>
 
-        <div className="summary-card">
-          <span className="summary-label">Defensive Assets</span>
-          <strong>{portfolio.defensiveWeight}%</strong>
+        <div className="ui-stat-card">
+          <p className="ui-stat-label">Defensive Assets</p>
+          <p className="ui-stat-value">{portfolio.defensiveWeight}%</p>
         </div>
 
-        <div className="summary-card">
-          <span className="summary-label">Allocation Check</span>
-          <strong>{assetClassTotal}%</strong>
+        <div className="ui-stat-card">
+          <p className="ui-stat-label">Allocation Check</p>
+          <p className="ui-stat-value">{assetClassTotal}%</p>
         </div>
       </div>
 
-      <div className="model-objective-card">
-        <span className="summary-label">Portfolio Objective</span>
-        <p>{portfolio.objective}</p>
+      <div className="ui-item-card">
+        <p className="ui-stat-label">Portfolio Objective</p>
+        <p style={{ marginTop: "6px", fontSize: "0.9rem" }}>{portfolio.objective}</p>
       </div>
 
-      <div className="model-section">
-        <div className="section-heading-row">
+      <div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
           <div>
-            <p className="eyebrow">Asset Allocation</p>
-            <h3>Strategic Asset Classes</h3>
+            <p style={{ fontSize: "0.7rem", color: "var(--primary)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700, margin: 0 }}>
+              Asset Allocation
+            </p>
+            <h3 style={{ fontSize: "1.1rem", fontWeight: 700, margin: "4px 0 0" }}>
+              Strategic Asset Classes
+            </h3>
           </div>
-          <span className="section-pill">Total {assetClassTotal}%</span>
+          <Badge variant="primary">Total {assetClassTotal}%</Badge>
         </div>
 
-        <div className="table-wrap">
-          <table className="model-table">
+        <div className="ui-table-wrap">
+          <table className="ui-table">
             <thead>
               <tr>
                 <th>Asset Class</th>
@@ -107,12 +107,10 @@ export default function ModelPortfolioBuilderPanel() {
             <tbody>
               {portfolio.assetClasses.map((assetClass) => (
                 <tr key={assetClass.name}>
-                  <td>
-                    <strong>{assetClass.name}</strong>
-                  </td>
+                  <td style={{ fontWeight: 700 }}>{assetClass.name}</td>
                   <td>{assetClass.type}</td>
                   <td>{assetClass.targetWeight}%</td>
-                  <td>{assetClass.description}</td>
+                  <td style={{ color: "var(--text-secondary)" }}>{assetClass.description}</td>
                 </tr>
               ))}
             </tbody>
@@ -120,28 +118,34 @@ export default function ModelPortfolioBuilderPanel() {
         </div>
       </div>
 
-      <div className="model-section">
-        <div className="section-heading-row">
+      <div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
           <div>
-            <p className="eyebrow">Investments</p>
-            <h3>Underlying Portfolio Holdings</h3>
+            <p style={{ fontSize: "0.7rem", color: "var(--primary)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700, margin: 0 }}>
+              Investments
+            </p>
+            <h3 style={{ fontSize: "1.1rem", fontWeight: 700, margin: "4px 0 0" }}>
+              Underlying Portfolio Holdings
+            </h3>
           </div>
-          <span className="section-pill">Total {holdingTotal}%</span>
+          <Badge variant="primary">Total {holdingTotal}%</Badge>
         </div>
 
-        <div className="asset-class-stack">
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           {portfolio.assetClasses.map((assetClass) => (
-            <div key={assetClass.name} className="asset-class-card">
-              <div className="asset-class-card-header">
+            <div key={assetClass.name} className="ui-item-card">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
                 <div>
-                  <h4>{assetClass.name}</h4>
-                  <p>{assetClass.description}</p>
+                  <h4 style={{ fontWeight: 700, fontSize: "0.95rem", margin: 0 }}>{assetClass.name}</h4>
+                  <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginTop: "4px" }}>
+                    {assetClass.description}
+                  </p>
                 </div>
-                <span>{assetClass.targetWeight}%</span>
+                <span style={{ fontWeight: 700, fontSize: "0.95rem" }}>{assetClass.targetWeight}%</span>
               </div>
 
-              <div className="table-wrap">
-                <table className="model-table compact">
+              <div className="ui-table-wrap">
+                <table className="ui-table">
                   <thead>
                     <tr>
                       <th>Code</th>
@@ -154,13 +158,11 @@ export default function ModelPortfolioBuilderPanel() {
                   <tbody>
                     {assetClass.holdings.map((holding) => (
                       <tr key={`${assetClass.name}-${holding.code}`}>
-                        <td>
-                          <strong>{holding.code}</strong>
-                        </td>
+                        <td style={{ fontWeight: 700 }}>{holding.code}</td>
                         <td>{holding.name}</td>
                         <td>{holding.sector ?? "—"}</td>
                         <td>{holding.weight}%</td>
-                        <td>{holding.rationale}</td>
+                        <td style={{ color: "var(--text-secondary)" }}>{holding.rationale}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -170,6 +172,6 @@ export default function ModelPortfolioBuilderPanel() {
           ))}
         </div>
       </div>
-    </section>
+    </Panel>
   );
 }

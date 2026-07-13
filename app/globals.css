@@ -278,6 +278,17 @@ body {
   color: var(--muted);
 }
 
+.status-pill {
+  display: inline-block;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(79, 163, 255, 0.15);
+  color: var(--primary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 table {
   border-collapse: collapse;
   width: 100%;
@@ -1290,6 +1301,13 @@ textarea {
   font-size:1.7rem;
 }
 
+.ui-panel-actions{
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
 .ui-panel-body{
 
   display:flex;
@@ -1652,4 +1670,41 @@ textarea {
   border: 1px solid var(--border);
   border-radius: var(--radius-small);
   padding: 14px 16px;
+}
+
+.proposal-section-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-panel-light);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.proposal-section-option:hover {
+  border-color: var(--primary);
+}
+
+.proposal-section-option.selected {
+  border-color: var(--primary);
+  background: rgba(79, 163, 255, 0.1);
+}
+
+.proposal-section-option input[type="checkbox"] {
+  margin-top: 3px;
+}
+
+.proposal-section-option strong {
+  display: block;
+  font-size: 0.85rem;
+}
+
+.proposal-section-option small {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 2px;
 }

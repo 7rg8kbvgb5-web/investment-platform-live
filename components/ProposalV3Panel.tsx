@@ -94,7 +94,7 @@ export default function ProposalV3Panel() {
   }
 
   return (
-    <section className="panel proposal-v3-panel">
+    <section className="panel">
       <div className="panel-header">
         <div>
           <p className="eyebrow">Proposal Generator V3</p>
@@ -140,13 +140,15 @@ export default function ProposalV3Panel() {
         </button>
       </div>
 
-      <div className="proposal-builder-layout">
-        <div className="proposal-section-selector">
+      <div style={{ display: "grid", gap: "20px", gridTemplateColumns: "minmax(0, 2fr) minmax(260px, 1fr)", alignItems: "start", marginTop: "20px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
           {Object.entries(groupedSections).map(([category, sections]) => (
-            <div key={category} className="proposal-section-group">
-              <h3>{categoryLabels[category as ProposalSection["category"]]}</h3>
+            <div key={category} className="ui-item-card">
+              <h3 style={{ fontSize: "0.9rem", fontWeight: 700, margin: "0 0 10px" }}>
+                {categoryLabels[category as ProposalSection["category"]]}
+              </h3>
 
-              <div className="proposal-section-list">
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 {sections.map((section) => {
                   const isSelected = selectedSectionIds.includes(section.id);
 
@@ -177,56 +179,50 @@ export default function ProposalV3Panel() {
           ))}
         </div>
 
-        <aside className="proposal-summary-card">
-          <p className="eyebrow">Live Proposal Summary</p>
-          <h3>{proposal.title}</h3>
+        <aside className="ui-item-card" style={{ position: "sticky", top: "20px" }}>
+          <p style={{ fontSize: "0.7rem", color: "var(--primary)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700, margin: 0 }}>
+            Live Proposal Summary
+          </p>
+          <h3 style={{ fontSize: "1.05rem", fontWeight: 700, margin: "6px 0 14px" }}>
+            {proposal.title}
+          </h3>
 
-          <div className="summary-metric">
-            <span>Proposal Version</span>
-            <strong>{proposal.version}</strong>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "14px" }}>
+            <SummaryMetric label="Proposal Version" value={proposal.version} />
+            <SummaryMetric label="Sections Selected" value={String(proposal.sectionCount)} />
+            <SummaryMetric label="Estimated Pages" value={String(estimatedPages)} />
+            <SummaryMetric label="Proposal Type" value={preset} />
+            <SummaryMetric
+              label="Status"
+              value={selectedSectionIds.length > 0 ? "Ready" : "Incomplete"}
+            />
           </div>
 
-          <div className="summary-metric">
-            <span>Sections Selected</span>
-            <strong>{proposal.sectionCount}</strong>
-          </div>
-
-          <div className="summary-metric">
-            <span>Estimated Pages</span>
-            <strong>{estimatedPages}</strong>
-          </div>
-
-          <div className="summary-metric">
-            <span>Proposal Type</span>
-            <strong>{preset}</strong>
-          </div>
-
-          <div className="summary-metric">
-            <span>Status</span>
-            <strong>{selectedSectionIds.length > 0 ? "Ready" : "Incomplete"}</strong>
-          </div>
-
-          <div className="proposal-outline">
-            <h4>Selected Outline</h4>
+          <div style={{ marginBottom: "16px" }}>
+            <h4 style={{ fontSize: "0.8rem", fontWeight: 700, margin: "0 0 8px" }}>
+              Selected Outline
+            </h4>
 
             {proposal.selectedSections.length > 0 ? (
-              <ol>
+              <ol style={{ paddingLeft: "18px", fontSize: "0.8rem", color: "var(--text-secondary)", display: "flex", flexDirection: "column", gap: "4px" }}>
                 {proposal.selectedSections.map((section) => (
                   <li key={section.id}>{section.title}</li>
                 ))}
               </ol>
             ) : (
-              <p className="muted">Select at least one section to generate a proposal.</p>
+              <p className="muted" style={{ fontSize: "0.8rem" }}>
+                Select at least one section to generate a proposal.
+              </p>
             )}
           </div>
 
-          <div className="proposal-actions">
-            <button type="button" className="secondary-button">
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <button type="button" className="ui-button ui-button-secondary">
               Preview Proposal
             </button>
             <button
               type="button"
-              className="primary-button"
+              className="ui-button"
               disabled={selectedSectionIds.length === 0}
             >
               Generate Proposal
@@ -235,5 +231,14 @@ export default function ProposalV3Panel() {
         </aside>
       </div>
     </section>
+  );
+}
+
+function SummaryMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem" }}>
+      <span style={{ color: "var(--text-muted)" }}>{label}</span>
+      <strong>{value}</strong>
+    </div>
   );
 }
