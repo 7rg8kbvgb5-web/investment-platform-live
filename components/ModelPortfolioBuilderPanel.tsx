@@ -160,7 +160,14 @@ export default function ModelPortfolioBuilderPanel() {
               </div>
 
               <div className="ui-table-wrap">
-                <table className="ui-table">
+                <table className="ui-table" style={{ tableLayout: "fixed" }}>
+                  <colgroup>
+                    <col style={{ width: "9%" }} />
+                    <col style={{ width: "22%" }} />
+                    <col style={{ width: "16%" }} />
+                    <col style={{ width: "9%" }} />
+                    <col style={{ width: "44%" }} />
+                  </colgroup>
                   <thead>
                     <tr>
                       <th>Code</th>
