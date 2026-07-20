@@ -34,6 +34,17 @@ const ACTION_STYLE: Record<string, { bg: string; fg: string }> = {
   hold: { bg: '#0d2542', fg: '#94a3b8' },
 }
 
+const EXAMPLE_HOLDINGS: UploadedHolding[] = [
+  { code: 'CBA', name: 'Commonwealth Bank', weight: 14, sourceRow: 1 },
+  { code: 'NAB', name: 'National Australia Bank', weight: 9, sourceRow: 2 },
+  { code: 'BHP', name: 'BHP Group', weight: 6, sourceRow: 3 },
+  { code: 'WES', name: 'Wesfarmers', weight: 4, sourceRow: 4 },
+  { code: 'IVV', name: 'iShares S&P 500 ETF', weight: 12, sourceRow: 5 },
+  { code: 'VAP', name: 'Australian Property Securities ETF', weight: 8, sourceRow: 6 },
+  { code: 'IAF', name: 'iShares Core Composite Bond ETF', weight: 22, sourceRow: 7 },
+  { code: 'Cash', name: 'Cash / At Call Account', weight: 25, sourceRow: 8 },
+]
+
 export default function ClientPortfolioUploadPanel() {
   const [mode, setMode] = useState<'pdf' | 'csv'>('pdf')
   const [csvText, setCsvText] = useState('')
@@ -48,6 +59,17 @@ export default function ClientPortfolioUploadPanel() {
   const [parseError, setParseError] = useState<string | null>(null)
   const [riskOverride, setRiskOverride] = useState<RiskProfile | 'auto'>('auto')
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  function loadExamplePortfolio() {
+    setHoldings(EXAMPLE_HOLDINGS)
+    setWarnings([])
+    setParseError(null)
+    setMeta({
+      clientName: 'Example Client (sample data)',
+      asAtDate: new Date().toISOString().slice(0, 10),
+      totalPortfolioValue: null,
+    })
+  }
 
   async function handlePdfUpload(file: File) {
     setParsing(true)
@@ -148,6 +170,13 @@ export default function ClientPortfolioUploadPanel() {
         >
           Paste CSV instead
         </button>
+        <button
+          type="button"
+          onClick={loadExamplePortfolio}
+          style={exampleButton}
+        >
+          See it with an example portfolio
+        </button>
       </div>
 
       {mode === 'pdf' ? (
@@ -200,6 +229,16 @@ export default function ClientPortfolioUploadPanel() {
               <li key={warning}>{warning}</li>
             ))}
           </ul>
+        </StatusBox>
+      ) : null}
+
+      {!hasHoldings && !parsing ? (
+        <StatusBox variant="neutral">
+          Nothing loaded yet — upload a statement, paste a CSV, or click
+          &quot;See it with an example portfolio&quot; above. Once holdings are in,
+          this shows the growth/defensive risk classification, asset-class
+          allocation vs the model (chart), and exact security-level
+          buy/increase/reduce/sell recommendations (chart) below.
         </StatusBox>
       ) : null}
 
@@ -485,6 +524,13 @@ const modeButtonActive = {
   background: '#1B7A7A',
   borderColor: '#1B7A7A',
   color: '#ffffff',
+}
+
+const exampleButton = {
+  ...modeButton,
+  marginLeft: 'auto',
+  color: '#93c5fd',
+  borderColor: '#2563eb',
 }
 
 const dropzone = {
