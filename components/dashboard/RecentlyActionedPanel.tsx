@@ -1,13 +1,24 @@
 'use client';
 
 import { useMemo } from 'react';
+import Link from 'next/link';
 import {
   getMockGovernanceAuditEntries,
   formatGovernanceAuditArea,
   formatGovernanceAuditAction,
 } from '../../lib/engines/governance-audit-trail';
+import type { GovernanceAuditArea } from '../../domain/types/governance-audit';
 import { formatIsoTimestampDisplay } from '../../lib/format-timestamp';
 import StatusBox from './StatusBox';
+
+const AREA_TO_PAGE: Record<GovernanceAuditArea, string> = {
+  'Fund Review': '/fund-reviews',
+  'Portfolio Scenario': '/portfolios',
+  'Tactical Overlay': '/portfolios',
+  Guardrail: '/portfolios',
+  Approval: '/investment-committee',
+  'House View': '/investment-committee',
+};
 
 export default function RecentlyActionedPanel() {
   const entries = useMemo(() => {
@@ -31,14 +42,16 @@ export default function RecentlyActionedPanel() {
         <ul style={list}>
           {entries.map((entry) => (
             <li key={entry.id} style={row}>
-              <div style={rowHeader}>
-                <span style={rowTitle}>{entry.subject}</span>
-                <span style={actionBadge}>{formatGovernanceAuditAction(entry.action)}</span>
-              </div>
-              <span style={rowMeta}>
-                {formatGovernanceAuditArea(entry.area)} · {entry.actor} · {formatIsoTimestampDisplay(entry.timestamp)}
-              </span>
-              <span style={rowSummary}>{entry.summary}</span>
+              <Link href={AREA_TO_PAGE[entry.area] ?? '/governance'} style={rowLink}>
+                <div style={rowHeader}>
+                  <span style={rowTitle}>{entry.subject}</span>
+                  <span style={actionBadge}>{formatGovernanceAuditAction(entry.action)}</span>
+                </div>
+                <span style={rowMeta}>
+                  {formatGovernanceAuditArea(entry.area)} · {entry.actor} · {formatIsoTimestampDisplay(entry.timestamp)}
+                </span>
+                <span style={rowSummary}>{entry.summary}</span>
+              </Link>
             </li>
           ))}
         </ul>
@@ -70,13 +83,19 @@ const list = {
 };
 
 const row = {
-  display: 'flex',
-  flexDirection: 'column' as const,
-  gap: '3px',
   padding: '10px 12px',
   background: '#12345b',
   borderRadius: '8px',
   border: '1px solid #2d4a6b',
+};
+
+const rowLink = {
+  display: 'flex',
+  flexDirection: 'column' as const,
+  gap: '3px',
+  width: '100%',
+  textDecoration: 'none',
+  color: 'inherit',
 };
 
 const rowHeader = {

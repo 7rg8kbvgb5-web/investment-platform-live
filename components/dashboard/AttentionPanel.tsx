@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import Link from 'next/link';
 import {
   analyzeInvestmentCommitteeDashboard,
   getMockDeferredReviewsForIC,
@@ -11,6 +12,14 @@ import { getMockGovernanceAuditEntries } from '../../lib/engines/governance-audi
 import { getMockHouseViewRecommendations } from '../../lib/engines/house-view-engine';
 import { formatIsoTimestampDisplay } from '../../lib/format-timestamp';
 import StatusBox from './StatusBox';
+
+const SOURCE_TO_PAGE: Record<string, string> = {
+  fund_review: '/fund-reviews',
+  house_view: '/investment-committee',
+  deferred_review: '/governance',
+  research_request: '/research',
+  portfolio_workflow: '/portfolios',
+};
 
 export default function AttentionPanel() {
   const dashboard = useMemo(() => {
@@ -52,10 +61,12 @@ export default function AttentionPanel() {
           <ul style={list}>
             {overdue.map((item) => (
               <li key={item.id} style={row}>
-                <span style={rowTitle}>{item.title}</span>
-                <span style={rowMeta}>
-                  {item.subtitle} · due {formatIsoTimestampDisplay(`${item.reviewDate}T00:00:00.000Z`)}
-                </span>
+                <Link href={SOURCE_TO_PAGE[item.source] ?? '/investment-committee'} style={rowLink}>
+                  <span style={rowTitle}>{item.title}</span>
+                  <span style={rowMeta}>
+                    {item.subtitle} · due {formatIsoTimestampDisplay(`${item.reviewDate}T00:00:00.000Z`)}
+                  </span>
+                </Link>
               </li>
             ))}
           </ul>
@@ -68,8 +79,10 @@ export default function AttentionPanel() {
           <ul style={list}>
             {reviewsRequiringAction.map((item) => (
               <li key={item.id} style={row}>
-                <span style={rowTitle}>{item.title}</span>
-                <span style={rowMeta}>{item.detail}</span>
+                <Link href={SOURCE_TO_PAGE[item.source] ?? '/investment-committee'} style={rowLink}>
+                  <span style={rowTitle}>{item.title}</span>
+                  <span style={rowMeta}>{item.detail}</span>
+                </Link>
               </li>
             ))}
           </ul>
@@ -82,14 +95,18 @@ export default function AttentionPanel() {
           <ul style={list}>
             {guardrailWarnings > 0 && (
               <li style={row}>
-                <span style={rowTitle}>{guardrailWarnings} guardrail warning{guardrailWarnings === 1 ? '' : 's'}</span>
-                <span style={rowMeta}>Active portfolio construction workflows currently flagging a breach.</span>
+                <Link href="/portfolios" style={rowLink}>
+                  <span style={rowTitle}>{guardrailWarnings} guardrail warning{guardrailWarnings === 1 ? '' : 's'}</span>
+                  <span style={rowMeta}>Active portfolio construction workflows currently flagging a breach.</span>
+                </Link>
               </li>
             )}
             {expiringOverlays > 0 && (
               <li style={row}>
-                <span style={rowTitle}>{expiringOverlays} tactical overlay{expiringOverlays === 1 ? '' : 's'} expiring soon</span>
-                <span style={rowMeta}>Within the next 30 days.</span>
+                <Link href="/portfolios" style={rowLink}>
+                  <span style={rowTitle}>{expiringOverlays} tactical overlay{expiringOverlays === 1 ? '' : 's'} expiring soon</span>
+                  <span style={rowMeta}>Within the next 30 days.</span>
+                </Link>
               </li>
             )}
           </ul>
@@ -142,6 +159,15 @@ const row = {
   background: '#12345b',
   borderRadius: '8px',
   border: '1px solid #2d4a6b',
+};
+
+const rowLink = {
+  display: 'flex',
+  flexDirection: 'column' as const,
+  gap: '2px',
+  width: '100%',
+  textDecoration: 'none',
+  color: 'inherit',
 };
 
 const rowTitle = {

@@ -1,8 +1,17 @@
 'use client';
 
 import { useMemo } from 'react';
-import { proposalPipelineItems, getProposalStageLabel } from '../../lib/engines/proposal-pipeline';
+import Link from 'next/link';
+import { proposalPipelineItems, getProposalStageLabel, type ProposalStage } from '../../lib/engines/proposal-pipeline';
 import StatusBox from './StatusBox';
+
+const STAGE_TO_PAGE: Record<ProposalStage, string> = {
+  draft: '/portfolios',
+  'adviser-review': '/portfolios',
+  'ic-review': '/investment-committee',
+  'ready-to-present': '/portfolios',
+  implemented: '/portfolios',
+};
 
 export default function InProgressPanel() {
   const items = useMemo(
@@ -25,13 +34,15 @@ export default function InProgressPanel() {
         <ul style={list}>
           {items.map((item) => (
             <li key={item.id} style={row}>
-              <div style={rowHeader}>
-                <span style={rowTitle}>{item.clientName}</span>
-                <span style={stageBadge}>{getProposalStageLabel(item.stage)}</span>
-              </div>
-              <span style={rowMeta}>
-                {item.entityType} · {item.portfolioStatus} · {item.adviser} · updated {item.lastUpdated}
-              </span>
+              <Link href={STAGE_TO_PAGE[item.stage]} style={rowLink}>
+                <div style={rowHeader}>
+                  <span style={rowTitle}>{item.clientName}</span>
+                  <span style={stageBadge}>{getProposalStageLabel(item.stage)}</span>
+                </div>
+                <span style={rowMeta}>
+                  {item.entityType} · {item.portfolioStatus} · {item.adviser} · updated {item.lastUpdated}
+                </span>
+              </Link>
             </li>
           ))}
         </ul>
@@ -63,13 +74,19 @@ const list = {
 };
 
 const row = {
-  display: 'flex',
-  flexDirection: 'column' as const,
-  gap: '4px',
   padding: '10px 12px',
   background: '#12345b',
   borderRadius: '8px',
   border: '1px solid #2d4a6b',
+};
+
+const rowLink = {
+  display: 'flex',
+  flexDirection: 'column' as const,
+  gap: '4px',
+  width: '100%',
+  textDecoration: 'none',
+  color: 'inherit',
 };
 
 const rowHeader = {

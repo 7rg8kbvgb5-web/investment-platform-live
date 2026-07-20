@@ -1,16 +1,4 @@
-import { supabase } from '../../lib/supabase';
-import { buildPortfolioState } from '../../lib/engines/build-portfolio-state';
 import PageContent from '../../components/PageContent';
-import DashboardHero from '../../components/dashboard/DashboardHero';
-import ProfileCardHeader from '../../components/dashboard/ProfileCardHeader';
-import ProfileSummaryGrid from '../../components/dashboard/ProfileSummaryGrid';
-import ProfileChartsSection from '../../components/dashboard/ProfileChartsSection';
-import ProfileAllocationTable from '../../components/dashboard/ProfileAllocationTable';
-import GuardrailsPanel from '../../components/dashboard/GuardrailsPanel';
-import OverlayGovernancePanel from '../../components/dashboard/OverlayGovernancePanel';
-import ResetToStrategicPanel from '../../components/dashboard/ResetToStrategicPanel';
-import PortfolioSimulationWorkflow from '../../components/dashboard/PortfolioSimulationWorkflow';
-import StatusBox from '../../components/dashboard/StatusBox';
 import { PortfolioCandidatesPanel } from '../../components/PortfolioCandidatesPanel';
 import { ChampionChallengerPortfolioPanel } from '../../components/ChampionChallengerPortfolioPanel';
 import { SectorConstructionPanel } from '../../components/SectorConstructionPanel';
@@ -40,32 +28,14 @@ import ProposalPipelinePanel from '../../components/ProposalPipelinePanel';
 import DashboardGrid from '../../components/ui/DashboardGrid';
 import AdviserPrioritiesPanel from '../../components/AdviserPrioritiesPanel';
 
-export default async function PortfoliosPage() {
-  const { data: profiles } = await supabase
-    .from('risk_profiles')
-    .select('*')
-    .order('id');
-
-  const { data: overlays } = await supabase
-    .from('tactical_overlays')
-    .select('*')
-    .order('id');
-
-  const { data: allocations } = await supabase
-    .from('strategic_allocations')
-    .select('*')
-    .order('id');
-
+export default function PortfoliosPage() {
   const clientAdviceWorkflow = buildClientAdviceWorkflow();
 
   return (
-    <>
-      <DashboardHero />
-
-      <PageContent
-        title="Portfolios"
-        description="Build model portfolios, review risk profiles, analyse client holdings and govern portfolio changes."
-      >
+    <PageContent
+      title="Portfolios"
+      description="Build model portfolios, review risk profiles, analyse client holdings and govern portfolio changes."
+    >
          <AdviserCommandCentreHeader />
          <AdviserCommandCentreDashboard />
          <DashboardGrid>
@@ -122,14 +92,5 @@ export default async function PortfoliosPage() {
           }
         />
       </PageContent>
-    </>
   );
 }
-
-const profileCard = {
-  marginBottom: '35px',
-  padding: '30px',
-  background: '#04142b',
-  borderRadius: '18px',
-  border: '1px solid #1e3a5f',
-};
