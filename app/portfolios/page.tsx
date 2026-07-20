@@ -5,6 +5,7 @@ import { ModelPortfolioVersioningPanel } from '../../components/ModelPortfolioVe
 import { ModelPortfolioApprovalPanel } from '../../components/ModelPortfolioApprovalPanel';
 import { ModelPortfolioChangeAuditPanel } from '../../components/ModelPortfolioChangeAuditPanel';
 import SectorHealthScorePanel from '../../components/SectorHealthScorePanel';
+import PortfolioAnalyticsPanel from '../../components/PortfolioAnalyticsPanel';
 import { PortfolioConstitutionPanel } from '../../components/PortfolioConstitutionPanel';
 import { PortfolioApprovalReadinessPanel } from '../../components/PortfolioApprovalReadinessPanel';
 import { ClientPortfolioAnalysisPanel } from '../../components/ClientPortfolioAnalysisPanel';
@@ -17,6 +18,8 @@ import { PortfolioDriftMonitoringPanel } from '../../components/PortfolioDriftMo
 import { DriftAlertsPanel } from '../../components/DriftAlertsPanel';
 import ModelPortfolioHealthPanel from '../../components/ModelPortfolioHealthPanel';
 import { ClientAdviceProvider } from '../../components/ClientAdviceContext';
+
+export const dynamic = 'force-dynamic';
 
 export default function PortfoliosPage() {
   const clientAdviceWorkflow = buildClientAdviceWorkflow();
@@ -35,7 +38,12 @@ export default function PortfoliosPage() {
               <PortfolioConstitutionPanel />
             </>
           }
-          analytics={<SectorHealthScorePanel />}
+          analytics={
+            <>
+              <SectorHealthScorePanel />
+              <PortfolioAnalyticsPanel />
+            </>
+          }
           riskProfiles={<RiskProfilePortfolioPanel />}
           clientAdvice={
             <>

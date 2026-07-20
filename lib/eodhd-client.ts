@@ -61,6 +61,29 @@ async function eodhdFetch<T>(path: string, params: Record<string, string> = {}):
   return response.json() as Promise<T>;
 }
 
+export type EodhdEodBar = {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  adjusted_close: number;
+  volume: number;
+};
+
+/**
+ * Historical daily EOD bars for a ticker over the given date range
+ * (YYYY-MM-DD). Used to derive returns, volatility and correlation -
+ * none of that can be computed from a single quote.
+ */
+export async function getHistoricalEod(
+  eodhdTicker: string,
+  from: string,
+  to: string
+): Promise<EodhdEodBar[]> {
+  return eodhdFetch<EodhdEodBar[]>(`/eod/${eodhdTicker}`, { from, to, period: 'd' });
+}
+
 /** Delayed real-time quote for a single ASX-listed ticker (e.g. "CBA.AU"). */
 export async function getQuote(eodhdTicker: string): Promise<EodhdQuote> {
   return eodhdFetch<EodhdQuote>(`/real-time/${eodhdTicker}`);

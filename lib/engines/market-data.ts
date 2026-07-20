@@ -24,11 +24,11 @@ export type HoldingMarketData = {
  * mandate, active fund, or cash - e.g. "CBA" is quotable, "Global Fund"
  * and "Direct Bonds" are not.
  */
-function isQuotableCode(code: string): boolean {
+export function isQuotableCode(code: string): boolean {
   return /^[A-Z]{2,5}$/.test(code);
 }
 
-function dedupeHoldings(): ModelHolding[] {
+export function dedupeHoldings(): ModelHolding[] {
   const seen = new Map<string, ModelHolding>();
   for (const portfolio of modelPortfolios) {
     for (const assetClass of portfolio.assetClasses) {
