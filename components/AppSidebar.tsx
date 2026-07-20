@@ -82,6 +82,17 @@ const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
+    href: '/data-analytics',
+    label: 'Data Analytics',
+    description: 'Live market data and fundamentals',
+    icon: (
+      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <path d="M3 16V4M3 16h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M6 13l3-4 3 2 4-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
     href: '/governance',
     label: 'Governance',
     description: 'Approvals, deferrals and audit',

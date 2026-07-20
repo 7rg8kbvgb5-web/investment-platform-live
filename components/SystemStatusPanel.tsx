@@ -132,6 +132,14 @@ const SYSTEM_MODULES: SystemModule[] = [
       'Connected and live for the Research Library and Weekly Brief. The Portfolio Engine and model portfolios below are not yet wired to it.',
   },
   {
+    id: 'eodhd-market-data',
+    name: 'EODHD Market Data',
+    status: 'Not Connected',
+    lastUpdated: '2026-07-21T00:00:00.000Z',
+    notes:
+      'ASX pricing and fundamentals for model portfolio holdings, feeding the Data Analytics page and (planned) Sector Health Score. Needs EODHD_API_KEY in Vercel.',
+  },
+  {
     id: 'external-market-data',
     name: 'External Market Data',
     status: 'Future',
