@@ -14,6 +14,8 @@ import {
   type RiskProfile,
 } from '../lib/engines/model-portfolios'
 import { compareClientPortfolioToModel } from '../lib/engines/portfolio-review-comparison'
+import AssetClassComparisonChart from './AssetClassComparisonChart'
+import HoldingAdjustmentChart from './HoldingAdjustmentChart'
 import StatusBox from './dashboard/StatusBox'
 
 type ExtractionMeta = {
@@ -270,6 +272,7 @@ export default function ClientPortfolioUploadPanel() {
             <p style={subHeading}>
               Asset Class Allocation vs {effectiveRiskProfile} Model
             </p>
+            <AssetClassComparisonChart rows={comparison.assetClassComparison} />
             <div style={tableWrap}>
               <table style={table}>
                 <thead>
@@ -306,6 +309,7 @@ export default function ClientPortfolioUploadPanel() {
           {/* Holding-level recommendations */}
           <div style={subPanel}>
             <p style={subHeading}>Recommended Changes</p>
+            <HoldingAdjustmentChart recommendations={comparison.holdingRecommendations} />
             <div style={tableWrap}>
               <table style={table}>
                 <thead>
