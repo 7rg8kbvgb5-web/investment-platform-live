@@ -5,9 +5,7 @@ import PortfolioWorkspaceTabs from './PortfolioWorkspaceTabs'
 import { WorkflowStepper, WorkflowStep } from './WorkflowStepper'
 import ClientAdviceDecisionSummary from './ClientAdviceDecisionSummary'
 import ProposalV3Panel from './ProposalV3Panel'
-import ClientRiskProfileSelector, {
-  type ClientRiskProfile,
-} from './ClientRiskProfileSelector'
+import ClientRiskProfileSelector from './ClientRiskProfileSelector'
 import {
   ClientAdviceProvider,
   useClientAdvice,
@@ -21,14 +19,22 @@ type PortfolioWorkspaceKey =
   | 'clientAdvice'
   | 'governance'
 
-  interface Props {
-    construction: React.ReactNode
-    riskProfiles: React.ReactNode
-    clientAdvice: React.ReactNode
-    governance: React.ReactNode
-  }
+interface Props {
+  construction: React.ReactNode
+  riskProfiles: React.ReactNode
+  clientAdvice: React.ReactNode
+  governance: React.ReactNode
+}
 
-export default function PortfolioWorkspace({
+export default function PortfolioWorkspace(props: Props) {
+  return (
+    <ClientAdviceProvider>
+      <WorkspaceBody {...props} />
+    </ClientAdviceProvider>
+  )
+}
+
+function WorkspaceBody({
   construction,
   riskProfiles,
   clientAdvice,
@@ -37,6 +43,7 @@ export default function PortfolioWorkspace({
   const [activeTab, setActiveTab] =
     useState<PortfolioWorkspaceKey>('construction')
 
+  const { selectedRiskProfile, setSelectedRiskProfile } = useClientAdvice()
 
   const clientAdviceWorkflow: WorkflowStep[] = [
     {
@@ -69,13 +76,21 @@ export default function PortfolioWorkspace({
     <div className="space-y-6">
       <PortfolioWorkspaceTabs activeTab={activeTab} onChange={setActiveTab} />
 
-      {activeTab === 'construction' && construction}
+      {activeTab === 'construction' && (
+        <div className="section">
+          <ClientRiskProfileSelector
+            selectedRiskProfile={selectedRiskProfile}
+            onChange={setSelectedRiskProfile}
+          />
+          {construction}
+        </div>
+      )}
 
       {activeTab === 'riskProfiles' && (
-  <div className="section">
-    <ModelPortfolioBuilderPanel />
-  </div>
-)}
+        <div className="section">
+          <ModelPortfolioBuilderPanel />
+        </div>
+      )}
 
       {activeTab === 'clientAdvice' && (
         <div className="section">
@@ -85,11 +100,6 @@ export default function PortfolioWorkspace({
             steps={clientAdviceWorkflow}
           />
 
-<ClientRiskProfileSelector
-  selectedRiskProfile="Balanced"
-  onChange={() => {}}
-/>
-
           <ClientAdviceDecisionSummary />
 
           {clientAdvice}
@@ -97,15 +107,14 @@ export default function PortfolioWorkspace({
           <ProposalV3Panel />
 
           <InstitutionalProposalBuilderPanel
-  proposal={{
-    executiveSummary:
-      'This proposal summarises the current portfolio position, recommended changes and investment committee evidence supporting the advice.',
-  }}
-  approvalReadiness={{
-    status: 'Draft',
-  }}
-/>
-
+            proposal={{
+              executiveSummary:
+                'This proposal summarises the current portfolio position, recommended changes and investment committee evidence supporting the advice.',
+            }}
+            approvalReadiness={{
+              status: 'Draft',
+            }}
+          />
         </div>
       )}
 
