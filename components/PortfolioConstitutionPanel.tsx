@@ -70,6 +70,37 @@ export function PortfolioConstitutionPanel() {
     );
   }
 
+  const [manualEntry, setManualEntry] = useState<Record<string, { code: string; name: string }>>({});
+
+  function updateManualEntry(assetClassName: string, field: 'code' | 'name', value: string) {
+    setManualEntry((prev) => ({
+      ...prev,
+      [assetClassName]: { code: '', name: '', ...prev[assetClassName], [field]: value },
+    }));
+  }
+
+  function addManualHolding(assetClassName: string) {
+    const entry = manualEntry[assetClassName];
+    const code = entry?.code.trim().toUpperCase();
+    const name = entry?.name.trim();
+    if (!code || !name) return;
+
+    setAssetClasses((prev) =>
+      prev.map((ac) => {
+        if (ac.name !== assetClassName) return ac;
+        if (ac.holdings.some((h) => h.code === code)) return ac;
+        const newHolding: ModelHolding = {
+          code,
+          name,
+          weight: 0,
+          rationale: 'Added manually - not yet on the Approved List.',
+        };
+        return { ...ac, holdings: [...ac.holdings, newHolding] };
+      })
+    );
+    setManualEntry((prev) => ({ ...prev, [assetClassName]: { code: '', name: '' } }));
+  }
+
   function resetToModel() {
     setAssetClasses(cloneAssetClasses(modelPortfolio.assetClasses));
   }
@@ -152,6 +183,35 @@ export function PortfolioConstitutionPanel() {
                     </option>
                   ))}
                 </select>
+              )}
+
+              <div style={manualAddRow}>
+                <input
+                  type="text"
+                  placeholder="Code"
+                  value={manualEntry[assetClass.name]?.code ?? ''}
+                  onChange={(e) => updateManualEntry(assetClass.name, 'code', e.target.value)}
+                  style={manualCodeInput}
+                />
+                <input
+                  type="text"
+                  placeholder="Security name"
+                  value={manualEntry[assetClass.name]?.name ?? ''}
+                  onChange={(e) => updateManualEntry(assetClass.name, 'name', e.target.value)}
+                  style={manualNameInput}
+                />
+                <button
+                  type="button"
+                  onClick={() => addManualHolding(assetClass.name)}
+                  style={manualAddButton}
+                >
+                  Add
+                </button>
+              </div>
+              {candidates.length === 0 && (
+                <p style={emptyText}>
+                  No suggested candidates on file for {assetClass.name} yet — add by code and name above.
+                </p>
               )}
             </div>
           );
@@ -299,4 +359,41 @@ const addSelect = {
   background: '#0b2342',
   border: '1px solid #2d4a6b',
   color: '#e2e8f0',
+};
+
+const manualAddRow = {
+  display: 'flex',
+  gap: '8px',
+  marginTop: '10px',
+};
+
+const manualCodeInput = {
+  width: '90px',
+  padding: '8px 10px',
+  borderRadius: '8px',
+  fontSize: '13px',
+  background: '#0b2342',
+  border: '1px solid #2d4a6b',
+  color: '#e2e8f0',
+};
+
+const manualNameInput = {
+  flex: 1,
+  padding: '8px 10px',
+  borderRadius: '8px',
+  fontSize: '13px',
+  background: '#0b2342',
+  border: '1px solid #2d4a6b',
+  color: '#e2e8f0',
+};
+
+const manualAddButton = {
+  padding: '8px 14px',
+  borderRadius: '8px',
+  fontSize: '13px',
+  fontWeight: 600,
+  background: '#0f3d2e',
+  border: '1px solid #10b981',
+  color: '#86efac',
+  cursor: 'pointer',
 };
