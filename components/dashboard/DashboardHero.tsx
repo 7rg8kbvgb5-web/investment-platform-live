@@ -1,19 +1,20 @@
 export default function DashboardHero() {
   return (
     <section style={hero}>
-      <p style={eyebrow}>Investment Platform</p>
-      <h1 style={title}>Portfolio Construction Engine</h1>
+      <p style={eyebrow}>Adviser Command Centre</p>
+      <h1 style={title}>Good morning, Sean</h1>
       <p style={subtitle}>
-        Strategic asset allocation by risk profile, with live Supabase data,
-        growth/defensive validation and portfolio guardrail foundations.
+        Here&apos;s what&apos;s worth your attention today — outstanding Investment
+        Committee reviews, macro developments, and where each client review is
+        up to.
       </p>
     </section>
   );
 }
 
 const hero = {
-  marginBottom: '40px',
-  padding: '30px',
+  marginBottom: '30px',
+  padding: '26px 30px',
   background: '#0b2342',
   borderRadius: '18px',
   border: '1px solid #2d4a6b',
@@ -28,13 +29,14 @@ const eyebrow = {
 };
 
 const title = {
-  fontSize: '48px',
-  margin: '0 0 15px 0',
+  fontSize: '32px',
+  margin: '0 0 10px 0',
 };
 
 const subtitle = {
-  fontSize: '18px',
-  maxWidth: '900px',
+  fontSize: '16px',
+  maxWidth: '820px',
   opacity: 0.85,
   lineHeight: 1.5,
+  margin: 0,
 };

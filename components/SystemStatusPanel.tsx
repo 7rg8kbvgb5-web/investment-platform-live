@@ -100,11 +100,36 @@ const SYSTEM_MODULES: SystemModule[] = [
       'Executive summary aggregating house views, reviews, deferred items, and governance health.',
   },
   {
+    id: 'research-library',
+    name: 'Research Library',
+    status: 'Active',
+    lastUpdated: '2026-07-13T00:00:00.000Z',
+    notes:
+      'Ord Minnett and Barrenjoey research documents uploaded, tagged, and stored in Supabase storage.',
+  },
+  {
+    id: 'weekly-brief',
+    name: 'Weekly Research Brief',
+    status: 'Active',
+    lastUpdated: '2026-07-13T00:00:00.000Z',
+    notes:
+      'Anthropic-powered brief with live web search, scanning macro events and Approved List holdings weekly. Recommendations only — never auto-trades.',
+  },
+  {
+    id: 'portfolio-pdf-review',
+    name: 'Client Portfolio PDF Review',
+    status: 'Active',
+    lastUpdated: '2026-07-13T00:00:00.000Z',
+    notes:
+      'Parses uploaded client portfolio statements, classifies risk against house models, and compares holdings to the security universe.',
+  },
+  {
     id: 'supabase',
     name: 'Supabase Persistence',
-    status: 'Not Connected',
-    lastUpdated: '2026-06-01T00:00:00.000Z',
-    notes: 'Database schema and live persistence not connected in this preview environment.',
+    status: 'Active',
+    lastUpdated: '2026-07-13T00:00:00.000Z',
+    notes:
+      'Connected and live for the Research Library and Weekly Brief. The Portfolio Engine and model portfolios below are not yet wired to it.',
   },
   {
     id: 'external-market-data',
