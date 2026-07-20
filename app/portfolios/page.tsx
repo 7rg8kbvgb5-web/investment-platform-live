@@ -15,12 +15,8 @@ import PortfolioWorkspace from '../../components/PortfolioWorkspace';
 import ClientPortfolioUploadPanel from '../../components/ClientPortfolioUploadPanel';
 import { PortfolioDriftMonitoringPanel } from '../../components/PortfolioDriftMonitoringPanel';
 import { DriftAlertsPanel } from '../../components/DriftAlertsPanel';
-import AdviserCommandCentreHeader from '../../components/AdviserCommandCentreHeader'
-import AdviserCommandCentreDashboard from '../../components/AdviserCommandCentreDashboard'
-import WorkflowProgressPanel from '../../components/WorkflowProgressPanel';
-import ProposalPipelinePanel from '../../components/ProposalPipelinePanel';
-import DashboardGrid from '../../components/ui/DashboardGrid';
-import AdviserPrioritiesPanel from '../../components/AdviserPrioritiesPanel';
+import ModelPortfolioHealthPanel from '../../components/ModelPortfolioHealthPanel';
+import { ClientAdviceProvider } from '../../components/ClientAdviceContext';
 
 export default function PortfoliosPage() {
   const clientAdviceWorkflow = buildClientAdviceWorkflow();
@@ -30,55 +26,52 @@ export default function PortfoliosPage() {
       title="Portfolios"
       description="Build model portfolios, review risk profiles, analyse client holdings and govern portfolio changes."
     >
-      <AdviserCommandCentreHeader />
-      <AdviserCommandCentreDashboard />
-      <DashboardGrid>
-        <WorkflowProgressPanel />
-        <ProposalPipelinePanel />
-        <AdviserPrioritiesPanel />
-      </DashboardGrid>
-      <PortfolioWorkspace
-        construction={
-          <>
-            <PortfolioConstitutionPanel />
-          </>
-        }
-        analytics={<SectorHealthScorePanel />}
-        riskProfiles={<RiskProfilePortfolioPanel />}
-        clientAdvice={
-          <>
-            <ClientPortfolioUploadPanel />
+      <ClientAdviceProvider>
+        <ModelPortfolioHealthPanel />
 
-            <ClientPortfolioMappingPanel />
+        <PortfolioWorkspace
+          construction={
+            <>
+              <PortfolioConstitutionPanel />
+            </>
+          }
+          analytics={<SectorHealthScorePanel />}
+          riskProfiles={<RiskProfilePortfolioPanel />}
+          clientAdvice={
+            <>
+              <ClientPortfolioUploadPanel />
 
-            <ClientPortfolioAnalysisPanel
-              analysis={clientAdviceWorkflow.analysis}
-            />
+              <ClientPortfolioMappingPanel />
 
-            <PortfolioDriftMonitoringPanel />
+              <ClientPortfolioAnalysisPanel
+                analysis={clientAdviceWorkflow.analysis}
+              />
 
-            <DriftAlertsPanel />
+              <PortfolioDriftMonitoringPanel />
 
-            <ClientRebalanceRecommendationsPanel
-              recommendations={clientAdviceWorkflow.rebalanceRecommendations}
-            />
+              <DriftAlertsPanel />
 
-            <InvestmentProposalPanel
-              proposal={clientAdviceWorkflow.proposal}
-              approvalReadiness={clientAdviceWorkflow.approvalReadiness}
-            />
+              <ClientRebalanceRecommendationsPanel
+                recommendations={clientAdviceWorkflow.rebalanceRecommendations}
+              />
 
-            <PortfolioApprovalReadinessPanel />
-          </>
-        }
-        governance={
-          <>
-            <ModelPortfolioVersioningPanel />
-            <ModelPortfolioApprovalPanel />
-            <ModelPortfolioChangeAuditPanel />
-          </>
-        }
-      />
+              <InvestmentProposalPanel
+                proposal={clientAdviceWorkflow.proposal}
+                approvalReadiness={clientAdviceWorkflow.approvalReadiness}
+              />
+
+              <PortfolioApprovalReadinessPanel />
+            </>
+          }
+          governance={
+            <>
+              <ModelPortfolioVersioningPanel />
+              <ModelPortfolioApprovalPanel />
+              <ModelPortfolioChangeAuditPanel />
+            </>
+          }
+        />
+      </ClientAdviceProvider>
     </PageContent>
   );
 }

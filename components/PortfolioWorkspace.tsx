@@ -7,7 +7,6 @@ import ClientAdviceDecisionSummary from './ClientAdviceDecisionSummary'
 import ProposalV3Panel from './ProposalV3Panel'
 import ClientRiskProfileSelector from './ClientRiskProfileSelector'
 import {
-  ClientAdviceProvider,
   useClientAdvice,
 } from './ClientAdviceContext'
 import ModelPortfolioBuilderPanel from "./ModelPortfolioBuilderPanel";
@@ -29,11 +28,7 @@ interface Props {
 }
 
 export default function PortfolioWorkspace(props: Props) {
-  return (
-    <ClientAdviceProvider>
-      <WorkspaceBody {...props} />
-    </ClientAdviceProvider>
-  )
+  return <WorkspaceBody {...props} />
 }
 
 function WorkspaceBody({
