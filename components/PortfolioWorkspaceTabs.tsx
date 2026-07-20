@@ -2,6 +2,7 @@
 
 type PortfolioWorkspace =
   | 'construction'
+  | 'analytics'
   | 'riskProfiles'
   | 'clientAdvice'
   | 'governance'
@@ -13,6 +14,7 @@ interface Props {
 
 const tabs = [
   { id: 'construction', label: 'Construction' },
+  { id: 'analytics', label: 'Analytics' },
   { id: 'riskProfiles', label: 'Risk Profiles' },
   { id: 'clientAdvice', label: 'Client Advice' },
   { id: 'governance', label: 'Governance' },

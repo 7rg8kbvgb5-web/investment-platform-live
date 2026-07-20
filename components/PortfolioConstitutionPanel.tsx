@@ -1,43 +1,161 @@
 'use client';
 
-import { getModelPortfolioByRiskProfile } from '../lib/engines/model-portfolios';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  getModelPortfolioByRiskProfile,
+  type ModelAssetClass,
+  type ModelHolding,
+} from '../lib/engines/model-portfolios';
+import { buildSecurityUniverse } from '../lib/engines/security-universe';
 import { useClientAdvice } from './ClientAdviceContext';
 import Panel from './ui/Panel';
+import StatusBox from './dashboard/StatusBox';
+
+function cloneAssetClasses(assetClasses: ModelAssetClass[]): ModelAssetClass[] {
+  return assetClasses.map((assetClass) => ({
+    ...assetClass,
+    holdings: assetClass.holdings.map((holding) => ({ ...holding })),
+  }));
+}
 
 export function PortfolioConstitutionPanel() {
   const { selectedRiskProfile } = useClientAdvice();
-  const portfolio = getModelPortfolioByRiskProfile(selectedRiskProfile);
+  const modelPortfolio = getModelPortfolioByRiskProfile(selectedRiskProfile);
+
+  // The working proposal always starts as the model portfolio for the
+  // selected risk profile - switching profile re-seeds it fresh. From
+  // there it's fully editable: securities can be added or removed per
+  // asset class without touching the underlying model.
+  const [assetClasses, setAssetClasses] = useState<ModelAssetClass[]>(() =>
+    cloneAssetClasses(modelPortfolio.assetClasses)
+  );
+
+  useEffect(() => {
+    setAssetClasses(cloneAssetClasses(modelPortfolio.assetClasses));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRiskProfile]);
+
+  const universe = useMemo(() => Array.from(buildSecurityUniverse().values()), []);
+
+  function removeHolding(assetClassName: string, code: string) {
+    setAssetClasses((prev) =>
+      prev.map((ac) =>
+        ac.name === assetClassName
+          ? { ...ac, holdings: ac.holdings.filter((h) => h.code !== code) }
+          : ac
+      )
+    );
+  }
+
+  function addHolding(assetClassName: string, code: string) {
+    if (!code) return;
+    const candidate = universe.find((entry) => entry.code === code);
+    if (!candidate) return;
+
+    setAssetClasses((prev) =>
+      prev.map((ac) => {
+        if (ac.name !== assetClassName) return ac;
+        if (ac.holdings.some((h) => h.code === candidate.code)) return ac;
+        const newHolding: ModelHolding = {
+          code: candidate.code,
+          name: candidate.name,
+          sector: candidate.sector,
+          weight: 0,
+          rationale: candidate.inSecurityMaster
+            ? 'Added from the Approved List.'
+            : 'Added manually.',
+        };
+        return { ...ac, holdings: [...ac.holdings, newHolding] };
+      })
+    );
+  }
+
+  function resetToModel() {
+    setAssetClasses(cloneAssetClasses(modelPortfolio.assetClasses));
+  }
 
   return (
     <Panel
       eyebrow={`${selectedRiskProfile} Model Portfolio`}
       title="Portfolio Constitution"
+      actions={
+        <button type="button" onClick={resetToModel} style={resetButton}>
+          Reset to model
+        </button>
+      }
     >
-      <p style={intro}>{portfolio.objective}</p>
+      <p style={intro}>{modelPortfolio.objective}</p>
+
+      <StatusBox variant="neutral" display="inline">
+        Starts as the {selectedRiskProfile} model portfolio — add or remove
+        securities per asset class below to build this client&apos;s proposal.
+        Changes here aren&apos;t saved yet; switching risk profile resets to
+        that profile&apos;s model.
+      </StatusBox>
 
       <div style={assetClassList}>
-        {portfolio.assetClasses.map((assetClass) => (
-          <div key={assetClass.name} style={assetClassCard}>
-            <div style={assetClassHeader}>
-              <h4 style={assetClassTitle}>{assetClass.name}</h4>
-              <span style={typeBadge}>{assetClass.type}</span>
-            </div>
-            <p style={assetClassDescription}>{assetClass.description}</p>
+        {assetClasses.map((assetClass) => {
+          const candidates = universe.filter(
+            (entry) =>
+              entry.assetClass === assetClass.name &&
+              !assetClass.holdings.some((h) => h.code === entry.code)
+          );
 
-            <ul style={holdingList}>
-              {assetClass.holdings.map((holding) => (
-                <li key={holding.code} style={holdingRow}>
-                  <div style={holdingHeader}>
-                    <span style={holdingCode}>{holding.code}</span>
-                    <span style={holdingName}>{holding.name}</span>
-                    {holding.sector && <span style={sectorTag}>{holding.sector}</span>}
-                  </div>
-                  <p style={holdingRationale}>{holding.rationale}</p>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
+          return (
+            <div key={assetClass.name} style={assetClassCard}>
+              <div style={assetClassHeader}>
+                <h4 style={assetClassTitle}>{assetClass.name}</h4>
+                <span style={typeBadge}>{assetClass.type}</span>
+              </div>
+              <p style={assetClassDescription}>{assetClass.description}</p>
+
+              <ul style={holdingList}>
+                {assetClass.holdings.map((holding) => (
+                  <li key={holding.code} style={holdingRow}>
+                    <div style={holdingHeader}>
+                      <span style={holdingCode}>{holding.code}</span>
+                      <span style={holdingName}>{holding.name}</span>
+                      {holding.sector && <span style={sectorTag}>{holding.sector}</span>}
+                      <button
+                        type="button"
+                        onClick={() => removeHolding(assetClass.name, holding.code)}
+                        style={removeButton}
+                        aria-label={`Remove ${holding.name}`}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <p style={holdingRationale}>{holding.rationale}</p>
+                  </li>
+                ))}
+                {assetClass.holdings.length === 0 && (
+                  <p style={emptyText}>No securities in this asset class yet.</p>
+                )}
+              </ul>
+
+              {candidates.length > 0 && (
+                <select
+                  defaultValue=""
+                  onChange={(e) => {
+                    addHolding(assetClass.name, e.target.value);
+                    e.target.value = '';
+                  }}
+                  style={addSelect}
+                >
+                  <option value="" disabled>
+                    + Add a security to {assetClass.name}
+                  </option>
+                  {candidates.map((entry) => (
+                    <option key={entry.code} value={entry.code}>
+                      {entry.code} — {entry.name}
+                      {entry.inSecurityMaster ? ' (Approved List)' : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          );
+        })}
       </div>
     </Panel>
   );
@@ -47,14 +165,26 @@ const intro = {
   color: 'var(--text-secondary)',
   fontSize: '0.85rem',
   marginTop: '-8px',
-  marginBottom: '16px',
+  marginBottom: '12px',
   lineHeight: 1.5,
+};
+
+const resetButton = {
+  padding: '6px 12px',
+  borderRadius: '8px',
+  fontSize: '12px',
+  fontWeight: 600,
+  background: '#0b2342',
+  border: '1px solid #2d4a6b',
+  color: '#93c5fd',
+  cursor: 'pointer',
 };
 
 const assetClassList = {
   display: 'flex',
   flexDirection: 'column' as const,
   gap: '14px',
+  marginTop: '16px',
 };
 
 const assetClassCard = {
@@ -130,9 +260,20 @@ const holdingName = {
 };
 
 const sectorTag = {
-  marginLeft: 'auto',
   fontSize: '11px',
   color: '#94a3b8',
+};
+
+const removeButton = {
+  marginLeft: 'auto',
+  padding: '3px 10px',
+  borderRadius: '999px',
+  fontSize: '11px',
+  fontWeight: 600,
+  background: '#4a1520',
+  border: '1px solid #ef4444',
+  color: '#fca5a5',
+  cursor: 'pointer',
 };
 
 const holdingRationale = {
@@ -140,4 +281,22 @@ const holdingRationale = {
   fontSize: '12px',
   color: '#94a3b8',
   lineHeight: 1.4,
+};
+
+const emptyText = {
+  margin: 0,
+  fontSize: '12px',
+  color: '#94a3b8',
+  fontStyle: 'italic' as const,
+};
+
+const addSelect = {
+  marginTop: '10px',
+  width: '100%',
+  padding: '8px 10px',
+  borderRadius: '8px',
+  fontSize: '13px',
+  background: '#0b2342',
+  border: '1px solid #2d4a6b',
+  color: '#e2e8f0',
 };

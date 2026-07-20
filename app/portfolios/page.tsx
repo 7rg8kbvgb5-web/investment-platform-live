@@ -40,10 +40,10 @@ export default function PortfoliosPage() {
       <PortfolioWorkspace
         construction={
           <>
-            <SectorHealthScorePanel />
             <PortfolioConstitutionPanel />
           </>
         }
+        analytics={<SectorHealthScorePanel />}
         riskProfiles={<RiskProfilePortfolioPanel />}
         clientAdvice={
           <>

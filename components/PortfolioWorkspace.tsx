@@ -15,12 +15,14 @@ import InstitutionalProposalBuilderPanel from "./InstitutionalProposalBuilderPan
 
 type PortfolioWorkspaceKey =
   | 'construction'
+  | 'analytics'
   | 'riskProfiles'
   | 'clientAdvice'
   | 'governance'
 
 interface Props {
   construction: React.ReactNode
+  analytics: React.ReactNode
   riskProfiles: React.ReactNode
   clientAdvice: React.ReactNode
   governance: React.ReactNode
@@ -36,6 +38,7 @@ export default function PortfolioWorkspace(props: Props) {
 
 function WorkspaceBody({
   construction,
+  analytics,
   riskProfiles,
   clientAdvice,
   governance,
@@ -84,6 +87,10 @@ function WorkspaceBody({
           />
           {construction}
         </div>
+      )}
+
+      {activeTab === 'analytics' && (
+        <div className="section">{analytics}</div>
       )}
 
       {activeTab === 'riskProfiles' && (
