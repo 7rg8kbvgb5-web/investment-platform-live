@@ -11,11 +11,56 @@ import { useClientAdvice } from './ClientAdviceContext';
 import Panel from './ui/Panel';
 import StatusBox from './dashboard/StatusBox';
 
-function cloneAssetClasses(assetClasses: ModelAssetClass[]): ModelAssetClass[] {
-  return assetClasses.map((assetClass) => ({
-    ...assetClass,
-    holdings: assetClass.holdings.map((holding) => ({ ...holding })),
-  }));
+// Bespoke, per-client weighting model.
+//
+// The model portfolio defines the *formal* weights (modelTargetWeight per
+// asset class, modelInClassWeight per holding within its asset class).
+// Every client is bespoke, so both are separately overridable per client:
+// clientTargetWeight (asset class's share of the whole portfolio) and
+// clientInClassWeight (a holding's share of its own asset class). A
+// holding's overall portfolio weight is always derived, never stored
+// directly: clientTargetWeight * clientInClassWeight / 100.
+//
+// Holdings added fresh (not part of the model) carry modelInClassWeight
+// of null so they never fight a "reset to model" for a weight that never
+// existed.
+type WorkingHolding = ModelHolding & {
+  modelInClassWeight: number | null;
+  clientInClassWeight: number;
+};
+
+type WorkingAssetClass = Omit<ModelAssetClass, 'holdings'> & {
+  modelTargetWeight: number;
+  clientTargetWeight: number;
+  holdings: WorkingHolding[];
+};
+
+function round1(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+function toWorking(assetClasses: ModelAssetClass[]): WorkingAssetClass[] {
+  return assetClasses.map((assetClass) => {
+    const modelTargetWeight = assetClass.targetWeight;
+    return {
+      ...assetClass,
+      modelTargetWeight,
+      clientTargetWeight: modelTargetWeight,
+      holdings: assetClass.holdings.map((holding) => {
+        const modelInClassWeight =
+          modelTargetWeight > 0 ? round1((holding.weight / modelTargetWeight) * 100) : 0;
+        return {
+          ...holding,
+          modelInClassWeight,
+          clientInClassWeight: modelInClassWeight,
+        };
+      }),
+    };
+  });
+}
+
+function overallWeight(assetClass: WorkingAssetClass, holding: WorkingHolding): number {
+  return round1((assetClass.clientTargetWeight * holding.clientInClassWeight) / 100);
 }
 
 export function PortfolioConstitutionPanel() {
@@ -25,13 +70,14 @@ export function PortfolioConstitutionPanel() {
   // The working proposal always starts as the model portfolio for the
   // selected risk profile - switching profile re-seeds it fresh. From
   // there it's fully editable: securities can be added or removed per
-  // asset class without touching the underlying model.
-  const [assetClasses, setAssetClasses] = useState<ModelAssetClass[]>(() =>
-    cloneAssetClasses(modelPortfolio.assetClasses)
+  // asset class, and both asset-class and in-class weights can be
+  // adjusted per client, without touching the underlying model.
+  const [assetClasses, setAssetClasses] = useState<WorkingAssetClass[]>(() =>
+    toWorking(modelPortfolio.assetClasses)
   );
 
   useEffect(() => {
-    setAssetClasses(cloneAssetClasses(modelPortfolio.assetClasses));
+    setAssetClasses(toWorking(modelPortfolio.assetClasses));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedRiskProfile]);
 
@@ -56,7 +102,7 @@ export function PortfolioConstitutionPanel() {
       prev.map((ac) => {
         if (ac.name !== assetClassName) return ac;
         if (ac.holdings.some((h) => h.code === candidate.code)) return ac;
-        const newHolding: ModelHolding = {
+        const newHolding: WorkingHolding = {
           code: candidate.code,
           name: candidate.name,
           sector: candidate.sector,
@@ -64,6 +110,8 @@ export function PortfolioConstitutionPanel() {
           rationale: candidate.inSecurityMaster
             ? 'Added from the Approved List.'
             : 'Added manually.',
+          modelInClassWeight: null,
+          clientInClassWeight: 0,
         };
         return { ...ac, holdings: [...ac.holdings, newHolding] };
       })
@@ -89,11 +137,13 @@ export function PortfolioConstitutionPanel() {
       prev.map((ac) => {
         if (ac.name !== assetClassName) return ac;
         if (ac.holdings.some((h) => h.code === code)) return ac;
-        const newHolding: ModelHolding = {
+        const newHolding: WorkingHolding = {
           code,
           name,
           weight: 0,
           rationale: 'Added manually - not yet on the Approved List.',
+          modelInClassWeight: null,
+          clientInClassWeight: 0,
         };
         return { ...ac, holdings: [...ac.holdings, newHolding] };
       })
@@ -101,9 +151,64 @@ export function PortfolioConstitutionPanel() {
     setManualEntry((prev) => ({ ...prev, [assetClassName]: { code: '', name: '' } }));
   }
 
-  function resetToModel() {
-    setAssetClasses(cloneAssetClasses(modelPortfolio.assetClasses));
+  function setAssetClassWeight(assetClassName: string, value: number) {
+    setAssetClasses((prev) =>
+      prev.map((ac) =>
+        ac.name === assetClassName
+          ? { ...ac, clientTargetWeight: Number.isFinite(value) ? value : ac.clientTargetWeight }
+          : ac
+      )
+    );
   }
+
+  function resetAssetClassWeight(assetClassName: string) {
+    setAssetClasses((prev) =>
+      prev.map((ac) =>
+        ac.name === assetClassName ? { ...ac, clientTargetWeight: ac.modelTargetWeight } : ac
+      )
+    );
+  }
+
+  function setHoldingWeight(assetClassName: string, code: string, value: number) {
+    setAssetClasses((prev) =>
+      prev.map((ac) => {
+        if (ac.name !== assetClassName) return ac;
+        return {
+          ...ac,
+          holdings: ac.holdings.map((h) =>
+            h.code === code
+              ? { ...h, clientInClassWeight: Number.isFinite(value) ? value : h.clientInClassWeight }
+              : h
+          ),
+        };
+      })
+    );
+  }
+
+  function resetHoldingWeight(assetClassName: string, code: string) {
+    setAssetClasses((prev) =>
+      prev.map((ac) => {
+        if (ac.name !== assetClassName) return ac;
+        return {
+          ...ac,
+          holdings: ac.holdings.map((h) =>
+            h.code === code && h.modelInClassWeight !== null
+              ? { ...h, clientInClassWeight: h.modelInClassWeight }
+              : h
+          ),
+        };
+      })
+    );
+  }
+
+  function resetToModel() {
+    setAssetClasses(toWorking(modelPortfolio.assetClasses));
+  }
+
+  const portfolioTotal = round1(
+    assetClasses.reduce((total, ac) => total + ac.clientTargetWeight, 0)
+  );
+  const portfolioOk = Math.abs(portfolioTotal - 100) < 0.15;
 
   return (
     <Panel
@@ -119,10 +224,18 @@ export function PortfolioConstitutionPanel() {
 
       <StatusBox variant="neutral" display="inline">
         Starts as the {selectedRiskProfile} model portfolio — add or remove
-        securities per asset class below to build this client&apos;s proposal.
-        Changes here aren&apos;t saved yet; switching risk profile resets to
-        that profile&apos;s model.
+        securities and adjust weightings per asset class and per holding to
+        build this client&apos;s bespoke proposal. Changes here aren&apos;t
+        saved yet; switching risk profile resets to that profile&apos;s
+        model.
       </StatusBox>
+
+      <div style={portfolioTotalRow}>
+        <span style={portfolioTotalLabel}>Portfolio total (asset classes)</span>
+        <span style={{ ...portfolioTotalValue, color: portfolioOk ? '#86efac' : '#fca5a5' }}>
+          {portfolioTotal}%
+        </span>
+      </div>
 
       <div style={assetClassList}>
         {assetClasses.map((assetClass) => {
@@ -132,37 +245,125 @@ export function PortfolioConstitutionPanel() {
               !assetClass.holdings.some((h) => h.code === entry.code)
           );
 
+          const inClassTotal = round1(
+            assetClass.holdings.reduce((total, h) => total + h.clientInClassWeight, 0)
+          );
+          const inClassOk = assetClass.holdings.length === 0 || Math.abs(inClassTotal - 100) < 0.15;
+          const classWeightChanged =
+            Math.abs(assetClass.clientTargetWeight - assetClass.modelTargetWeight) > 0.001;
+
           return (
             <div key={assetClass.name} style={assetClassCard}>
               <div style={assetClassHeader}>
                 <h4 style={assetClassTitle}>{assetClass.name}</h4>
                 <span style={typeBadge}>{assetClass.type}</span>
+                <div style={assetClassWeightControl}>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={assetClass.clientTargetWeight}
+                    onChange={(e) =>
+                      setAssetClassWeight(assetClass.name, parseFloat(e.target.value))
+                    }
+                    style={assetClassWeightInput}
+                    aria-label={`${assetClass.name} weight of overall portfolio`}
+                  />
+                  <span style={weightPercentSign}>% of portfolio</span>
+                  {classWeightChanged && (
+                    <>
+                      <span style={modelWeightHint}>model {assetClass.modelTargetWeight}%</span>
+                      <button
+                        type="button"
+                        onClick={() => resetAssetClassWeight(assetClass.name)}
+                        style={miniResetButton}
+                      >
+                        Reset
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
               <p style={assetClassDescription}>{assetClass.description}</p>
 
               <ul style={holdingList}>
-                {assetClass.holdings.map((holding) => (
-                  <li key={holding.code} style={holdingRow}>
-                    <div style={holdingHeader}>
-                      <span style={holdingCode}>{holding.code}</span>
-                      <span style={holdingName}>{holding.name}</span>
-                      {holding.sector && <span style={sectorTag}>{holding.sector}</span>}
-                      <button
-                        type="button"
-                        onClick={() => removeHolding(assetClass.name, holding.code)}
-                        style={removeButton}
-                        aria-label={`Remove ${holding.name}`}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                    <p style={holdingRationale}>{holding.rationale}</p>
-                  </li>
-                ))}
+                {assetClass.holdings.map((holding) => {
+                  const changed =
+                    holding.modelInClassWeight !== null &&
+                    Math.abs(holding.clientInClassWeight - holding.modelInClassWeight) > 0.001;
+                  return (
+                    <li key={holding.code} style={holdingRow}>
+                      <div style={holdingHeader}>
+                        <span style={holdingCode}>{holding.code}</span>
+                        <span style={holdingName}>{holding.name}</span>
+                        {holding.sector && <span style={sectorTag}>{holding.sector}</span>}
+                        <button
+                          type="button"
+                          onClick={() => removeHolding(assetClass.name, holding.code)}
+                          style={removeButton}
+                          aria-label={`Remove ${holding.name}`}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      <p style={holdingRationale}>{holding.rationale}</p>
+                      <div style={holdingWeightRow}>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={holding.clientInClassWeight}
+                          onChange={(e) =>
+                            setHoldingWeight(
+                              assetClass.name,
+                              holding.code,
+                              parseFloat(e.target.value)
+                            )
+                          }
+                          style={holdingWeightInput}
+                          aria-label={`${holding.name} weight within ${assetClass.name}`}
+                        />
+                        <span style={weightPercentSign}>% of class</span>
+                        <span style={overallWeightLabel}>
+                          = {overallWeight(assetClass, holding)}% of portfolio
+                        </span>
+                        {changed && (
+                          <>
+                            <span style={modelWeightHint}>
+                              model {holding.modelInClassWeight}%
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => resetHoldingWeight(assetClass.name, holding.code)}
+                              style={miniResetButton}
+                            >
+                              Reset
+                            </button>
+                          </>
+                        )}
+                        {holding.modelInClassWeight === null && (
+                          <span style={notInModelTag}>not in model</span>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
                 {assetClass.holdings.length === 0 && (
                   <p style={emptyText}>No securities in this asset class yet.</p>
                 )}
               </ul>
+
+              {assetClass.holdings.length > 0 && (
+                <div style={inClassTotalRow}>
+                  <span style={inClassTotalLabel}>Class total</span>
+                  <span
+                    style={{
+                      ...inClassTotalValue,
+                      color: inClassOk ? '#86efac' : '#fca5a5',
+                    }}
+                  >
+                    {inClassTotal}%
+                  </span>
+                </div>
+              )}
 
               {candidates.length > 0 && (
                 <select
@@ -240,6 +441,28 @@ const resetButton = {
   cursor: 'pointer',
 };
 
+const portfolioTotalRow = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  padding: '8px 12px',
+  marginTop: '10px',
+  background: '#0b2342',
+  borderRadius: '8px',
+  border: '1px solid #2d4a6b',
+};
+
+const portfolioTotalLabel = {
+  fontSize: '12px',
+  fontWeight: 600,
+  color: '#94a3b8',
+};
+
+const portfolioTotalValue = {
+  fontSize: '13px',
+  fontWeight: 700,
+};
+
 const assetClassList = {
   display: 'flex',
   flexDirection: 'column' as const,
@@ -256,9 +479,10 @@ const assetClassCard = {
 
 const assetClassHeader = {
   display: 'flex',
-  justifyContent: 'space-between',
+  justifyContent: 'flex-start',
   alignItems: 'center',
   gap: '10px',
+  flexWrap: 'wrap' as const,
 };
 
 const assetClassTitle = {
@@ -276,6 +500,52 @@ const typeBadge = {
   background: '#0b2342',
   border: '1px solid #2d4a6b',
   color: '#93c5fd',
+};
+
+const assetClassWeightControl = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '6px',
+  marginLeft: 'auto',
+};
+
+const assetClassWeightInput = {
+  width: '64px',
+  padding: '5px 8px',
+  borderRadius: '6px',
+  fontSize: '12px',
+  fontWeight: 700,
+  background: '#0b2342',
+  border: '1px solid #2d4a6b',
+  color: '#e2e8f0',
+};
+
+const weightPercentSign = {
+  fontSize: '11px',
+  color: '#94a3b8',
+};
+
+const modelWeightHint = {
+  fontSize: '11px',
+  color: '#64748b',
+  fontStyle: 'italic' as const,
+};
+
+const miniResetButton = {
+  padding: '2px 8px',
+  borderRadius: '999px',
+  fontSize: '10px',
+  fontWeight: 600,
+  background: '#0b2342',
+  border: '1px solid #2d4a6b',
+  color: '#93c5fd',
+  cursor: 'pointer',
+};
+
+const notInModelTag = {
+  fontSize: '11px',
+  fontWeight: 600,
+  color: '#fbbf24',
 };
 
 const assetClassDescription = {
@@ -341,6 +611,50 @@ const holdingRationale = {
   fontSize: '12px',
   color: '#94a3b8',
   lineHeight: 1.4,
+};
+
+const holdingWeightRow = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '6px',
+  flexWrap: 'wrap' as const,
+  marginTop: '8px',
+};
+
+const holdingWeightInput = {
+  width: '60px',
+  padding: '5px 8px',
+  borderRadius: '6px',
+  fontSize: '12px',
+  fontWeight: 700,
+  background: '#12345b',
+  border: '1px solid #2d4a6b',
+  color: '#e2e8f0',
+};
+
+const overallWeightLabel = {
+  fontSize: '11px',
+  color: '#93c5fd',
+  fontWeight: 600,
+};
+
+const inClassTotalRow = {
+  display: 'flex',
+  justifyContent: 'flex-end',
+  gap: '8px',
+  marginTop: '10px',
+  paddingTop: '8px',
+  borderTop: '1px dashed #2d4a6b',
+};
+
+const inClassTotalLabel = {
+  fontSize: '11px',
+  color: '#94a3b8',
+};
+
+const inClassTotalValue = {
+  fontSize: '12px',
+  fontWeight: 700,
 };
 
 const emptyText = {
