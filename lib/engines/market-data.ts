@@ -42,6 +42,48 @@ export function dedupeHoldings(): ModelHolding[] {
   return Array.from(seen.values());
 }
 
+/**
+ * Batch price lookup for an arbitrary set of codes - used by the client
+ * portfolio comparison to size trades in real units/dollars rather than
+ * just percentage weights. Unlike getModelPortfolioMarketData this takes
+ * whatever codes the caller has (client holdings + proposed buys), not
+ * just the model portfolio universe, and skips fundamentals since only
+ * price is needed for trade sizing.
+ */
+export async function getQuotesForCodes(
+  codes: string[]
+): Promise<Record<string, { price: number | null; error: string | null }>> {
+  const uniqueCodes = Array.from(new Set(codes));
+  const result: Record<string, { price: number | null; error: string | null }> = {};
+
+  if (!isEodhdConfigured()) {
+    for (const code of uniqueCodes) {
+      result[code] = { price: null, error: 'EODHD_API_KEY not configured' };
+    }
+    return result;
+  }
+
+  await Promise.all(
+    uniqueCodes.map(async (code) => {
+      if (!isQuotableCode(code)) {
+        result[code] = { price: null, error: 'Not a quotable listed security' };
+        return;
+      }
+      try {
+        const quote = await getQuote(toEodhdTicker(code));
+        result[code] = { price: quote.close, error: null };
+      } catch (error) {
+        result[code] = {
+          price: null,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
+      }
+    })
+  );
+
+  return result;
+}
+
 export async function getModelPortfolioMarketData(): Promise<HoldingMarketData[]> {
   const holdings = dedupeHoldings();
 
