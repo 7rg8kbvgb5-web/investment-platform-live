@@ -1,6 +1,7 @@
 import PageContent from '../../components/PageContent';
 import MarketDataTable from '../../components/MarketDataTable';
 import SectorHealthScorePanel from '../../components/SectorHealthScorePanel';
+import PortfolioAnalyticsPanel from '../../components/PortfolioAnalyticsPanel';
 import { getModelPortfolioMarketData } from '../../lib/engines/market-data';
 import { isEodhdConfigured } from '../../lib/eodhd-client';
 import StatusBox from '../../components/dashboard/StatusBox';
@@ -14,7 +15,7 @@ export default async function DataAnalyticsPage() {
   return (
     <PageContent
       title="Data Analytics"
-      description="Live market data powering Sector Health Score and holdings-level pricing and fundamentals across the model portfolios."
+      description="Live market data powering Sector Health Score, holdings-level pricing and fundamentals, and risk-adjusted portfolio analytics across the model portfolios."
     >
       <StatusBox variant={connected ? 'success' : 'warning'}>
         EODHD connection: {connected ? 'Active' : 'Not connected'}
@@ -23,6 +24,8 @@ export default async function DataAnalyticsPage() {
       </StatusBox>
 
       <SectorHealthScorePanel />
+
+      <PortfolioAnalyticsPanel />
 
       <MarketDataTable holdings={holdings} connected={connected} />
     </PageContent>
