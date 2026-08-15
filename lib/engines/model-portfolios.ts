@@ -142,6 +142,14 @@ function roundPortfolio(portfolio: ModelPortfolio): ModelPortfolio {
   };
 }
 
+// Growth/defensive splits are anchored to Vanguard's Diversified Index
+// range - the most widely cited SAA benchmark in the Australian market
+// (Conservative 30/70, Balanced 50/50, Growth 70/30, High Growth 90/10),
+// which also sits comfortably within the SuperRatings survey bands used
+// industry-wide (SR Conservative Balanced 41-59% growth, SR Balanced
+// 60-76%, SR Growth 77-90%). Moderate (40/60) is this platform's own
+// addition between Conservative and Balanced, common in adviser risk
+// profiling, interpolated between the two Vanguard anchor points.
 const rawModelPortfolios: ModelPortfolio[] = [
   {
     riskProfile: "Conservative",
@@ -161,46 +169,46 @@ const rawModelPortfolios: ModelPortfolio[] = [
   {
     riskProfile: "Moderate",
     objective: "Designed for investors seeking moderate growth while retaining a meaningful allocation to defensive assets.",
-    growthWeight: 45,
-    defensiveWeight: 55,
+    growthWeight: 40,
+    defensiveWeight: 60,
     assetClasses: [
-      australianEquities(20),
-      internationalEquities(17),
-      propertyInfrastructure(5),
+      australianEquities(18),
+      internationalEquities(15),
+      propertyInfrastructure(4),
       alternatives(3),
-      australianFixedInterest(28),
-      globalFixedInterest(18),
-      cash(9),
+      australianFixedInterest(32),
+      globalFixedInterest(20),
+      cash(8),
     ],
   },
   {
     riskProfile: "Balanced",
     objective: "Designed for investors seeking a balance between long-term capital growth, income generation and downside risk management.",
-    growthWeight: 60,
-    defensiveWeight: 40,
+    growthWeight: 50,
+    defensiveWeight: 50,
     assetClasses: [
-      australianEquities(30),
-      internationalEquities(25),
-      propertyInfrastructure(3),
+      australianEquities(25),
+      internationalEquities(21),
+      propertyInfrastructure(2),
       alternatives(2),
-      australianFixedInterest(20),
-      globalFixedInterest(12),
-      cash(8),
+      australianFixedInterest(25),
+      globalFixedInterest(15),
+      cash(10),
     ],
   },
   {
     riskProfile: "Growth",
     objective: "Designed for investors seeking long-term capital growth, with a higher allocation to growth assets and tolerance for market volatility.",
-    growthWeight: 75,
-    defensiveWeight: 25,
+    growthWeight: 70,
+    defensiveWeight: 30,
     assetClasses: [
-      australianEquities(38),
-      internationalEquities(30),
+      australianEquities(35),
+      internationalEquities(28),
       propertyInfrastructure(4),
       alternatives(3),
-      australianFixedInterest(12),
-      globalFixedInterest(8),
-      cash(5),
+      australianFixedInterest(15),
+      globalFixedInterest(9),
+      cash(6),
     ],
   },
   {
