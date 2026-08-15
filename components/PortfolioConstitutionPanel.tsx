@@ -10,6 +10,7 @@ import { buildSecurityUniverse } from '../lib/engines/security-universe';
 import { useClientAdvice } from './ClientAdviceContext';
 import Panel from './ui/Panel';
 import StatusBox from './dashboard/StatusBox';
+import AllocationPieChart from './AllocationPieChart';
 
 // Bespoke, per-client weighting model.
 //
@@ -236,6 +237,13 @@ export function PortfolioConstitutionPanel() {
           {portfolioTotal}%
         </span>
       </div>
+
+      <AllocationPieChart
+        allocations={assetClasses.map((ac) => ({
+          asset_class: ac.name,
+          target_weight: ac.clientTargetWeight,
+        }))}
+      />
 
       <div style={assetClassList}>
         {assetClasses.map((assetClass) => {
