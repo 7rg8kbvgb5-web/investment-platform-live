@@ -5,6 +5,10 @@ export type MappedHolding = {
   code: string
   name?: string
   weight: number
+  /** Dollar market value of this holding, if the upload stated one directly. */
+  value?: number
+  /** Units/shares held, if the upload stated a quantity directly. */
+  quantity?: number
   sector: string
   assetClass: string
   assetClassType: 'Growth' | 'Defensive' | 'Unknown'
@@ -59,6 +63,8 @@ export function mapClientHoldings(
         code: entry.code,
         name: holding.name ?? entry.name,
         weight: holding.weight,
+        value: holding.value,
+        quantity: holding.quantity,
         sector: entry.sector,
         assetClass: entry.assetClass,
         assetClassType: entry.assetClassType,
@@ -76,6 +82,8 @@ export function mapClientHoldings(
       code: holding.code,
       name: holding.name,
       weight: holding.weight,
+      value: holding.value,
+      quantity: holding.quantity,
       sector: 'Not in security master or model universe',
       assetClass: 'Unclassified',
       assetClassType: 'Unknown',
