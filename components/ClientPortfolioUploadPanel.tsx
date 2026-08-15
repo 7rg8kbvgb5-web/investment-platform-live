@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   parseClientPortfolioCsv,
   type ParsedPortfolioUpload,
@@ -58,7 +58,17 @@ export default function ClientPortfolioUploadPanel() {
   const [parsing, setParsing] = useState(false)
   const [parseError, setParseError] = useState<string | null>(null)
   const [riskOverride, setRiskOverride] = useState<RiskProfile | 'auto'>('auto')
+  const [manualPortfolioValue, setManualPortfolioValue] = useState<string>('')
+  const [prices, setPrices] = useState<Record<string, number | null>>({})
+  const [pricesLoading, setPricesLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Total portfolio value used to size trades in dollars. The upload's own
+  // stated total (from a PDF that prints it) takes precedence; otherwise
+  // the adviser can enter it manually - either way, everything downstream
+  // (dollar values, units) lights up once one is available.
+  const effectiveTotalPortfolioValue: number | undefined =
+    meta.totalPortfolioValue ?? (manualPortfolioValue ? parseFloat(manualPortfolioValue) || undefined : undefined)
 
   function loadExamplePortfolio() {
     setHoldings(EXAMPLE_HOLDINGS)
@@ -138,10 +148,71 @@ export default function ClientPortfolioUploadPanel() {
     [effectiveRiskProfile],
   )
 
+  // Every code that could plausibly need a live price: what the client
+  // holds today, plus every holding in the model being compared against
+  // (the buy candidates). Fetched once per (holdings, model) change.
+  const codesToPrice = useMemo(() => {
+    const codes = new Set<string>()
+    for (const holding of mappingResult.mappedHoldings) {
+      if (holding.mapped) codes.add(holding.code)
+    }
+    for (const assetClass of model.assetClasses) {
+      for (const holding of assetClass.holdings) codes.add(holding.code)
+    }
+    return Array.from(codes)
+  }, [mappingResult.mappedHoldings, model])
+
+  useEffect(() => {
+    if (codesToPrice.length === 0) {
+      setPrices({})
+      return
+    }
+
+    let cancelled = false
+    setPricesLoading(true)
+
+    fetch('/api/market-data/quote-batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ codes: codesToPrice }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled || !data.ok) return
+        const priceMap: Record<string, number | null> = {}
+        for (const [code, entry] of Object.entries(
+          data.quotes as Record<string, { price: number | null }>,
+        )) {
+          priceMap[code] = entry.price
+        }
+        setPrices(priceMap)
+      })
+      .catch(() => {
+        if (!cancelled) setPrices({})
+      })
+      .finally(() => {
+        if (!cancelled) setPricesLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+    // codesToPrice is a derived array (new identity each render) - compare
+    // by its joined contents instead so this only refetches when the
+    // actual set of codes changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [codesToPrice.join(',')])
+
   const comparison = useMemo(
-    () => compareClientPortfolioToModel(mappingResult.mappedHoldings, model),
-    [mappingResult.mappedHoldings, model],
+    () =>
+      compareClientPortfolioToModel(mappingResult.mappedHoldings, model, {
+        totalPortfolioValue: effectiveTotalPortfolioValue,
+        prices,
+      }),
+    [mappingResult.mappedHoldings, model, effectiveTotalPortfolioValue, prices],
   )
+
+  const pricesConnected = Object.values(prices).some((p) => p !== null && p !== undefined)
 
   const hasHoldings = holdings.length > 0
 
@@ -265,6 +336,44 @@ export default function ClientPortfolioUploadPanel() {
             />
           </div>
 
+          {/* Portfolio value + pricing status - drives dollar/unit trade sizing below */}
+          <div style={subPanel}>
+            <div style={subPanelHeaderRow}>
+              <p style={subHeading}>Portfolio Value &amp; Live Pricing</p>
+              {pricesLoading ? (
+                <span style={pricingStatusMuted}>Fetching live prices…</span>
+              ) : pricesConnected ? (
+                <span style={pricingStatusOk}>Live prices connected</span>
+              ) : (
+                <span style={pricingStatusWarn}>
+                  No live prices — connect EODHD on the Data Analytics page for unit sizing
+                </span>
+              )}
+            </div>
+            {meta.totalPortfolioValue ? (
+              <p style={bodyText}>
+                Total portfolio value from the statement:{' '}
+                <strong>{formatCurrency(meta.totalPortfolioValue)}</strong>. Used to size
+                every recommended trade in dollars below.
+              </p>
+            ) : (
+              <>
+                <p style={bodyText}>
+                  The statement didn&apos;t state a total portfolio value, so dollar and
+                  unit trade sizing can&apos;t be shown yet — weight-based comparisons
+                  below still work regardless. Enter it manually to size trades:
+                </p>
+                <input
+                  type="number"
+                  placeholder="e.g. 850000"
+                  value={manualPortfolioValue}
+                  onChange={(e) => setManualPortfolioValue(e.target.value)}
+                  style={portfolioValueInput}
+                />
+              </>
+            )}
+          </div>
+
           {/* Risk classification */}
           <div style={subPanel}>
             <div style={subPanelHeaderRow}>
@@ -358,6 +467,8 @@ export default function ClientPortfolioUploadPanel() {
                     <th style={th}>Current</th>
                     <th style={th}>Target</th>
                     <th style={th}>Change</th>
+                    <th style={th}>Trade Value</th>
+                    <th style={th}>Units</th>
                     <th style={th}>Action</th>
                     <th style={th}>Rationale</th>
                   </tr>
@@ -379,6 +490,28 @@ export default function ClientPortfolioUploadPanel() {
                           {rec.changeWeight}pp
                         </td>
                         <td style={td}>
+                          {rec.changeValue !== null ? (
+                            <>
+                              {rec.changeValue > 0 ? '+' : ''}
+                              {formatCurrency(rec.changeValue)}
+                            </>
+                          ) : (
+                            <span style={tdMutedInline}>—</span>
+                          )}
+                        </td>
+                        <td style={td}>
+                          {rec.units !== null ? (
+                            <>
+                              {rec.units > 0 ? '+' : ''}
+                              {rec.units.toLocaleString()}
+                            </>
+                          ) : (
+                            <span style={tdMutedInline}>
+                              {rec.changeValue !== null ? 'no price' : '—'}
+                            </span>
+                          )}
+                        </td>
+                        <td style={td}>
                           <ActionBadge action={rec.action} />
                         </td>
                         <td style={tdWrap}>{rec.rationale}</td>
@@ -388,7 +521,7 @@ export default function ClientPortfolioUploadPanel() {
                     (rec) => rec.action === 'hold',
                   ) ? (
                     <tr>
-                      <td style={td} colSpan={7}>
+                      <td style={td} colSpan={9}>
                         No changes required — all mapped holdings are in
                         line with the {effectiveRiskProfile} model.
                       </td>
@@ -437,6 +570,14 @@ export default function ClientPortfolioUploadPanel() {
       ) : null}
     </section>
   )
+}
+
+function formatCurrency(value: number): string {
+  return value.toLocaleString('en-AU', {
+    style: 'currency',
+    currency: 'AUD',
+    maximumFractionDigits: 0,
+  })
 }
 
 function SummaryCard({ title, value }: { title: string; value: string }) {
@@ -706,4 +847,38 @@ const pill = {
   fontSize: '11px',
   fontWeight: 700,
   letterSpacing: '0.02em',
+}
+
+const tdMutedInline = {
+  color: '#64748b',
+  fontSize: '12px',
+}
+
+const pricingStatusOk = {
+  fontSize: '11px',
+  fontWeight: 700,
+  color: '#4ade80',
+}
+
+const pricingStatusWarn = {
+  fontSize: '11px',
+  fontWeight: 700,
+  color: '#facc15',
+}
+
+const pricingStatusMuted = {
+  fontSize: '11px',
+  fontWeight: 600,
+  color: '#94a3b8',
+}
+
+const portfolioValueInput = {
+  width: '220px',
+  padding: '8px 10px',
+  borderRadius: '8px',
+  fontSize: '13px',
+  background: '#04142b',
+  border: '1px solid #2d4a6b',
+  color: '#e2e8f0',
+  marginTop: '4px',
 }
