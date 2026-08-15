@@ -9,22 +9,20 @@ import ClientRiskProfileSelector from './ClientRiskProfileSelector'
 import {
   useClientAdvice,
 } from './ClientAdviceContext'
-import ModelPortfolioBuilderPanel from "./ModelPortfolioBuilderPanel";
 import InstitutionalProposalBuilderPanel from "./InstitutionalProposalBuilderPanel";
 
-type PortfolioWorkspaceKey =
-  | 'construction'
-  | 'analytics'
-  | 'riskProfiles'
-  | 'clientAdvice'
-  | 'governance'
+type PortfolioWorkspaceKey = 'riskProfile' | 'construction' | 'clientAdvice'
 
 interface Props {
+  // The formally-set model portfolio per risk profile - "under a perfect
+  // scenario" - built and edited here.
+  riskProfile: React.ReactNode
+  // A specific client's uploaded portfolio compared against, and adjusted
+  // towards, the risk profile selected above.
   construction: React.ReactNode
-  analytics: React.ReactNode
-  riskProfiles: React.ReactNode
+  // Reasoning, sourced context, and manual additions that turn the
+  // construction output into a client-ready proposal.
   clientAdvice: React.ReactNode
-  governance: React.ReactNode
 }
 
 export default function PortfolioWorkspace(props: Props) {
@@ -32,14 +30,12 @@ export default function PortfolioWorkspace(props: Props) {
 }
 
 function WorkspaceBody({
+  riskProfile,
   construction,
-  analytics,
-  riskProfiles,
   clientAdvice,
-  governance,
 }: Props) {
   const [activeTab, setActiveTab] =
-    useState<PortfolioWorkspaceKey>('construction')
+    useState<PortfolioWorkspaceKey>('riskProfile')
 
   const { selectedRiskProfile, setSelectedRiskProfile } = useClientAdvice()
 
@@ -74,24 +70,18 @@ function WorkspaceBody({
     <div className="space-y-6">
       <PortfolioWorkspaceTabs activeTab={activeTab} onChange={setActiveTab} />
 
-      {activeTab === 'construction' && (
+      {activeTab === 'riskProfile' && (
         <div className="section">
           <ClientRiskProfileSelector
             selectedRiskProfile={selectedRiskProfile}
             onChange={setSelectedRiskProfile}
           />
-          {construction}
+          {riskProfile}
         </div>
       )}
 
-      {activeTab === 'analytics' && (
-        <div className="section">{analytics}</div>
-      )}
-
-      {activeTab === 'riskProfiles' && (
-        <div className="section">
-          <ModelPortfolioBuilderPanel />
-        </div>
+      {activeTab === 'construction' && (
+        <div className="section">{construction}</div>
       )}
 
       {activeTab === 'clientAdvice' && (
@@ -119,8 +109,6 @@ function WorkspaceBody({
           />
         </div>
       )}
-
-      {activeTab === 'governance' && governance}
     </div>
   )
 }
