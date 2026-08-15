@@ -8,14 +8,17 @@ import {
 } from '../lib/engines/client-portfolio-upload'
 import { mapClientHoldings } from '../lib/engines/client-holdings-mapping'
 import { classifyPortfolioRiskProfile } from '../lib/engines/portfolio-risk-classification'
+import type { RiskProfile, ModelPortfolio } from '../lib/engines/model-portfolios'
 import {
-  getModelPortfolioByRiskProfile,
-  modelPortfolios,
-  type RiskProfile,
-} from '../lib/engines/model-portfolios'
+  RISK_PROFILES,
+  fetchModelPortfolio,
+  fetchAllRiskProfileWeights,
+  computeGrowthDefensiveByProfile,
+} from '../lib/engines/model-portfolio-core'
 import { compareClientPortfolioToModel } from '../lib/engines/portfolio-review-comparison'
 import AssetClassComparisonChart from './AssetClassComparisonChart'
 import HoldingAdjustmentChart from './HoldingAdjustmentChart'
+import AllocationPieChart from './AllocationPieChart'
 import StatusBox from './dashboard/StatusBox'
 
 type ExtractionMeta = {
@@ -23,8 +26,6 @@ type ExtractionMeta = {
   asAtDate: string | null
   totalPortfolioValue: number | null
 }
-
-const RISK_PROFILES: RiskProfile[] = modelPortfolios.map((p) => p.riskProfile)
 
 const ACTION_STYLE: Record<string, { bg: string; fg: string }> = {
   buy: { bg: '#0f3d2e', fg: '#4ade80' },
@@ -62,6 +63,34 @@ export default function ClientPortfolioUploadPanel() {
   const [prices, setPrices] = useState<Record<string, number | null>>({})
   const [pricesLoading, setPricesLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Every risk profile's growth/defensive split, fetched live from the
+  // Supabase-backed core model once on mount, so risk classification
+  // always ranks against the house model as it actually is right now -
+  // not a hardcoded snapshot.
+  const [allWeights, setAllWeights] = useState<Record
+    RiskProfile,
+    Record<string, number>
+  > | null>(null)
+  const [allWeightsError, setAllWeightsError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetchAllRiskProfileWeights()
+      .then((w) => {
+        if (!cancelled) setAllWeights(w)
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setAllWeightsError(
+            err instanceof Error ? err.message : 'Failed to load risk profile weights.',
+          )
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Total portfolio value used to size trades in dollars. The upload's own
   // stated total (from a PDF that prints it) takes precedence; otherwise
@@ -131,22 +160,60 @@ export default function ClientPortfolioUploadPanel() {
 
   const mappingResult = useMemo(() => mapClientHoldings(holdings), [holdings])
 
+  const growthDefensiveByProfile = useMemo(
+    () => (allWeights ? computeGrowthDefensiveByProfile(allWeights) : null),
+    [allWeights],
+  )
+
   const riskClassification = useMemo(
     () =>
-      classifyPortfolioRiskProfile(
-        mappingResult.growthWeight,
-        mappingResult.defensiveWeight,
-      ),
-    [mappingResult.growthWeight, mappingResult.defensiveWeight],
+      growthDefensiveByProfile
+        ? classifyPortfolioRiskProfile(
+            mappingResult.growthWeight,
+            mappingResult.defensiveWeight,
+            growthDefensiveByProfile,
+          )
+        : null,
+    [mappingResult.growthWeight, mappingResult.defensiveWeight, growthDefensiveByProfile],
   )
 
-  const effectiveRiskProfile: RiskProfile =
-    riskOverride === 'auto' ? riskClassification.nearestRiskProfile : riskOverride
+  const effectiveRiskProfile: RiskProfile | null =
+    riskOverride === 'auto' ? riskClassification?.nearestRiskProfile ?? null : riskOverride
 
-  const model = useMemo(
-    () => getModelPortfolioByRiskProfile(effectiveRiskProfile),
-    [effectiveRiskProfile],
-  )
+  // The target model itself now lives in Supabase (shared core securities +
+  // per-profile weights) rather than a static file, so it's fetched live
+  // whenever the effective risk profile changes - this is what makes any
+  // edit made on the Risk Profile tab show up here automatically.
+  const [model, setModel] = useState<ModelPortfolio | null>(null)
+  const [modelLoading, setModelLoading] = useState(false)
+  const [modelError, setModelError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!effectiveRiskProfile) {
+      setModel(null)
+      return
+    }
+    let cancelled = false
+    setModelLoading(true)
+    setModelError(null)
+    fetchModelPortfolio(effectiveRiskProfile)
+      .then((m) => {
+        if (!cancelled) setModel(m)
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setModelError(
+            err instanceof Error ? err.message : 'Failed to load the model portfolio.',
+          )
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setModelLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [effectiveRiskProfile])
 
   // Every code that could plausibly need a live price: what the client
   // holds today, plus every holding in the model being compared against
@@ -156,8 +223,10 @@ export default function ClientPortfolioUploadPanel() {
     for (const holding of mappingResult.mappedHoldings) {
       if (holding.mapped) codes.add(holding.code)
     }
-    for (const assetClass of model.assetClasses) {
-      for (const holding of assetClass.holdings) codes.add(holding.code)
+    if (model) {
+      for (const assetClass of model.assetClasses) {
+        for (const holding of assetClass.holdings) codes.add(holding.code)
+      }
     }
     return Array.from(codes)
   }, [mappingResult.mappedHoldings, model])
@@ -205,10 +274,12 @@ export default function ClientPortfolioUploadPanel() {
 
   const comparison = useMemo(
     () =>
-      compareClientPortfolioToModel(mappingResult.mappedHoldings, model, {
-        totalPortfolioValue: effectiveTotalPortfolioValue,
-        prices,
-      }),
+      model
+        ? compareClientPortfolioToModel(mappingResult.mappedHoldings, model, {
+            totalPortfolioValue: effectiveTotalPortfolioValue,
+            prices,
+          })
+        : null,
     [mappingResult.mappedHoldings, model, effectiveTotalPortfolioValue, prices],
   )
 
@@ -291,6 +362,8 @@ export default function ClientPortfolioUploadPanel() {
       )}
 
       {parseError ? <StatusBox variant="error">{parseError}</StatusBox> : null}
+      {allWeightsError ? <StatusBox variant="error">{allWeightsError}</StatusBox> : null}
+      {modelError ? <StatusBox variant="error">{modelError}</StatusBox> : null}
 
       {warnings.length > 0 ? (
         <StatusBox variant="warning">
@@ -307,13 +380,18 @@ export default function ClientPortfolioUploadPanel() {
         <StatusBox variant="neutral">
           Nothing loaded yet — upload a statement, paste a CSV, or click
           &quot;See it with an example portfolio&quot; above. Once holdings are in,
-          this shows the growth/defensive risk classification, asset-class
-          allocation vs the model (chart), and exact security-level
-          buy/increase/reduce/sell recommendations (chart) below.
+          this shows the growth/defensive risk classification, the target
+          model&apos;s constitution, asset-class allocation vs the model
+          (chart), and exact security-level buy/increase/reduce/sell
+          recommendations (chart) below.
         </StatusBox>
       ) : null}
 
-      {hasHoldings ? (
+      {hasHoldings && (modelLoading || !allWeights) && !modelError ? (
+        <StatusBox variant="neutral">Loading the live model portfolio…</StatusBox>
+      ) : null}
+
+      {hasHoldings && model && comparison && riskClassification && effectiveRiskProfile ? (
         <>
           {/* Summary bar */}
           <div style={summaryRow}>
@@ -413,6 +491,44 @@ export default function ClientPortfolioUploadPanel() {
                 ? ` You're currently comparing against ${riskOverride} instead — the adviser's own read of the client's risk tolerance always takes precedence over this automatic estimate.`
                 : ''}
             </p>
+          </div>
+
+          {/* Target model constitution - same table+chart layout as the
+              Risk Profile tab, read live from the same Supabase core, so
+              this always matches what's actually defined there. */}
+          <div style={subPanel}>
+            <p style={subHeading}>
+              {effectiveRiskProfile} Model Constitution (Target)
+            </p>
+            <p style={bodyText}>{model.objective}</p>
+            <div style={constitutionOverviewRow}>
+              <div style={constitutionTableCol}>
+                <table style={table}>
+                  <thead>
+                    <tr>
+                      <th style={th}>Asset Class</th>
+                      <th style={th}>Weight</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {model.assetClasses.map((ac) => (
+                      <tr key={ac.name}>
+                        <td style={td}>{ac.name}</td>
+                        <td style={td}>{ac.targetWeight}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={constitutionChartCol}>
+                <AllocationPieChart
+                  allocations={model.assetClasses.map((ac) => ({
+                    asset_class: ac.name,
+                    target_weight: ac.targetWeight,
+                  }))}
+                />
+              </div>
+            </div>
           </div>
 
           {/* Asset class comparison */}
@@ -738,6 +854,24 @@ const summaryValue = {
   fontSize: '16px',
   fontWeight: 700,
   color: '#ffffff',
+}
+
+const constitutionOverviewRow = {
+  display: 'flex',
+  flexWrap: 'wrap' as const,
+  gap: '20px',
+  marginTop: '10px',
+  alignItems: 'stretch',
+}
+
+const constitutionTableCol = {
+  flex: '1 1 320px',
+  minWidth: '280px',
+}
+
+const constitutionChartCol = {
+  flex: '1 1 340px',
+  minWidth: '300px',
 }
 
 const subPanel = {
