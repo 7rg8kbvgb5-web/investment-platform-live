@@ -159,6 +159,50 @@ export async function fetchRiskProfileWeights(
   return weights;
 }
 
+/** All five risk profiles' asset-class weights in one call - used for risk classification and cross-profile summaries. */
+export async function fetchAllRiskProfileWeights(): Promise
+  Record<RiskProfile, Record<string, number>>
+> {
+  const { data, error } = await supabase
+    .from(WEIGHTS_TABLE)
+    .select('risk_profile, asset_class, target_weight');
+
+  if (error) {
+    throw new Error(`Failed to load risk profile weights: ${error.message}`);
+  }
+
+  const result = Object.fromEntries(RISK_PROFILES.map((p) => [p, {}])) as Record
+    RiskProfile,
+    Record<string, number>
+  >;
+  for (const row of data ?? []) {
+    result[row.risk_profile as RiskProfile][row.asset_class] = Number(row.target_weight);
+  }
+  return result;
+}
+
+/** Growth/defensive totals per risk profile, derived live from Supabase weights + the structural asset-class types - used by risk classification instead of a hardcoded table. */
+export function computeGrowthDefensiveByProfile(
+  allWeights: Record<RiskProfile, Record<string, number>>
+): Array<{ riskProfile: RiskProfile; growthWeight: number; defensiveWeight: number }> {
+  return RISK_PROFILES.map((riskProfile) => {
+    const weights = allWeights[riskProfile] ?? {};
+    const growthWeight = round2(
+      ASSET_CLASSES.filter((ac) => ac.type === 'Growth').reduce(
+        (sum, ac) => sum + (weights[ac.name] ?? 0),
+        0
+      )
+    );
+    const defensiveWeight = round2(
+      ASSET_CLASSES.filter((ac) => ac.type === 'Defensive').reduce(
+        (sum, ac) => sum + (weights[ac.name] ?? 0),
+        0
+      )
+    );
+    return { riskProfile, growthWeight, defensiveWeight };
+  });
+}
+
 /**
  * Composes the shared core securities and one risk profile's weights into
  * the same ModelPortfolio shape the rest of the app already expects, so
