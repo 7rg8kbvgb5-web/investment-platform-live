@@ -1,4 +1,4 @@
-import { modelPortfolios, type RiskProfile } from './model-portfolios'
+import type { RiskProfile } from './model-portfolios'
 
 export type RiskClassificationResult = {
   clientGrowthWeight: number
@@ -16,25 +16,28 @@ export type RiskClassificationResult = {
 
 /**
  * Classifies a client's portfolio against the five house model risk
- * profiles using actual growth/defensive weights from model-portfolios.ts
- * (the same data driving the rest of the platform) — nothing here is an
- * invented threshold.
+ * profiles by growth/defensive weight. The profiles' growth weights are
+ * supplied by the caller (fetched live from the Supabase-backed core
+ * model via computeGrowthDefensiveByProfile) rather than imported here,
+ * so this always ranks against whatever the house model actually is
+ * right now, including any adviser edits, not a stale snapshot.
  *
  * Method: nearest match by absolute distance between the client's mapped
- * growth weight and each model's growth weight. This is a starting point
- * for adviser judgement, not a substitute for it — a client's actual risk
- * profile also depends on stated tolerance, timeframe and objectives,
- * which this function has no visibility into.
+ * growth weight and each profile's growth weight. This is a starting
+ * point for adviser judgement, not a substitute for it — a client's
+ * actual risk profile also depends on stated tolerance, timeframe and
+ * objectives, which this function has no visibility into.
  */
 export function classifyPortfolioRiskProfile(
   clientGrowthWeight: number,
   clientDefensiveWeight: number,
+  profiles: Array<{ riskProfile: RiskProfile; growthWeight: number }>,
 ): RiskClassificationResult {
-  const ranked = modelPortfolios
-    .map((portfolio) => ({
-      riskProfile: portfolio.riskProfile,
-      modelGrowthWeight: portfolio.growthWeight,
-      distance: Math.abs(portfolio.growthWeight - clientGrowthWeight),
+  const ranked = profiles
+    .map((profile) => ({
+      riskProfile: profile.riskProfile,
+      modelGrowthWeight: profile.growthWeight,
+      distance: Math.abs(profile.growthWeight - clientGrowthWeight),
     }))
     .sort((a, b) => a.distance - b.distance)
 
