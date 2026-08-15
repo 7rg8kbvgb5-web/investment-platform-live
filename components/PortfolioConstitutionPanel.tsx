@@ -231,19 +231,42 @@ export function PortfolioConstitutionPanel() {
         model.
       </StatusBox>
 
-      <div style={portfolioTotalRow}>
-        <span style={portfolioTotalLabel}>Portfolio total (asset classes)</span>
-        <span style={{ ...portfolioTotalValue, color: portfolioOk ? '#86efac' : '#fca5a5' }}>
-          {portfolioTotal}%
-        </span>
-      </div>
+      <div style={overviewRow}>
+        <div style={overviewTableCol}>
+          <div style={portfolioTotalRow}>
+            <span style={portfolioTotalLabel}>Portfolio total (asset classes)</span>
+            <span style={{ ...portfolioTotalValue, color: portfolioOk ? '#86efac' : '#fca5a5' }}>
+              {portfolioTotal}%
+            </span>
+          </div>
 
-      <AllocationPieChart
-        allocations={assetClasses.map((ac) => ({
-          asset_class: ac.name,
-          target_weight: ac.clientTargetWeight,
-        }))}
-      />
+          <table style={overviewTable}>
+            <thead>
+              <tr>
+                <th style={overviewTh}>Asset Class</th>
+                <th style={overviewThRight}>Weight</th>
+              </tr>
+            </thead>
+            <tbody>
+              {assetClasses.map((assetClass) => (
+                <tr key={assetClass.name}>
+                  <td style={overviewTd}>{assetClass.name}</td>
+                  <td style={overviewTdRight}>{assetClass.clientTargetWeight}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div style={overviewChartCol}>
+          <AllocationPieChart
+            allocations={assetClasses.map((ac) => ({
+              asset_class: ac.name,
+              target_weight: ac.clientTargetWeight,
+            }))}
+          />
+        </div>
+      </div>
 
       <div style={assetClassList}>
         {assetClasses.map((assetClass) => {
@@ -476,6 +499,65 @@ const assetClassList = {
   flexDirection: 'column' as const,
   gap: '14px',
   marginTop: '16px',
+};
+
+const overviewRow = {
+  display: 'flex',
+  flexWrap: 'wrap' as const,
+  gap: '20px',
+  marginTop: '10px',
+  alignItems: 'stretch',
+};
+
+const overviewTableCol = {
+  flex: '1 1 320px',
+  minWidth: '280px',
+  display: 'flex',
+  flexDirection: 'column' as const,
+  gap: '10px',
+};
+
+const overviewChartCol = {
+  flex: '1 1 340px',
+  minWidth: '300px',
+};
+
+const overviewTable = {
+  width: '100%',
+  borderCollapse: 'collapse' as const,
+  background: '#0b2342',
+  borderRadius: '8px',
+  overflow: 'hidden',
+  border: '1px solid #2d4a6b',
+};
+
+const overviewTh = {
+  textAlign: 'left' as const,
+  padding: '8px 12px',
+  fontSize: '11px',
+  fontWeight: 700,
+  color: '#94a3b8',
+  textTransform: 'uppercase' as const,
+  letterSpacing: '0.04em',
+  borderBottom: '1px solid #2d4a6b',
+};
+
+const overviewThRight = {
+  ...overviewTh,
+  textAlign: 'right' as const,
+};
+
+const overviewTd = {
+  padding: '8px 12px',
+  fontSize: '13px',
+  color: '#e2e8f0',
+  borderBottom: '1px solid #1e3a5f',
+};
+
+const overviewTdRight = {
+  ...overviewTd,
+  textAlign: 'right' as const,
+  fontWeight: 700,
 };
 
 const assetClassCard = {
