@@ -22,6 +22,7 @@ type ResearchDocumentRow = {
   published_at: string | null;
   created_at: string;
   house_view_rating: string | null;
+  is_current: boolean;
 };
 
 function mapRow(row: ResearchDocumentRow): ResearchDocument {
@@ -40,6 +41,7 @@ function mapRow(row: ResearchDocumentRow): ResearchDocument {
     publishedAt: row.published_at,
     createdAt: row.created_at,
     houseViewRating: row.house_view_rating,
+    isCurrent: row.is_current ?? true,
   };
 }
 
@@ -109,6 +111,26 @@ export async function uploadResearchDocument(
     // half-uploaded document never sits in the bucket without a record.
     await supabase.storage.from(BUCKET).remove([storagePath]);
     throw new Error(`Failed to save document metadata: ${insertError.message}`);
+  }
+
+  // A new Top Ideas / preferred-holdings list supersedes whatever the
+  // same source's previous one was - no point keeping an old preferred
+  // list marked current once a fresh one has replaced it. Older uploads
+  // aren't deleted, just no longer flagged current, so they stay
+  // available in the library's full history if ever needed.
+  if (input.documentType === "Top Ideas") {
+    const { error: supersedeError } = await supabase
+      .from(TABLE)
+      .update({ is_current: false })
+      .eq("source", input.source)
+      .eq("document_type", "Top Ideas")
+      .neq("id", data.id);
+
+    if (supersedeError) {
+      // The new upload itself succeeded - don't fail the whole request
+      // over the supersede step, just surface it for visibility.
+      console.error("Failed to supersede previous Top Ideas upload:", supersedeError.message);
+    }
   }
 
   return mapRow(data as ResearchDocumentRow);

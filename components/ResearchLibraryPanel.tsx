@@ -17,6 +17,7 @@ import StatusBox from './dashboard/StatusBox';
 
 const SOURCES: ResearchDocumentSource[] = ['Ord Minnett', 'Barrenjoey', 'Other'];
 const DOCUMENT_TYPES: ResearchDocumentType[] = [
+  'Top Ideas',
   'Research Note',
   'Sector Report',
   'Company Update',
@@ -281,7 +282,12 @@ export default function ResearchLibraryPanel() {
                     </td>
                     <td style={td}>{document.source}</td>
                     <td style={td}>{document.houseViewRating ?? '—'}</td>
-                    <td style={td}>{document.documentType}</td>
+                    <td style={td}>
+                      {document.documentType}
+                      {document.documentType === 'Top Ideas' && !document.isCurrent && (
+                        <span style={supersededTag}>Superseded</span>
+                      )}
+                    </td>
                     <td style={td}>{document.tickers.join(', ') || '—'}</td>
                     <td style={td}>{document.sectors.join(', ') || '—'}</td>
                     <td style={td}>
@@ -424,6 +430,17 @@ const td = {
   padding: '10px 12px',
   borderBottom: '1px solid #1e293b',
   verticalAlign: 'top' as const,
+};
+
+const supersededTag = {
+  display: 'inline-block',
+  marginLeft: '6px',
+  padding: '1px 7px',
+  borderRadius: '999px',
+  fontSize: '10px',
+  fontWeight: 700,
+  background: '#12203a',
+  color: '#94a3b8',
 };
 
 const titleCell = {

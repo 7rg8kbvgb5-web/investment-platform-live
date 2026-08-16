@@ -51,7 +51,9 @@ export function HouseViewsPanel() {
     <Panel eyebrow="Uploaded via the Research Library below" title="House Views">
       <p style={intro}>
         Ord Minnett&apos;s and Barrenjoey&apos;s own house views, as uploaded — separated out here so
-        they&apos;re immediately visible rather than mixed into the general document list.
+        they&apos;re immediately visible rather than mixed into the general document list. Uploading a
+        new &quot;Top Ideas&quot; list automatically supersedes that source&apos;s previous one, so only
+        the current list is featured below.
       </p>
 
       {loading ? (
@@ -71,17 +73,49 @@ export function HouseViewsPanel() {
           )}
           <div style={columnsGrid}>
             {HOUSE_SOURCES.map((source) => {
-              const sourceDocs = documents.filter((d) => d.source === source);
+              const sourceDocs = documents.filter(
+                (d) => d.source === source && !(d.documentType === 'Top Ideas' && !d.isCurrent),
+              );
+              const topIdeas = sourceDocs.find((d) => d.documentType === 'Top Ideas');
+              const otherDocs = sourceDocs.filter((d) => d.documentType !== 'Top Ideas');
+
               return (
                 <div key={source} style={sourceColumn}>
                   <h4 style={sourceTitle}>{source}</h4>
-                  {sourceDocs.length === 0 ? (
+
+                  {topIdeas && (
+                    <div style={topIdeasBox}>
+                      <div style={docHeader}>
+                        <span style={topIdeasLabel}>Current Top Ideas</span>
+                        {topIdeas.houseViewRating && (
+                          <span style={docRatingBadge}>{topIdeas.houseViewRating}</span>
+                        )}
+                      </div>
+                      <p style={docTitleText}>{topIdeas.title}</p>
+                      {topIdeas.summary && <p style={docSummary}>{topIdeas.summary}</p>}
+                      <div style={docMetaRow}>
+                        {topIdeas.tickers.length > 0 && (
+                          <span style={docTag}>{topIdeas.tickers.join(', ')}</span>
+                        )}
+                        <span style={docDate}>{formatIsoTimestampDisplay(topIdeas.createdAt)}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDownload(topIdeas)}
+                        style={downloadButton}
+                      >
+                        Download
+                      </button>
+                    </div>
+                  )}
+
+                  {otherDocs.length === 0 && !topIdeas ? (
                     <p style={emptyText}>
                       No {source} house view uploaded yet — use the Research Library below.
                     </p>
-                  ) : (
+                  ) : otherDocs.length > 0 ? (
                     <ul style={docList}>
-                      {sourceDocs.map((doc) => (
+                      {otherDocs.map((doc) => (
                         <li key={doc.id} style={docRow}>
                           <div style={docHeader}>
                             <span style={docTitleText}>{doc.title}</span>
@@ -110,7 +144,7 @@ export function HouseViewsPanel() {
                         </li>
                       ))}
                     </ul>
-                  )}
+                  ) : null}
                 </div>
               );
             })}
@@ -145,6 +179,22 @@ const sourceTitle = {
   fontSize: '14px',
   fontWeight: 700,
   color: '#93c5fd',
+};
+
+const topIdeasBox = {
+  padding: '12px 14px',
+  borderRadius: '10px',
+  background: '#0f3d2e',
+  border: '1px solid #10b981',
+  marginBottom: '12px',
+};
+
+const topIdeasLabel = {
+  fontSize: '10px',
+  fontWeight: 700,
+  color: '#86efac',
+  textTransform: 'uppercase' as const,
+  letterSpacing: '0.04em',
 };
 
 const docList = {
