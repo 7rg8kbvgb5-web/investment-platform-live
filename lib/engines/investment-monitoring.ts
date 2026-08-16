@@ -20,6 +20,9 @@ export type MonitoringAlert = {
   sourceNote: string | null
   status: AlertStatus
   generatedAt: string
+  /** Only populated for category === 'alternative'. */
+  suggestedAlternativeCode: string | null
+  suggestedAlternativeName: string | null
 }
 
 type RawAlert = {
@@ -30,6 +33,8 @@ type RawAlert = {
   affectedAssetClass?: string | null
   affectedCodes?: string[]
   sourceNote?: string | null
+  suggestedAlternativeCode?: string | null
+  suggestedAlternativeName?: string | null
 }
 
 // This engine only ever produces adviser-facing recommendations for review
@@ -52,11 +57,14 @@ Use web search to scan for anything from roughly the past 7 days across three ca
    action (M&A, capital raise, guidance downgrade), a regulatory or governance issue, or anything else that
    could specifically affect that holding's suitability or performance. Tag the specific ticker(s) involved.
 
-3. BETTER RISK-ADJUSTED ALTERNATIVES - for an asset class below, flag if a specific alternative security
-   now appears to offer a better risk-adjusted return than what the model currently holds in that class,
-   based on recent developments (performance, fees, manager change, sector positioning). Name the specific
-   alternative and the specific existing holding(s) it would be compared against. This is a flag for
-   Investment Committee review only - never phrase it as advice to trade or as a completed decision.
+3. BETTER RISK-ADJUSTED ALTERNATIVES - for an asset class below, flag if a SPECIFIC, NAMED alternative
+   security now appears to offer a better risk-adjusted return than what the model currently holds in that
+   class, based on recent developments (performance, fees, manager change, sector positioning). You must
+   name a real, specific, investable security as the alternative (with its own ticker) - a vague "this
+   holding may be underperforming, worth reviewing" flag with no concrete replacement named is NOT
+   acceptable for this category and should be omitted rather than included half-formed. Name the specific
+   existing holding(s) it would replace or be compared against. This is a flag for Investment Committee
+   review only - never phrase it as advice to trade or as a completed decision.
 
 Every alert must have a plausible, well-reasoned link to one of the actual asset classes or securities
 provided - do not invent generic market commentary with no specific tie to the portfolio below. If nothing
@@ -67,8 +75,11 @@ no preamble, no commentary before or after it. Respond with exactly this shape:
 {
   "macro": [{ "title": string, "summary": string, "severity": "critical"|"high"|"medium"|"low", "affectedAssetClass": string, "affectedCodes": string[], "sourceNote": string }],
   "investment": [{ "title": string, "summary": string, "severity": "critical"|"high"|"medium"|"low", "affectedAssetClass": string, "affectedCodes": string[], "sourceNote": string }],
-  "alternative": [{ "title": string, "summary": string, "severity": "critical"|"high"|"medium"|"low", "affectedAssetClass": string, "affectedCodes": string[], "sourceNote": string }]
+  "alternative": [{ "title": string, "summary": string, "severity": "critical"|"high"|"medium"|"low", "affectedAssetClass": string, "affectedCodes": string[], "sourceNote": string, "suggestedAlternativeCode": string, "suggestedAlternativeName": string }]
 }
+For "alternative" items, "affectedCodes" must contain the existing holding(s) being compared against, and
+"suggestedAlternativeCode"/"suggestedAlternativeName" must both be filled in with the specific named
+replacement - never leave these null or omit them for an item in the "alternative" array.
 "summary" should be 2-4 sentences: what happened, and specifically why it matters for this asset class or
 security. "sourceNote" is a short (under 15 words) plain-text note on where this came from, e.g.
 "Reuters, 12 Aug 2026" - not a URL. "severity" should reflect genuine portfolio relevance: critical/high
@@ -95,6 +106,8 @@ function mapRow(row: {
   source_note: string | null
   status: AlertStatus
   generated_at: string
+  suggested_alternative_code: string | null
+  suggested_alternative_name: string | null
 }): MonitoringAlert {
   return {
     id: row.id,
@@ -108,6 +121,8 @@ function mapRow(row: {
     sourceNote: row.source_note,
     status: row.status,
     generatedAt: row.generated_at,
+    suggestedAlternativeCode: row.suggested_alternative_code,
+    suggestedAlternativeName: row.suggested_alternative_name,
   }
 }
 
@@ -176,6 +191,11 @@ export async function runInvestmentMonitoringScan(): Promise<MonitoringAlert[]> 
     const alerts = parsed[category] ?? []
     for (const alert of alerts) {
       if (!alert.title || !alert.summary) continue
+      // An 'alternative' item without a named replacement doesn't meet the
+      // bar - drop it rather than show a vague underperformance flag.
+      if (category === 'alternative' && (!alert.suggestedAlternativeCode || !alert.suggestedAlternativeName)) {
+        continue
+      }
       const severity: AlertSeverity =
         alert.severity === 'critical' || alert.severity === 'high' || alert.severity === 'low'
           ? alert.severity
@@ -189,6 +209,8 @@ export async function runInvestmentMonitoringScan(): Promise<MonitoringAlert[]> 
         affected_asset_class: alert.affectedAssetClass ?? null,
         affected_codes: alert.affectedCodes ?? [],
         source_note: alert.sourceNote ?? null,
+        suggested_alternative_code: alert.suggestedAlternativeCode ?? null,
+        suggested_alternative_name: alert.suggestedAlternativeName ?? null,
         raw_model_output: rawText,
       })
     }

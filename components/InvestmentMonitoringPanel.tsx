@@ -183,12 +183,20 @@ export function InvestmentMonitoringPanel() {
                           <span style={alertTitle}>{alert.title}</span>
                         </div>
                         <p style={alertSummary}>{alert.summary}</p>
+                        {alert.category === 'alternative' && alert.suggestedAlternativeCode && (
+                          <div style={alternativeCallout}>
+                            <span style={alternativeCalloutLabel}>Suggested alternative</span>
+                            <span style={alternativeCalloutValue}>
+                              {alert.suggestedAlternativeCode} — {alert.suggestedAlternativeName}
+                            </span>
+                          </div>
+                        )}
                         <div style={alertTagsRow}>
                           {alert.affectedAssetClass && (
                             <span style={alertTag}>{alert.affectedAssetClass}</span>
                           )}
                           {alert.affectedCodes.map((code) => (
-                            <span key={code} style={alertTagCode}>
+                            <span key={code} style={alertTagCode} title={alert.category === 'alternative' ? 'Existing holding' : undefined}>
                               {code}
                             </span>
                           ))}
@@ -365,6 +373,31 @@ const alertSummary = {
   fontSize: '12px',
   color: '#cbd5e1',
   lineHeight: 1.5,
+};
+
+const alternativeCallout = {
+  display: 'flex',
+  flexDirection: 'column' as const,
+  gap: '2px',
+  marginTop: '8px',
+  padding: '8px 10px',
+  borderRadius: '8px',
+  background: '#0f3d2e',
+  border: '1px solid #10b981',
+};
+
+const alternativeCalloutLabel = {
+  fontSize: '10px',
+  fontWeight: 700,
+  color: '#86efac',
+  textTransform: 'uppercase' as const,
+  letterSpacing: '0.03em',
+};
+
+const alternativeCalloutValue = {
+  fontSize: '13px',
+  fontWeight: 700,
+  color: '#e2e8f0',
 };
 
 const alertTagsRow = {
