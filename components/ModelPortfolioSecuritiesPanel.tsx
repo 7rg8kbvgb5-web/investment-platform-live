@@ -12,6 +12,7 @@ import {
 } from '../lib/engines/model-portfolio-core';
 import { buildSecurityUniverse } from '../lib/engines/security-universe';
 import { stripExchangeSuffix } from '../lib/engines/security-lookup';
+import { computeConvictionRating, type ConvictionRating } from '../lib/engines/conviction-rating';
 import Panel from './ui/Panel';
 import StatusBox from './dashboard/StatusBox';
 import AllocationPieChart from './AllocationPieChart';
@@ -30,6 +31,8 @@ export function ModelPortfolioSecuritiesPanel() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savingCount, setSavingCount] = useState(0);
+  const [convictions, setConvictions] = useState<Record<string, ConvictionRating>>({});
+  const [convictionsLoading, setConvictionsLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,6 +56,28 @@ export function ModelPortfolioSecuritiesPanel() {
   }, []);
 
   const universe = useMemo(() => Array.from(buildSecurityUniverse().values()), []);
+
+  useEffect(() => {
+    if (securities.length === 0) return;
+    let cancelled = false;
+    Promise.all(
+      securities.map(async (s) => {
+        try {
+          const rating = await computeConvictionRating(s.code);
+          return [s.code, rating] as const;
+        } catch {
+          return [s.code, { houseView: null, convictionScore: null, sources: [] }] as const;
+        }
+      }),
+    ).then((results) => {
+      if (cancelled) return;
+      setConvictions(Object.fromEntries(results));
+      setConvictionsLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [securities]);
 
   async function withSaving<T>(action: () => Promise<T>): Promise<T | undefined> {
     setSavingCount((c) => c + 1);
@@ -350,12 +375,31 @@ export function ModelPortfolioSecuritiesPanel() {
               <p style={assetClassDescription}>{assetClass.description}</p>
 
               <ul style={holdingList}>
-                {assetClass.holdings.map((holding) => (
+                {assetClass.holdings.map((holding) => {
+                  const conviction = convictions[holding.code];
+                  const houseView = conviction?.houseView ?? null;
+                  const convictionScore = conviction?.convictionScore ?? null;
+                  const sources = conviction?.sources ?? [];
+                  const convictionTooltip =
+                    sources.length > 0
+                      ? sources.map((s) => `${s.source}: ${s.rating}`).join(' · ')
+                      : convictionsLoading
+                        ? 'Loading…'
+                        : 'No rating data yet';
+
+                  return (
                   <li key={holding.id} style={holdingRow}>
                     <div style={holdingHeader}>
                       <span style={holdingCode}>{holding.code}</span>
                       <span style={holdingName}>{holding.name}</span>
                       {holding.sector && <span style={sectorTag}>{holding.sector}</span>}
+                      <span title={convictionTooltip} style={convictionBadge(houseView)}>
+                        {convictionScore !== null
+                          ? `${convictionScore}/5 conviction`
+                          : convictionsLoading
+                            ? 'Conviction: loading…'
+                            : 'No rating data'}
+                      </span>
                       <button
                         type="button"
                         onClick={() => handleRemove(holding)}
@@ -399,7 +443,8 @@ export function ModelPortfolioSecuritiesPanel() {
                       <span style={weightPercentSign}>% fwd. yield (FY26/27)</span>
                     </div>
                   </li>
-                ))}
+                  );
+                })}
                 {assetClass.holdings.length === 0 && (
                   <p style={emptyText}>No securities in this asset class yet.</p>
                 )}
@@ -713,6 +758,27 @@ const sectorTag = {
   fontSize: '11px',
   color: '#94a3b8',
 };
+
+function convictionBadge(houseView: string | null) {
+  const colors: Record<string, { bg: string; border: string; text: string }> = {
+    'strong-positive': { bg: '#0f3d2e', border: '#10b981', text: '#86efac' },
+    positive: { bg: '#0f3d2e', border: '#10b981', text: '#86efac' },
+    neutral: { bg: '#12203a', border: '#1e3a5f', text: '#94a3b8' },
+    negative: { bg: '#4a1520', border: '#ef4444', text: '#fca5a5' },
+    'strong-negative': { bg: '#4a1520', border: '#ef4444', text: '#fca5a5' },
+  };
+  const c = houseView ? colors[houseView] ?? colors.neutral : colors.neutral;
+  return {
+    padding: '2px 8px',
+    borderRadius: '999px',
+    fontSize: '10px',
+    fontWeight: 700,
+    background: c.bg,
+    border: `1px solid ${c.border}`,
+    color: c.text,
+    whiteSpace: 'nowrap' as const,
+  };
+}
 
 const removeButton = {
   marginLeft: 'auto',
