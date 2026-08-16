@@ -4,7 +4,7 @@ import { fetchCoreSecurities, type HoldingType } from './model-portfolio-core'
 
 const TABLE = 'fund_review_alerts'
 
-export type FundReviewCategory = 'manager' | 'performance' | 'structural'
+export type FundReviewCategory = 'manager' | 'performance' | 'structural' | 'alternative'
 export type FundReviewSeverity = 'critical' | 'high' | 'medium' | 'low'
 export type FundReviewStatus = 'new' | 'reviewed' | 'dismissed'
 
@@ -29,6 +29,9 @@ export type FundReviewAlert = {
   sourceNote: string | null
   status: FundReviewStatus
   generatedAt: string
+  /** Only populated for category === 'alternative'. */
+  suggestedAlternativeCode: string | null
+  suggestedAlternativeName: string | null
 }
 
 type RawAlert = {
@@ -39,6 +42,8 @@ type RawAlert = {
   title?: string
   summary?: string
   sourceNote?: string | null
+  suggestedAlternativeCode?: string | null
+  suggestedAlternativeName?: string | null
 }
 
 // This engine only ever produces adviser-facing recommendations for
@@ -60,6 +65,14 @@ Use web search to check each fund against three categories, drawing on standard 
    UNLISTED fund: redemption terms, any gates or freezes, changes to application/redemption frequency,
    valuation methodology concerns, fee changes, related-party issues.
 
+4. BETTER RISK-ADJUSTED ALTERNATIVE - for a fund below, flag if a SPECIFIC, NAMED alternative fund
+   (same asset class/strategy) now appears to offer a better risk-adjusted return - based on recent
+   performance, fees, manager change, or ratings moves. You must name a real, specific, investable fund
+   as the alternative (with its own code/ticker/APIR code) - a vague "this fund may be underperforming,
+   worth reviewing" flag with no concrete replacement named is NOT acceptable for this category and
+   should be omitted rather than included half-formed. This is a flag for Investment Committee review
+   only - never phrase it as advice to redeem or switch, or as a completed decision.
+
 Every alert must be specific to the actual fund named - do not invent generic commentary with no
 specific tie to that fund. If nothing notable turns up for a fund in a category, simply don't include an
 entry for it - do not pad with invented content.
@@ -67,8 +80,11 @@ entry for it - do not pad with invented content.
 After searching, your FINAL message must contain ONLY a JSON object and nothing else - no markdown
 fences, no preamble, no commentary before or after it. Respond with exactly this shape:
 {
-  "alerts": [{ "fundCode": string, "fundName": string, "category": "manager"|"performance"|"structural", "severity": "critical"|"high"|"medium"|"low", "title": string, "summary": string, "sourceNote": string }]
+  "alerts": [{ "fundCode": string, "fundName": string, "category": "manager"|"performance"|"structural"|"alternative", "severity": "critical"|"high"|"medium"|"low", "title": string, "summary": string, "sourceNote": string, "suggestedAlternativeCode": string, "suggestedAlternativeName": string }]
 }
+For "alternative" items, "suggestedAlternativeCode"/"suggestedAlternativeName" must both be filled in
+with the specific named replacement fund - never leave these null or omit them for an item in that
+category. Other categories should leave them out entirely.
 "summary" should be 2-4 sentences: what happened, and specifically why it matters for that fund.
 "sourceNote" is a short (under 15 words) plain-text note on where this came from, e.g.
 "Morningstar, 10 Aug 2026" - not a URL. "severity" should reflect genuine relevance to an adviser
@@ -95,6 +111,8 @@ function mapRow(row: {
   source_note: string | null
   status: FundReviewStatus
   generated_at: string
+  suggested_alternative_code: string | null
+  suggested_alternative_name: string | null
 }): FundReviewAlert {
   return {
     id: row.id,
@@ -109,6 +127,8 @@ function mapRow(row: {
     sourceNote: row.source_note,
     status: row.status,
     generatedAt: row.generated_at,
+    suggestedAlternativeCode: row.suggested_alternative_code,
+    suggestedAlternativeName: row.suggested_alternative_name,
   }
 }
 
@@ -180,9 +200,17 @@ export async function runFundReviewScan(): Promise<FundReviewAlert[]> {
     const fund = fundByCode.get(alert.fundCode)
     if (!fund) continue
     const category: FundReviewCategory =
-      alert.category === 'manager' || alert.category === 'performance' || alert.category === 'structural'
+      alert.category === 'manager' ||
+      alert.category === 'performance' ||
+      alert.category === 'structural' ||
+      alert.category === 'alternative'
         ? alert.category
         : 'performance'
+    // An 'alternative' item without a named replacement doesn't meet the
+    // bar - drop it rather than show a vague underperformance flag.
+    if (category === 'alternative' && (!alert.suggestedAlternativeCode || !alert.suggestedAlternativeName)) {
+      continue
+    }
     const severity: FundReviewSeverity =
       alert.severity === 'critical' || alert.severity === 'high' || alert.severity === 'low'
         ? alert.severity
@@ -197,6 +225,8 @@ export async function runFundReviewScan(): Promise<FundReviewAlert[]> {
       title: alert.title,
       summary: alert.summary,
       source_note: alert.sourceNote ?? null,
+      suggested_alternative_code: alert.suggestedAlternativeCode ?? null,
+      suggested_alternative_name: alert.suggestedAlternativeName ?? null,
       raw_model_output: rawText,
     })
   }
