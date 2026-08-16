@@ -1,13 +1,7 @@
 import PageContent from "../../components/PageContent";
 import { ConsensusViewPanel } from "../../components/ConsensusViewPanel";
 import { HouseViewsPanel } from "../../components/HouseViewsPanel";
-import ResearchInboxPanel from "../../components/ResearchInboxPanel";
-import ResearchRequestPanel from "../../components/ResearchRequestPanel";
-import InvestmentCasePanel from "../../components/InvestmentCasePanel";
-import InvestmentCaseLifecyclePanel from "../../components/InvestmentCaseLifecyclePanel";
 import { SecurityMasterPanel } from "../../components/SecurityMasterPanel";
-import { ApprovedListPanel } from "../../components/ApprovedListPanel";
-import { SyncPreviewPanel } from "../../components/SyncPreviewPanel";
 import ResearchLibraryPanel from "../../components/ResearchLibraryPanel";
 import WeeklyBriefPanel from "../../components/WeeklyBriefPanel";
 
@@ -15,7 +9,7 @@ export default function ResearchPage() {
   return (
     <PageContent
       title="Research"
-      description="Research inbox workflow, investment cases, security master, approved list, and research request management."
+      description="Consensus view, house views, research library, and the security master with a live conviction rating."
     >
       <ConsensusViewPanel />
 
@@ -25,19 +19,7 @@ export default function ResearchPage() {
 
       <ResearchLibraryPanel />
 
-      <ResearchInboxPanel />
-
-      <ResearchRequestPanel />
-
-      <InvestmentCasePanel />
-
-      <InvestmentCaseLifecyclePanel />
-
       <SecurityMasterPanel />
-
-      <ApprovedListPanel />
-
-      <SyncPreviewPanel />
     </PageContent>
   );
 }

@@ -24,6 +24,8 @@ export type ResearchDocument = {
   uploadedBy: string | null;
   publishedAt: string | null;
   createdAt: string;
+  /** This source's rating for the security (e.g. "Buy") - only meaningful for Ord Minnett/Barrenjoey uploads. */
+  houseViewRating: string | null;
 };
 
 /** Fields required to upload a new research document. */
@@ -36,5 +38,6 @@ export type ResearchDocumentUploadInput = {
   summary?: string;
   publishedAt?: string;
   uploadedBy?: string;
+  houseViewRating?: string;
   file: File;
 };

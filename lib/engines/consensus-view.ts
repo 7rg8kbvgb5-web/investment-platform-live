@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { supabase } from '../supabase'
 import { stripExchangeSuffix } from './security-lookup'
 
 export type BrokerRecommendation = {
@@ -147,5 +148,68 @@ export async function fetchConsensusView(code: string): Promise<ConsensusView> {
     averagePriceTarget: average(priceTargets),
     averageYield: average(yields),
     generatedAt: new Date().toISOString(),
+  }
+}
+
+/**
+ * Runs a fresh consensus lookup and caches it (one row per ticker,
+ * overwriting any previous cache) so other parts of the app - like the
+ * conviction rating on Security Master - can read the latest result
+ * without firing their own web-search scan.
+ */
+export async function fetchAndCacheConsensusView(code: string): Promise<ConsensusView> {
+  const view = await fetchConsensusView(code)
+
+  const { error } = await supabase.from('consensus_view_cache').upsert({
+    code: view.code,
+    name: view.name,
+    current_price: view.currentPrice,
+    consensus_rating: view.consensusRating,
+    average_price_target: view.averagePriceTarget,
+    average_yield: view.averageYield,
+    recommendations: view.recommendations,
+    generated_at: view.generatedAt,
+  })
+
+  if (error) {
+    // Caching is a bonus, not the point of the lookup - surface it as a
+    // console warning rather than failing the whole request.
+    console.error('Failed to cache consensus view:', error.message)
+  }
+
+  return view
+}
+
+export type CachedConsensusView = {
+  code: string
+  name: string | null
+  currentPrice: number | null
+  consensusRating: string | null
+  averagePriceTarget: number | null
+  averageYield: number | null
+  generatedAt: string
+}
+
+/** Reads back whatever consensus view was last cached for a ticker, without running a new scan. */
+export async function fetchCachedConsensusView(code: string): Promise<CachedConsensusView | null> {
+  const { data, error } = await supabase
+    .from('consensus_view_cache')
+    .select('*')
+    .eq('code', stripExchangeSuffix(code))
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(`Failed to load cached consensus view: ${error.message}`)
+  }
+  if (!data) return null
+
+  return {
+    code: data.code,
+    name: data.name,
+    currentPrice: data.current_price,
+    consensusRating: data.consensus_rating,
+    averagePriceTarget: data.average_price_target,
+    averageYield: data.average_yield,
+    generatedAt: data.generated_at,
   }
 }

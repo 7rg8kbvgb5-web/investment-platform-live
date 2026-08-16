@@ -39,6 +39,7 @@ export default function ResearchLibraryPanel() {
   const [tickersInput, setTickersInput] = useState('');
   const [sectorsInput, setSectorsInput] = useState('');
   const [summary, setSummary] = useState('');
+  const [houseViewRating, setHouseViewRating] = useState('');
   const [file, setFile] = useState<File | null>(null);
 
   async function refresh() {
@@ -80,6 +81,10 @@ export default function ResearchLibraryPanel() {
         tickers: normaliseTags(tickersInput, 'ticker'),
         sectors: normaliseTags(sectorsInput, 'sector'),
         summary: summary.trim() || undefined,
+        houseViewRating:
+          (source === 'Ord Minnett' || source === 'Barrenjoey') && houseViewRating.trim()
+            ? houseViewRating.trim()
+            : undefined,
         file,
       });
 
@@ -87,6 +92,7 @@ export default function ResearchLibraryPanel() {
       setTickersInput('');
       setSectorsInput('');
       setSummary('');
+      setHouseViewRating('');
       setFile(null);
       setSubmitSuccess(true);
       await refresh();
@@ -189,6 +195,18 @@ export default function ResearchLibraryPanel() {
           </label>
         </div>
 
+        {(source === 'Ord Minnett' || source === 'Barrenjoey') && (
+          <label style={label}>
+            {source}&apos;s rating (optional — feeds the conviction rating on Security Master)
+            <input
+              style={input}
+              value={houseViewRating}
+              onChange={(event) => setHouseViewRating(event.target.value)}
+              placeholder="e.g. Buy, Accumulate, Hold, Reduce, Sell"
+            />
+          </label>
+        )}
+
         <label style={label}>
           Summary (optional)
           <textarea
@@ -244,6 +262,7 @@ export default function ResearchLibraryPanel() {
                 <tr>
                   <th style={th}>Title</th>
                   <th style={th}>Source</th>
+                  <th style={th}>Rating</th>
                   <th style={th}>Type</th>
                   <th style={th}>Tickers</th>
                   <th style={th}>Sectors</th>
@@ -261,6 +280,7 @@ export default function ResearchLibraryPanel() {
                       ) : null}
                     </td>
                     <td style={td}>{document.source}</td>
+                    <td style={td}>{document.houseViewRating ?? '—'}</td>
                     <td style={td}>{document.documentType}</td>
                     <td style={td}>{document.tickers.join(', ') || '—'}</td>
                     <td style={td}>{document.sectors.join(', ') || '—'}</td>

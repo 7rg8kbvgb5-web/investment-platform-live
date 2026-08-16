@@ -1,4 +1,4 @@
-import { fetchConsensusView } from '../../../../lib/engines/consensus-view'
+import { fetchAndCacheConsensusView } from '../../../../lib/engines/consensus-view'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -10,7 +10,7 @@ export async function POST(request: Request) {
     if (!code.trim()) {
       return Response.json({ ok: false, error: 'No ticker code supplied.' }, { status: 400 })
     }
-    const result = await fetchConsensusView(code)
+    const result = await fetchAndCacheConsensusView(code)
     return Response.json({ ok: true, result })
   } catch (error) {
     console.error('Consensus view lookup failed:', error)

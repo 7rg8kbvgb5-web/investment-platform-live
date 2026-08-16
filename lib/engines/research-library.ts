@@ -21,6 +21,7 @@ type ResearchDocumentRow = {
   uploaded_by: string | null;
   published_at: string | null;
   created_at: string;
+  house_view_rating: string | null;
 };
 
 function mapRow(row: ResearchDocumentRow): ResearchDocument {
@@ -38,6 +39,7 @@ function mapRow(row: ResearchDocumentRow): ResearchDocument {
     uploadedBy: row.uploaded_by,
     publishedAt: row.published_at,
     createdAt: row.created_at,
+    houseViewRating: row.house_view_rating,
   };
 }
 
@@ -97,6 +99,7 @@ export async function uploadResearchDocument(
       file_size_bytes: input.file.size,
       uploaded_by: input.uploadedBy ?? null,
       published_at: input.publishedAt ?? null,
+      house_view_rating: input.houseViewRating ?? null,
     })
     .select("*")
     .single();
@@ -159,4 +162,31 @@ export function filterResearchDocuments(
     const matchesSector = !sector || document.sectors.includes(sector);
     return matchesTicker || matchesSector;
   });
+}
+
+/**
+ * Latest house-view rating a given source (Ord Minnett or Barrenjoey) has
+ * put on a ticker, from whichever of their uploaded documents most
+ * recently carried a rating for it. Null if that source hasn't rated the
+ * ticker (either no upload, or uploads exist but none carried a rating).
+ */
+export async function fetchLatestHouseViewRating(
+  code: string,
+  source: ResearchDocument["source"]
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from(TABLE)
+    .select("house_view_rating")
+    .eq("source", source)
+    .contains("tickers", [code.toUpperCase()])
+    .not("house_view_rating", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to load ${source} house view rating: ${error.message}`);
+  }
+
+  return data?.house_view_rating ?? null;
 }

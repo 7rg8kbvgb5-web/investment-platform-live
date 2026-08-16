@@ -85,6 +85,9 @@ export function HouseViewsPanel() {
                         <li key={doc.id} style={docRow}>
                           <div style={docHeader}>
                             <span style={docTitleText}>{doc.title}</span>
+                            {doc.houseViewRating && (
+                              <span style={docRatingBadge}>{doc.houseViewRating}</span>
+                            )}
                             <span style={docTypeBadge}>{doc.documentType}</span>
                           </div>
                           {doc.summary && <p style={docSummary}>{doc.summary}</p>}
@@ -181,6 +184,15 @@ const docTypeBadge = {
   fontWeight: 600,
   background: '#12345b',
   color: '#93c5fd',
+};
+
+const docRatingBadge = {
+  padding: '2px 8px',
+  borderRadius: '999px',
+  fontSize: '10px',
+  fontWeight: 700,
+  background: '#0f3d2e',
+  color: '#86efac',
 };
 
 const docSummary = {

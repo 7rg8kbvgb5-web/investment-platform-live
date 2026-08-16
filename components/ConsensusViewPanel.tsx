@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Panel from './ui/Panel';
 import StatusBox from './dashboard/StatusBox';
 import type { ConsensusView } from '../lib/engines/consensus-view';
+import { classifyRating } from '../lib/engines/rating-scale';
 
 // Broker/analyst consensus, similar in spirit to FN Arena - but compiled
 // live via web search rather than a licensed broker-note feed, since no
@@ -91,6 +92,24 @@ export function ConsensusViewPanel() {
                   {result.currentPrice !== null ? `$${result.currentPrice}` : '—'}
                 </span>
               </div>
+              {result.currentPrice !== null && result.averagePriceTarget !== null && (
+                <div style={aggregateStat}>
+                  <span style={aggregateStatLabel}>Implied upside/downside</span>
+                  <span
+                    style={{
+                      ...aggregateStatValue,
+                      color:
+                        result.averagePriceTarget >= result.currentPrice ? '#4ade80' : '#fca5a5',
+                    }}
+                  >
+                    {result.averagePriceTarget >= result.currentPrice ? '+' : ''}
+                    {Math.round(
+                      ((result.averagePriceTarget - result.currentPrice) / result.currentPrice) * 1000,
+                    ) / 10}
+                    %
+                  </span>
+                </div>
+              )}
               <div style={aggregateStat}>
                 <span style={aggregateStatLabel}>Avg. yield</span>
                 <span style={aggregateStatValue}>
@@ -102,6 +121,21 @@ export function ConsensusViewPanel() {
                 <span style={aggregateStatValue}>{result.recommendations.length}</span>
               </div>
             </div>
+            {result.recommendations.length > 0 && (
+              <div style={distributionRow}>
+                {(['bullish', 'neutral', 'bearish'] as const).map((lean) => {
+                  const count = result.recommendations.filter(
+                    (r) => classifyRating(r.rating) === lean,
+                  ).length
+                  if (count === 0) return null
+                  return (
+                    <span key={lean} style={distributionChip(lean)}>
+                      {count} {lean}
+                    </span>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
           {result.recommendations.length === 0 ? (
@@ -225,6 +259,31 @@ const aggregateStatValue = {
   color: '#4ade80',
   marginTop: '2px',
 };
+
+const distributionRow = {
+  display: 'flex',
+  gap: '8px',
+  marginTop: '12px',
+  paddingTop: '10px',
+  borderTop: '1px dashed #2d4a6b',
+};
+
+function distributionChip(lean: 'bullish' | 'neutral' | 'bearish') {
+  const colors = {
+    bullish: { bg: '#0f3d2e', border: '#10b981', text: '#86efac' },
+    neutral: { bg: '#12203a', border: '#1e3a5f', text: '#94a3b8' },
+    bearish: { bg: '#4a1520', border: '#ef4444', text: '#fca5a5' },
+  }[lean];
+  return {
+    padding: '3px 10px',
+    borderRadius: '999px',
+    fontSize: '11px',
+    fontWeight: 700,
+    background: colors.bg,
+    border: `1px solid ${colors.border}`,
+    color: colors.text,
+  };
+}
 
 const tableWrap = {
   overflowX: 'auto' as const,
