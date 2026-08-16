@@ -10,7 +10,6 @@ import {
 } from '../lib/engines/model-portfolio-core';
 import { computePortfolioYield } from '../lib/engines/yield-aggregation';
 import { computeConvictionRating, type ConvictionRating } from '../lib/engines/conviction-rating';
-import type { TacticalAssetClassView } from '../lib/engines/tactical-asset-view';
 import type { RiskProfile } from '../lib/engines/model-portfolios';
 import { useClientAdvice } from './ClientAdviceContext';
 import Panel from './ui/Panel';
@@ -58,35 +57,6 @@ export function PortfolioConstitutionPanel() {
   const [savingCount, setSavingCount] = useState(0);
   const [convictions, setConvictions] = useState<Record<string, ConvictionRating>>({});
   const [convictionsLoading, setConvictionsLoading] = useState(true);
-  const [tacticalView, setTacticalView] = useState<TacticalAssetClassView | null>(null);
-  const [tacticalScanning, setTacticalScanning] = useState(false);
-  const [tacticalError, setTacticalError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch('/api/tactical-view/latest')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.ok) setTacticalView(data.view);
-      })
-      .catch(() => {
-        // Non-critical background load - the "Run scan" button still works either way.
-      });
-  }, []);
-
-  async function runTacticalScan() {
-    setTacticalScanning(true);
-    setTacticalError(null);
-    try {
-      const res = await fetch('/api/tactical-view/run-now', { method: 'POST' });
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.error ?? 'Scan failed.');
-      setTacticalView(data.view);
-    } catch (err) {
-      setTacticalError(err instanceof Error ? err.message : 'Scan failed.');
-    } finally {
-      setTacticalScanning(false);
-    }
-  }
 
   const load = useCallback(async (profile: string) => {
     setLoading(true);
@@ -269,52 +239,6 @@ export function PortfolioConstitutionPanel() {
         </StatusBox>
       )}
 
-      <div style={tacticalBar}>
-        <div style={tacticalHeader}>
-          <span style={tacticalTitle}>Live Global Asset Class View</span>
-          <div style={tacticalHeaderRight}>
-            {tacticalView && (
-              <span style={tacticalTimestamp}>
-                {new Date(tacticalView.generatedAt).toLocaleString('en-AU', {
-                  day: 'numeric',
-                  month: 'short',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={runTacticalScan}
-              disabled={tacticalScanning}
-              style={tacticalScanButton}
-            >
-              {tacticalScanning ? 'Scanning…' : 'Run scan'}
-            </button>
-          </div>
-        </div>
-        {tacticalError && (
-          <StatusBox variant="error" display="inline">
-            {tacticalError}
-          </StatusBox>
-        )}
-        {!tacticalView && !tacticalError ? (
-          <p style={tacticalEmptyText}>
-            No scan run yet — click &quot;Run scan&quot; for a live macro/market tactical
-            read on each asset class.
-          </p>
-        ) : (
-          <div style={tacticalChipRow}>
-            {tacticalView?.calls.map((call) => (
-              <span key={call.assetClass} title={call.rationale} style={tacticalChip(call.stance)}>
-                <span style={tacticalChipClass}>{call.assetClass}</span>
-                <span style={tacticalChipStance}>{call.stance}</span>
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
       <div style={overviewRow}>
         <div style={overviewTableCol}>
           <div style={portfolioTotalRow}>
@@ -489,96 +413,6 @@ const assetClassList = {
   flexDirection: 'column' as const,
   gap: '14px',
   marginTop: '16px',
-};
-
-const tacticalBar = {
-  padding: '12px 14px',
-  borderRadius: '10px',
-  background: '#0b2447',
-  border: '1px solid #2d4a6b',
-  marginBottom: '16px',
-};
-
-const tacticalHeader = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  flexWrap: 'wrap' as const,
-  gap: '10px',
-  marginBottom: '8px',
-};
-
-const tacticalTitle = {
-  fontSize: '12px',
-  fontWeight: 700,
-  color: '#93c5fd',
-  textTransform: 'uppercase' as const,
-  letterSpacing: '0.03em',
-};
-
-const tacticalHeaderRight = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '10px',
-};
-
-const tacticalTimestamp = {
-  fontSize: '11px',
-  color: '#64748b',
-};
-
-const tacticalScanButton = {
-  padding: '6px 14px',
-  borderRadius: '8px',
-  fontSize: '12px',
-  fontWeight: 700,
-  background: '#0f3d2e',
-  border: '1px solid #10b981',
-  color: '#86efac',
-  cursor: 'pointer',
-};
-
-const tacticalEmptyText = {
-  margin: 0,
-  fontSize: '12px',
-  color: '#94a3b8',
-  fontStyle: 'italic' as const,
-};
-
-const tacticalChipRow = {
-  display: 'flex',
-  flexWrap: 'wrap' as const,
-  gap: '8px',
-};
-
-function tacticalChip(stance: 'OW' | 'N' | 'UW') {
-  const colors: Record<string, { bg: string; border: string; text: string }> = {
-    OW: { bg: '#0f3d2e', border: '#10b981', text: '#86efac' },
-    N: { bg: '#12203a', border: '#1e3a5f', text: '#94a3b8' },
-    UW: { bg: '#4a1520', border: '#ef4444', text: '#fca5a5' },
-  };
-  const c = colors[stance];
-  return {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    padding: '5px 10px',
-    borderRadius: '999px',
-    background: c.bg,
-    border: `1px solid ${c.border}`,
-    color: c.text,
-    fontSize: '12px',
-    cursor: 'help',
-  };
-}
-
-const tacticalChipClass = {
-  color: '#e2e8f0',
-  fontWeight: 600,
-};
-
-const tacticalChipStance = {
-  fontWeight: 700,
 };
 
 const overviewRow = {

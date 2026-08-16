@@ -13,6 +13,7 @@ import {
 import { buildSecurityUniverse, type SecurityUniverseEntry } from '../lib/engines/security-universe';
 import { stripExchangeSuffix } from '../lib/engines/security-lookup';
 import { computeConvictionRating, type ConvictionRating } from '../lib/engines/conviction-rating';
+import type { TacticalAssetClassView } from '../lib/engines/tactical-asset-view';
 import {
   HoldingMetricGrid,
   HoldingMetricCell,
@@ -39,6 +40,35 @@ export function ModelPortfolioSecuritiesPanel() {
   const [convictions, setConvictions] = useState<Record<string, ConvictionRating>>({});
   const [convictionsLoading, setConvictionsLoading] = useState(true);
   const [universe, setUniverse] = useState<SecurityUniverseEntry[]>([]);
+  const [tacticalView, setTacticalView] = useState<TacticalAssetClassView | null>(null);
+  const [tacticalScanning, setTacticalScanning] = useState(false);
+  const [tacticalError, setTacticalError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/tactical-view/latest')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.ok) setTacticalView(data.view);
+      })
+      .catch(() => {
+        // Non-critical background load - the "Run scan" button still works either way.
+      });
+  }, []);
+
+  async function runTacticalScan() {
+    setTacticalScanning(true);
+    setTacticalError(null);
+    try {
+      const res = await fetch('/api/tactical-view/run-now', { method: 'POST' });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error ?? 'Scan failed.');
+      setTacticalView(data.view);
+    } catch (err) {
+      setTacticalError(err instanceof Error ? err.message : 'Scan failed.');
+    } finally {
+      setTacticalScanning(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -360,6 +390,62 @@ export function ModelPortfolioSecuritiesPanel() {
           </table>
         </div>
         <div style={overviewChartCol}>
+          <div style={tacticalTableWrap}>
+            <div style={tacticalTableHeader}>
+              <span style={tacticalTitle}>Live Global Asset Class View</span>
+              <div style={tacticalHeaderRight}>
+                {tacticalView && (
+                  <span style={tacticalTimestamp}>
+                    {new Date(tacticalView.generatedAt).toLocaleString('en-AU', {
+                      day: 'numeric',
+                      month: 'short',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={runTacticalScan}
+                  disabled={tacticalScanning}
+                  style={tacticalScanButton}
+                >
+                  {tacticalScanning ? 'Scanning…' : 'Run scan'}
+                </button>
+              </div>
+            </div>
+            {tacticalError && (
+              <StatusBox variant="error" display="inline">
+                {tacticalError}
+              </StatusBox>
+            )}
+            {!tacticalView && !tacticalError ? (
+              <p style={emptyText}>
+                No scan run yet — click &quot;Run scan&quot; for a live macro/market
+                tactical read on each asset class.
+              </p>
+            ) : (
+              <table style={overviewTable}>
+                <thead>
+                  <tr>
+                    <th style={overviewTh}>Asset Class</th>
+                    <th style={overviewThRight}>Stance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tacticalView?.calls.map((call) => (
+                    <tr key={call.assetClass} title={call.rationale}>
+                      <td style={overviewTd}>{call.assetClass}</td>
+                      <td style={overviewTdRight}>
+                        <span style={tacticalStanceTag(call.stance)}>{call.stance}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
           {sectorBreakdown.length > 0 ? (
             <>
               <p style={chartCaption}>Securities by sector</p>
@@ -627,6 +713,72 @@ const statValue = {
   color: '#4ade80',
   marginTop: '2px',
 };
+
+const tacticalTableWrap = {
+  padding: '10px 12px',
+  borderRadius: '10px',
+  background: '#0b2447',
+  border: '1px solid #2d4a6b',
+  marginBottom: '14px',
+};
+
+const tacticalTableHeader = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  flexWrap: 'wrap' as const,
+  gap: '8px',
+  marginBottom: '8px',
+};
+
+const tacticalTitle = {
+  fontSize: '11px',
+  fontWeight: 700,
+  color: '#93c5fd',
+  textTransform: 'uppercase' as const,
+  letterSpacing: '0.03em',
+};
+
+const tacticalHeaderRight = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+};
+
+const tacticalTimestamp = {
+  fontSize: '10px',
+  color: '#64748b',
+};
+
+const tacticalScanButton = {
+  padding: '4px 10px',
+  borderRadius: '6px',
+  fontSize: '11px',
+  fontWeight: 700,
+  background: '#0f3d2e',
+  border: '1px solid #10b981',
+  color: '#86efac',
+  cursor: 'pointer',
+};
+
+function tacticalStanceTag(stance: 'OW' | 'N' | 'UW') {
+  const colors: Record<string, { bg: string; border: string; text: string }> = {
+    OW: { bg: '#0f3d2e', border: '#10b981', text: '#86efac' },
+    N: { bg: '#12203a', border: '#1e3a5f', text: '#94a3b8' },
+    UW: { bg: '#4a1520', border: '#ef4444', text: '#fca5a5' },
+  };
+  const c = colors[stance];
+  return {
+    padding: '2px 8px',
+    borderRadius: '999px',
+    fontSize: '11px',
+    fontWeight: 700,
+    background: c.bg,
+    border: `1px solid ${c.border}`,
+    color: c.text,
+    cursor: 'help',
+  };
+}
 
 const overviewRow = {
   display: 'flex',
