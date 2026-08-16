@@ -23,6 +23,12 @@ import {
   type HoldingWeightOverrides,
 } from '../lib/engines/client-weight-overrides'
 import { normaliseCode } from '../lib/engines/security-universe'
+import {
+  saveClientReview,
+  listClientReviews,
+  fetchClientReview,
+  deleteClientReview,
+} from '../lib/engines/client-portfolio-reviews'
 import AssetClassComparisonChart from './AssetClassComparisonChart'
 import HoldingAdjustmentChart from './HoldingAdjustmentChart'
 import AllocationPieChart from './AllocationPieChart'
@@ -272,6 +278,124 @@ export default function ClientPortfolioUploadPanel() {
     setHoldingOverrides({})
   }
 
+  // --- Save/resume a client's in-progress review ---
+  // Everything above (uploaded holdings, risk override, portfolio value,
+  // bespoke weight overrides) previously lived only in this tab's memory.
+  // Naming a review after a client and letting it autosave means closing
+  // the tab and coming back tomorrow picks up exactly where it left off -
+  // the house model itself was always safe in Supabase; this closes the
+  // gap for the client-specific working file.
+  const [clientReviewName, setClientReviewName] = useState('')
+  const [reviewId, setReviewId] = useState<string | null>(null)
+  const [reviewStatus, setReviewStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [reviewError, setReviewError] = useState<string | null>(null)
+  const [showLoadPicker, setShowLoadPicker] = useState(false)
+  const [savedReviews, setSavedReviews] = useState<
+    { id: string; clientName: string; updatedAt: string }[]
+  >([])
+  const [loadingSavedReviews, setLoadingSavedReviews] = useState(false)
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isHydrating = useRef(false)
+
+  useEffect(() => {
+    if (isHydrating.current) {
+      isHydrating.current = false
+      return
+    }
+    const name = clientReviewName.trim()
+    if (!name || holdings.length === 0) return
+
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    setReviewStatus('saving')
+    saveTimer.current = setTimeout(async () => {
+      try {
+        const savedId = await saveClientReview(reviewId, name, {
+          holdings,
+          meta,
+          riskOverride,
+          manualPortfolioValue,
+          assetClassOverrides,
+          holdingOverrides,
+        })
+        setReviewId((prev) => prev ?? savedId)
+        setReviewStatus('saved')
+      } catch (err) {
+        setReviewError(err instanceof Error ? err.message : 'Failed to save.')
+        setReviewStatus('error')
+      }
+    }, 1200)
+
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+    }
+    // clientReviewName intentionally excluded from deps beyond its own
+    // change - editing it retriggers via the other dependencies changing
+    // too, and including it directly would refire on every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [holdings, meta, riskOverride, manualPortfolioValue, assetClassOverrides, holdingOverrides, clientReviewName])
+
+  async function openLoadPicker() {
+    setShowLoadPicker(true)
+    setLoadingSavedReviews(true)
+    try {
+      const reviews = await listClientReviews()
+      setSavedReviews(reviews)
+    } catch (err) {
+      setReviewError(err instanceof Error ? err.message : 'Failed to load saved reviews.')
+    } finally {
+      setLoadingSavedReviews(false)
+    }
+  }
+
+  async function loadReview(id: string) {
+    try {
+      const review = await fetchClientReview(id)
+      isHydrating.current = true
+      setClientReviewName(review.clientName)
+      setReviewId(review.id)
+      setHoldings(review.state.holdings)
+      setMeta(review.state.meta)
+      setRiskOverride(review.state.riskOverride)
+      setManualPortfolioValue(review.state.manualPortfolioValue)
+      setAssetClassOverrides(review.state.assetClassOverrides)
+      setHoldingOverrides(review.state.holdingOverrides)
+      setReviewStatus('saved')
+      setShowLoadPicker(false)
+    } catch (err) {
+      setReviewError(err instanceof Error ? err.message : 'Failed to load review.')
+    }
+  }
+
+  async function removeReview(id: string, e: React.MouseEvent) {
+    e.stopPropagation()
+    const confirmed = window.confirm('Delete this saved client review? This cannot be undone.')
+    if (!confirmed) return
+    try {
+      await deleteClientReview(id)
+      setSavedReviews((prev) => prev.filter((r) => r.id !== id))
+      if (reviewId === id) {
+        startNewReview()
+      }
+    } catch (err) {
+      setReviewError(err instanceof Error ? err.message : 'Failed to delete review.')
+    }
+  }
+
+  function startNewReview() {
+    isHydrating.current = true
+    setClientReviewName('')
+    setReviewId(null)
+    setReviewStatus('idle')
+    setHoldings([])
+    setCsvText('')
+    setWarnings([])
+    setMeta({ clientName: null, asAtDate: null, totalPortfolioValue: null })
+    setRiskOverride('auto')
+    setManualPortfolioValue('')
+    setAssetClassOverrides({})
+    setHoldingOverrides({})
+  }
+
   // Every code that could plausibly need a live price: what the client
   // holds today, plus every holding in the model being compared against
   // (the buy candidates). Fetched once per (holdings, model) change.
@@ -366,6 +490,78 @@ export default function ClientPortfolioUploadPanel() {
         class and security, classify its risk profile, and see exactly
         which positions need to change to align with the house model.
       </p>
+
+      <div style={reviewBar}>
+        <div style={reviewNameField}>
+          <input
+            type="text"
+            placeholder="Client name (e.g. J Smith) — saves this review as you work"
+            value={clientReviewName}
+            onChange={(e) => setClientReviewName(e.target.value)}
+            style={reviewNameInput}
+          />
+          {reviewStatus === 'saving' && <span style={reviewStatusSaving}>Saving…</span>}
+          {reviewStatus === 'saved' && <span style={reviewStatusSaved}>Saved</span>}
+          {reviewStatus === 'error' && (
+            <span style={reviewStatusError} title={reviewError ?? undefined}>
+              Save failed
+            </span>
+          )}
+        </div>
+        <div style={reviewButtonGroup}>
+          <button type="button" style={reviewBarButton} onClick={openLoadPicker}>
+            Resume a client…
+          </button>
+          {(hasHoldings || clientReviewName) && (
+            <button type="button" style={reviewBarButton} onClick={startNewReview}>
+              New review
+            </button>
+          )}
+        </div>
+      </div>
+
+      {showLoadPicker && (
+        <div style={loadPickerBox}>
+          <div style={loadPickerHeader}>
+            <span style={loadPickerTitle}>Saved client reviews</span>
+            <button
+              type="button"
+              style={loadPickerClose}
+              onClick={() => setShowLoadPicker(false)}
+            >
+              Close
+            </button>
+          </div>
+          {loadingSavedReviews ? (
+            <p style={loadPickerEmpty}>Loading…</p>
+          ) : savedReviews.length === 0 ? (
+            <p style={loadPickerEmpty}>No saved reviews yet — name a client above to start one.</p>
+          ) : (
+            <ul style={loadPickerList}>
+              {savedReviews.map((r) => (
+                <li key={r.id} style={loadPickerRow} onClick={() => loadReview(r.id)}>
+                  <span style={loadPickerName}>{r.clientName}</span>
+                  <span style={loadPickerDate}>
+                    {new Date(r.updatedAt).toLocaleString('en-AU', {
+                      day: 'numeric',
+                      month: 'short',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                  <button
+                    type="button"
+                    style={loadPickerDelete}
+                    onClick={(e) => removeReview(r.id, e)}
+                  >
+                    Delete
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       <div style={modeToggleRow}>
         <button
@@ -970,6 +1166,151 @@ const description = {
   lineHeight: 1.5,
   marginBottom: '20px',
   maxWidth: '680px',
+}
+
+const reviewBar = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  flexWrap: 'wrap' as const,
+  gap: '10px',
+  marginBottom: '10px',
+}
+
+const reviewNameField = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  flex: 1,
+  minWidth: '260px',
+}
+
+const reviewNameInput = {
+  flex: 1,
+  padding: '9px 12px',
+  borderRadius: '8px',
+  fontSize: '13px',
+  background: '#04142b',
+  border: '1px solid #2d4a6b',
+  color: '#e2e8f0',
+}
+
+const reviewStatusSaving = {
+  fontSize: '11px',
+  fontWeight: 700,
+  color: '#facc15',
+  whiteSpace: 'nowrap' as const,
+}
+
+const reviewStatusSaved = {
+  fontSize: '11px',
+  fontWeight: 700,
+  color: '#4ade80',
+  whiteSpace: 'nowrap' as const,
+}
+
+const reviewStatusError = {
+  fontSize: '11px',
+  fontWeight: 700,
+  color: '#f87171',
+  whiteSpace: 'nowrap' as const,
+  cursor: 'help',
+}
+
+const reviewButtonGroup = {
+  display: 'flex',
+  gap: '8px',
+}
+
+const reviewBarButton = {
+  padding: '9px 14px',
+  borderRadius: '8px',
+  fontSize: '12px',
+  fontWeight: 600,
+  background: '#0b2447',
+  border: '1px solid #2d4a6b',
+  color: '#93c5fd',
+  cursor: 'pointer',
+  whiteSpace: 'nowrap' as const,
+}
+
+const loadPickerBox = {
+  padding: '12px 14px',
+  borderRadius: '10px',
+  background: '#0b2447',
+  border: '1px solid #2d4a6b',
+  marginBottom: '14px',
+}
+
+const loadPickerHeader = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: '8px',
+}
+
+const loadPickerTitle = {
+  fontSize: '12px',
+  fontWeight: 700,
+  color: '#93c5fd',
+  textTransform: 'uppercase' as const,
+  letterSpacing: '0.03em',
+}
+
+const loadPickerClose = {
+  border: 'none',
+  background: 'transparent',
+  color: '#64748b',
+  fontSize: '11px',
+  cursor: 'pointer',
+}
+
+const loadPickerList = {
+  listStyle: 'none',
+  margin: 0,
+  padding: 0,
+  display: 'flex',
+  flexDirection: 'column' as const,
+  gap: '4px',
+}
+
+const loadPickerRow = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '10px',
+  padding: '8px 10px',
+  borderRadius: '8px',
+  background: '#04142b',
+  cursor: 'pointer',
+}
+
+const loadPickerName = {
+  flex: 1,
+  fontSize: '13px',
+  fontWeight: 600,
+  color: '#e2e8f0',
+}
+
+const loadPickerDate = {
+  fontSize: '11px',
+  color: '#64748b',
+}
+
+const loadPickerDelete = {
+  border: '1px solid #4a1e2a',
+  background: 'transparent',
+  color: '#f87171',
+  fontSize: '11px',
+  cursor: 'pointer',
+  padding: '3px 8px',
+  borderRadius: '6px',
+}
+
+const loadPickerEmpty = {
+  margin: 0,
+  fontSize: '12px',
+  color: '#94a3b8',
+  fontStyle: 'italic' as const,
 }
 
 const modeToggleRow = {
