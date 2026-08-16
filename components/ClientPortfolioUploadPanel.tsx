@@ -108,9 +108,15 @@ export default function ClientPortfolioUploadPanel() {
   // Total portfolio value used to size trades in dollars. The upload's own
   // stated total (from a PDF that prints it) takes precedence; otherwise
   // the adviser can enter it manually - either way, everything downstream
-  // (dollar values, units) lights up once one is available.
-  const effectiveTotalPortfolioValue: number | undefined =
+  // (dollar values, units) lights up once one is available. Additional
+  // cash the client wants to inject from elsewhere adds to whichever base
+  // value is in play, so it flows straight into buy-side sizing.
+  const [additionalCash, setAdditionalCash] = useState<string>('')
+  const baseTotalPortfolioValue: number | undefined =
     meta.totalPortfolioValue ?? (manualPortfolioValue ? parseFloat(manualPortfolioValue) || undefined : undefined)
+  const additionalCashValue = additionalCash ? parseFloat(additionalCash) || 0 : 0
+  const effectiveTotalPortfolioValue: number | undefined =
+    baseTotalPortfolioValue !== undefined ? baseTotalPortfolioValue + additionalCashValue : undefined
 
   function loadExamplePortfolio() {
     setHoldings(EXAMPLE_HOLDINGS)
@@ -314,6 +320,7 @@ export default function ClientPortfolioUploadPanel() {
           meta,
           riskOverride,
           manualPortfolioValue,
+          additionalCash,
           assetClassOverrides,
           holdingOverrides,
         })
@@ -332,7 +339,7 @@ export default function ClientPortfolioUploadPanel() {
     // change - editing it retriggers via the other dependencies changing
     // too, and including it directly would refire on every keystroke.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [holdings, meta, riskOverride, manualPortfolioValue, assetClassOverrides, holdingOverrides, clientReviewName])
+  }, [holdings, meta, riskOverride, manualPortfolioValue, additionalCash, assetClassOverrides, holdingOverrides, clientReviewName])
 
   async function openLoadPicker() {
     setShowLoadPicker(true)
@@ -357,6 +364,7 @@ export default function ClientPortfolioUploadPanel() {
       setMeta(review.state.meta)
       setRiskOverride(review.state.riskOverride)
       setManualPortfolioValue(review.state.manualPortfolioValue)
+      setAdditionalCash(review.state.additionalCash)
       setAssetClassOverrides(review.state.assetClassOverrides)
       setHoldingOverrides(review.state.holdingOverrides)
       setReviewStatus('saved')
@@ -392,6 +400,7 @@ export default function ClientPortfolioUploadPanel() {
     setMeta({ clientName: null, asAtDate: null, totalPortfolioValue: null })
     setRiskOverride('auto')
     setManualPortfolioValue('')
+    setAdditionalCash('')
     setAssetClassOverrides({})
     setHoldingOverrides({})
   }
@@ -476,6 +485,23 @@ export default function ClientPortfolioUploadPanel() {
         : null,
     [clientAdjustedModel, effectiveTotalPortfolioValue],
   )
+
+  // Residual cash surplus/deficit: whatever share of the total investable
+  // value (statement/manual value + any additional cash) isn't accounted
+  // for by the sum of every holding's target weight. Positive means cash
+  // is left uninvested; negative means the adjustments above call for
+  // more than is actually available, and either more cash or smaller
+  // buys are needed to close the gap.
+  const residualCash = useMemo(() => {
+    if (!comparison || effectiveTotalPortfolioValue === undefined) return null
+    const totalTargetWeightPct = comparison.holdingRecommendations.reduce(
+      (sum, rec) => sum + rec.targetWeight,
+      0,
+    )
+    const residualPct = Math.round((100 - totalTargetWeightPct) * 100) / 100
+    const residualValue = Math.round(effectiveTotalPortfolioValue * (residualPct / 100) * 100) / 100
+    return { residualPct, residualValue }
+  }, [comparison, effectiveTotalPortfolioValue])
 
   const pricesConnected = Object.values(prices).some((p) => p !== null && p !== undefined)
 
@@ -952,109 +978,210 @@ export default function ClientPortfolioUploadPanel() {
             </div>
           ) : null}
 
-          {/* Holding-level recommendations, broken out by asset class to
-              mirror the Model Portfolio / Risk Profile tabs' layout, so
-              the workflow reads the same way across the app. Every
-              holding is shown here now (not just ones flagged for
-              change), and every target weight is editable - this is
-              where bespoke amendments for this specific client/review
-              happen. */}
+          {/* Resulting Portfolio: current holdings (read-only) side by
+              side with the exact unit-level adjustments needed to bring
+              the client in line with the model - editable here, so an
+              adviser can deliberately shift away from the model where a
+              client's circumstances call for it. A cash bar up top shows
+              whatever's left over (or short) once every adjustment below
+              is accounted for, plus an option to add cash the client
+              wants to inject from elsewhere. */}
           <div style={subPanel}>
-            <p style={subHeading}>Recommended Changes</p>
+            <p style={subHeading}>Resulting Portfolio</p>
             <HoldingAdjustmentChart recommendations={comparison.holdingRecommendations} />
-            <div style={assetClassList}>
-              {clientAdjustedModel.assetClasses.map((assetClass) => {
-                const classRecs = comparison.holdingRecommendations.filter(
-                  (rec) => rec.assetClass === assetClass.name,
-                )
-                if (classRecs.length === 0) return null
 
-                return (
-                  <div key={assetClass.name} style={assetClassCard}>
-                    <div style={assetClassCardHeader}>
-                      <h4 style={assetClassCardTitle}>{assetClass.name}</h4>
-                      <span style={typeBadgeSmall}>{assetClass.type}</span>
-                      <span style={countBadgeSmall}>{classRecs.length} holdings</span>
-                    </div>
+            <div style={cashBar}>
+              <div style={cashBarStat}>
+                <span style={cashBarLabel}>Current portfolio value</span>
+                <span style={cashBarValue}>
+                  {baseTotalPortfolioValue !== undefined ? formatCurrency(baseTotalPortfolioValue) : '—'}
+                </span>
+              </div>
+              <div style={cashBarStat}>
+                <span style={cashBarLabel}>Add cash to invest</span>
+                <input
+                  type="number"
+                  step="100"
+                  placeholder="0"
+                  value={additionalCash}
+                  onChange={(e) => setAdditionalCash(e.target.value)}
+                  style={cashInput}
+                  aria-label="Additional cash to invest"
+                />
+              </div>
+              <div style={cashBarStat}>
+                <span style={cashBarLabel}>
+                  {residualCash && residualCash.residualValue < 0 ? 'Cash deficit' : 'Residual cash'}
+                </span>
+                <span
+                  style={{
+                    ...cashBarValue,
+                    color:
+                      residualCash === null
+                        ? '#94a3b8'
+                        : residualCash.residualValue < 0
+                          ? '#fca5a5'
+                          : '#4ade80',
+                  }}
+                >
+                  {residualCash !== null ? (
+                    <>
+                      {residualCash.residualValue < 0 ? '-' : ''}
+                      {formatCurrency(Math.abs(residualCash.residualValue))}
+                      <span style={cashBarSubValue}> ({residualCash.residualPct}%)</span>
+                    </>
+                  ) : (
+                    'Enter a portfolio value'
+                  )}
+                </span>
+              </div>
+            </div>
 
-                    <ul style={holdingCardList}>
-                      {classRecs.map((rec) => (
-                        <li key={rec.code} style={holdingCardRow}>
-                          <div style={holdingCardHeader}>
-                            <span style={holdingCardCode}>{rec.code}</span>
-                            <span style={holdingCardName}>{rec.name}</span>
-                            <span style={holdingCardBadge}>
-                              <ActionBadge action={rec.action} />
-                            </span>
-                          </div>
+            <div style={resultingPortfolioGrid}>
+              <div style={resultingColumn}>
+                <p style={resultingColumnTitle}>Current Portfolio</p>
+                <div style={assetClassList}>
+                  {clientAdjustedModel.assetClasses.map((assetClass) => {
+                    const classRecs = comparison.holdingRecommendations.filter(
+                      (rec) => rec.assetClass === assetClass.name && rec.currentWeight > 0,
+                    )
+                    if (classRecs.length === 0) return null
 
-                          <div style={weightEditCell}>
-                            <span style={holdingCardFieldLabel}>Current {rec.currentWeight}% → Target</span>
-                            <input
-                              type="number"
-                              step={0.5}
-                              style={
-                                holdingOverrides[normaliseCode(rec.code)] !== undefined
-                                  ? weightInputOverridden
-                                  : weightInput
-                              }
-                              value={rec.targetWeight}
-                              onChange={(e) => {
-                                const value = parseFloat(e.target.value)
-                                if (!Number.isNaN(value)) setHoldingWeight(rec.code, value)
-                              }}
-                              aria-label={`${rec.name} target weight`}
-                            />
-                            %
-                            <span style={holdingCardChange}>
-                              ({rec.changeWeight > 0 ? '+' : ''}
-                              {rec.changeWeight}pp)
-                            </span>
-                            {holdingOverrides[normaliseCode(rec.code)] !== undefined ? (
-                              <button
-                                style={resetWeightButton}
-                                title="Reset to house model weight"
-                                onClick={() => resetHoldingWeight(rec.code)}
-                              >
-                                ↺
-                              </button>
-                            ) : null}
-                          </div>
-
-                          <div style={holdingCardValueRow}>
-                            <span>
-                              Trade value:{' '}
-                              {rec.changeValue !== null ? (
-                                <strong>
-                                  {rec.changeValue > 0 ? '+' : ''}
-                                  {formatCurrency(rec.changeValue)}
-                                </strong>
-                              ) : (
-                                <span style={tdMutedInline}>—</span>
-                              )}
-                            </span>
-                            <span>
-                              Units:{' '}
-                              {rec.units !== null ? (
-                                <strong>
-                                  {rec.units > 0 ? '+' : ''}
-                                  {rec.units.toLocaleString()}
-                                </strong>
-                              ) : (
-                                <span style={tdMutedInline}>
-                                  {rec.changeValue !== null ? 'no price' : '—'}
+                    return (
+                      <div key={assetClass.name} style={assetClassCard}>
+                        <div style={assetClassCardHeader}>
+                          <h4 style={assetClassCardTitle}>{assetClass.name}</h4>
+                          <span style={countBadgeSmall}>{classRecs.length} holdings</span>
+                        </div>
+                        <ul style={holdingCardList}>
+                          {classRecs.map((rec) => (
+                            <li key={rec.code} style={holdingCardRow}>
+                              <div style={holdingCardHeader}>
+                                <span style={holdingCardCode}>{rec.code}</span>
+                                <span style={holdingCardName}>{rec.name}</span>
+                              </div>
+                              <div style={holdingCardValueRow}>
+                                <span>
+                                  Weight: <strong>{rec.currentWeight}%</strong>
                                 </span>
-                              )}
-                            </span>
-                          </div>
+                                <span>
+                                  Value:{' '}
+                                  {rec.currentValue !== null ? (
+                                    <strong>{formatCurrency(rec.currentValue)}</strong>
+                                  ) : (
+                                    <span style={tdMutedInline}>—</span>
+                                  )}
+                                </span>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )
+                  })}
+                  {comparison.holdingRecommendations.every((rec) => rec.currentWeight === 0) && (
+                    <p style={loadPickerEmpty}>No current holdings mapped to the model&apos;s asset classes.</p>
+                  )}
+                </div>
+              </div>
 
-                          <p style={holdingCardRationale}>{rec.rationale}</p>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )
-              })}
+              <div style={resultingColumn}>
+                <p style={resultingColumnTitle}>Recommended Adjustments</p>
+                <div style={assetClassList}>
+                  {clientAdjustedModel.assetClasses.map((assetClass) => {
+                    const classRecs = comparison.holdingRecommendations.filter(
+                      (rec) => rec.assetClass === assetClass.name,
+                    )
+                    if (classRecs.length === 0) return null
+
+                    return (
+                      <div key={assetClass.name} style={assetClassCard}>
+                        <div style={assetClassCardHeader}>
+                          <h4 style={assetClassCardTitle}>{assetClass.name}</h4>
+                          <span style={typeBadgeSmall}>{assetClass.type}</span>
+                          <span style={countBadgeSmall}>{classRecs.length} holdings</span>
+                        </div>
+
+                        <ul style={holdingCardList}>
+                          {classRecs.map((rec) => (
+                            <li key={rec.code} style={holdingCardRow}>
+                              <div style={holdingCardHeader}>
+                                <span style={holdingCardCode}>{rec.code}</span>
+                                <span style={holdingCardName}>{rec.name}</span>
+                                <span style={holdingCardBadge}>
+                                  <ActionBadge action={rec.action} />
+                                </span>
+                              </div>
+
+                              <div style={weightEditCell}>
+                                <span style={holdingCardFieldLabel}>Target</span>
+                                <input
+                                  type="number"
+                                  step={0.5}
+                                  style={
+                                    holdingOverrides[normaliseCode(rec.code)] !== undefined
+                                      ? weightInputOverridden
+                                      : weightInput
+                                  }
+                                  value={rec.targetWeight}
+                                  onChange={(e) => {
+                                    const value = parseFloat(e.target.value)
+                                    if (!Number.isNaN(value)) setHoldingWeight(rec.code, value)
+                                  }}
+                                  aria-label={`${rec.name} target weight`}
+                                />
+                                %
+                                <span style={holdingCardChange}>
+                                  ({rec.changeWeight > 0 ? '+' : ''}
+                                  {rec.changeWeight}pp)
+                                </span>
+                                {holdingOverrides[normaliseCode(rec.code)] !== undefined ? (
+                                  <button
+                                    style={resetWeightButton}
+                                    title="Reset to house model weight"
+                                    onClick={() => resetHoldingWeight(rec.code)}
+                                  >
+                                    ↺
+                                  </button>
+                                ) : null}
+                              </div>
+
+                              <div style={holdingCardValueRow}>
+                                <span>
+                                  Trade value:{' '}
+                                  {rec.changeValue !== null ? (
+                                    <strong>
+                                      {rec.changeValue > 0 ? '+' : ''}
+                                      {formatCurrency(rec.changeValue)}
+                                    </strong>
+                                  ) : (
+                                    <span style={tdMutedInline}>—</span>
+                                  )}
+                                </span>
+                                <span>
+                                  Units:{' '}
+                                  {rec.units !== null ? (
+                                    <strong>
+                                      {rec.units > 0 ? '+' : ''}
+                                      {rec.units.toLocaleString()}
+                                    </strong>
+                                  ) : (
+                                    <span style={tdMutedInline}>
+                                      {rec.changeValue !== null ? 'no price' : '—'}
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
+
+                              <p style={holdingCardRationale}>{rec.rationale}</p>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1764,4 +1891,70 @@ const holdingCardRationale = {
   fontSize: '12px',
   color: '#94a3b8',
   lineHeight: 1.4,
+}
+
+const cashBar = {
+  display: 'flex',
+  flexWrap: 'wrap' as const,
+  gap: '20px',
+  padding: '14px 16px',
+  borderRadius: '12px',
+  background: '#0b2447',
+  border: '1px solid #2d4a6b',
+  marginTop: '10px',
+  marginBottom: '18px',
+}
+
+const cashBarStat = {
+  display: 'flex',
+  flexDirection: 'column' as const,
+  gap: '4px',
+}
+
+const cashBarLabel = {
+  fontSize: '11px',
+  color: '#94a3b8',
+}
+
+const cashBarValue = {
+  fontSize: '20px',
+  fontWeight: 700,
+  color: '#e2e8f0',
+}
+
+const cashBarSubValue = {
+  fontSize: '12px',
+  fontWeight: 600,
+  opacity: 0.8,
+}
+
+const cashInput = {
+  width: '140px',
+  padding: '7px 10px',
+  borderRadius: '8px',
+  fontSize: '15px',
+  fontWeight: 700,
+  background: '#04142b',
+  border: '1px solid #2d4a6b',
+  color: '#4ade80',
+}
+
+const resultingPortfolioGrid = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+  gap: '20px',
+}
+
+const resultingColumn = {
+  display: 'flex',
+  flexDirection: 'column' as const,
+}
+
+const resultingColumnTitle = {
+  margin: '0 0 10px',
+  fontSize: '13px',
+  fontWeight: 700,
+  color: '#93c5fd',
+  textTransform: 'uppercase' as const,
+  letterSpacing: '0.03em',
 }

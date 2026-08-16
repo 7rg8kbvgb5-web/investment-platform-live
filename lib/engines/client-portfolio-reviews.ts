@@ -16,6 +16,7 @@ export type ClientPortfolioReviewState = {
   meta: ExtractionMeta
   riskOverride: RiskProfile | 'auto'
   manualPortfolioValue: string
+  additionalCash: string
   assetClassOverrides: AssetClassWeightOverrides
   holdingOverrides: HoldingWeightOverrides
 }
@@ -32,6 +33,7 @@ type ReviewRow = {
   client_name: string
   risk_override: string | null
   manual_portfolio_value: string | null
+  additional_cash: string | null
   holdings: UploadedHolding[]
   extraction_meta: ExtractionMeta
   asset_class_overrides: AssetClassWeightOverrides
@@ -49,6 +51,7 @@ function mapRow(row: ReviewRow): ClientPortfolioReview {
       meta: row.extraction_meta ?? { clientName: null, asAtDate: null, totalPortfolioValue: null },
       riskOverride: (row.risk_override as RiskProfile | 'auto' | null) ?? 'auto',
       manualPortfolioValue: row.manual_portfolio_value ?? '',
+      additionalCash: row.additional_cash ?? '',
       assetClassOverrides: row.asset_class_overrides ?? {},
       holdingOverrides: row.holding_overrides ?? {},
     },
@@ -92,6 +95,7 @@ export async function saveClientReview(
     client_name: clientName,
     risk_override: state.riskOverride,
     manual_portfolio_value: state.manualPortfolioValue,
+    additional_cash: state.additionalCash,
     holdings: state.holdings,
     extraction_meta: state.meta,
     asset_class_overrides: state.assetClassOverrides,
