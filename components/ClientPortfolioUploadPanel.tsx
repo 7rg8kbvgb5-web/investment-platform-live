@@ -16,6 +16,7 @@ import {
   computeGrowthDefensiveByProfile,
 } from '../lib/engines/model-portfolio-core'
 import { compareClientPortfolioToModel } from '../lib/engines/portfolio-review-comparison'
+import { computePortfolioYield } from '../lib/engines/yield-aggregation'
 import {
   applyClientWeightOverrides,
   type AssetClassWeightOverrides,
@@ -337,6 +338,19 @@ export default function ClientPortfolioUploadPanel() {
           })
         : null,
     [mappingResult.mappedHoldings, clientAdjustedModel, effectiveTotalPortfolioValue, prices],
+  )
+
+  // Aggregate yield/income for the target (post-rebalance) portfolio, at
+  // this client's actual dollar value where known. Uses clientAdjustedModel
+  // so any bespoke weight overrides above flow through into the income
+  // figures too - the yield picture always matches what's actually being
+  // proposed.
+  const yieldSummary = useMemo(
+    () =>
+      clientAdjustedModel
+        ? computePortfolioYield(clientAdjustedModel, effectiveTotalPortfolioValue ?? null)
+        : null,
+    [clientAdjustedModel, effectiveTotalPortfolioValue],
   )
 
   const pricesConnected = Object.values(prices).some((p) => p !== null && p !== undefined)
@@ -664,6 +678,83 @@ export default function ClientPortfolioUploadPanel() {
               </table>
             </div>
           </div>
+
+          {/* Target portfolio yield/income - post-rebalance, at this
+              client's actual dollar value where known, reflecting any
+              bespoke weight overrides above. */}
+          {yieldSummary ? (
+            <div style={subPanel}>
+              <p style={subHeading}>Target Portfolio Yield &amp; Income</p>
+              <p style={bodyText}>
+                Blended yield and estimated annual income if this client&apos;s
+                portfolio is brought fully in line with the {effectiveRiskProfile}{' '}
+                model as proposed above.
+              </p>
+              <div style={yieldOverviewRow}>
+                <div style={yieldOverviewStat}>
+                  <span style={yieldOverviewLabel}>Blended portfolio yield</span>
+                  <span style={yieldOverviewValue}>
+                    {yieldSummary.totalBlendedYieldPct !== null
+                      ? `${yieldSummary.totalBlendedYieldPct}%`
+                      : '—'}
+                  </span>
+                </div>
+                <div style={yieldOverviewStat}>
+                  <span style={yieldOverviewLabel}>Estimated annual income</span>
+                  <span style={yieldOverviewValue}>
+                    {yieldSummary.totalIncomeValue !== null
+                      ? formatCurrency(yieldSummary.totalIncomeValue)
+                      : effectiveTotalPortfolioValue
+                        ? '—'
+                        : 'Enter portfolio value above'}
+                  </span>
+                </div>
+                <div style={yieldOverviewStat}>
+                  <span style={yieldOverviewLabel}>Yield data coverage</span>
+                  <span style={yieldOverviewValue}>{yieldSummary.totalYieldCoveragePct}%</span>
+                </div>
+              </div>
+              <div style={tableWrap}>
+                <table style={table}>
+                  <thead>
+                    <tr>
+                      <th style={th}>Asset Class</th>
+                      <th style={th}>Weight</th>
+                      <th style={th}>Blended Yield</th>
+                      <th style={th}>Est. Annual Income</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {yieldSummary.assetClasses
+                      .filter((ac) => ac.weight > 0)
+                      .map((ac) => (
+                        <tr key={ac.assetClass}>
+                          <td style={td}>{ac.assetClass}</td>
+                          <td style={tdMuted}>{ac.weight}%</td>
+                          <td style={td}>
+                            {ac.blendedYieldPct !== null ? `${ac.blendedYieldPct}%` : '—'}
+                          </td>
+                          <td style={td}>
+                            {ac.incomeValue !== null ? (
+                              formatCurrency(ac.incomeValue)
+                            ) : (
+                              <span style={tdMutedInline}>—</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+              {yieldSummary.totalYieldCoveragePct < 100 ? (
+                <p style={tdMutedInline}>
+                  {100 - yieldSummary.totalYieldCoveragePct}% of the target portfolio (by
+                  weight) doesn&apos;t have a stated yield yet — add it on the Risk Profile
+                  tab to complete this picture.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
 
           {/* Holding-level recommendations */}
           <div style={subPanel}>
@@ -1193,4 +1284,28 @@ const resetAllButton = {
   cursor: 'pointer',
   padding: '4px 10px',
   borderRadius: '6px',
+}
+
+const yieldOverviewRow = {
+  display: 'flex',
+  gap: '20px',
+  flexWrap: 'wrap' as const,
+  margin: '10px 0 14px',
+}
+
+const yieldOverviewStat = {
+  display: 'flex',
+  flexDirection: 'column' as const,
+}
+
+const yieldOverviewLabel = {
+  fontSize: '11px',
+  color: '#94a3b8',
+}
+
+const yieldOverviewValue = {
+  fontSize: '20px',
+  fontWeight: 700,
+  color: '#4ade80',
+  marginTop: '2px',
 }

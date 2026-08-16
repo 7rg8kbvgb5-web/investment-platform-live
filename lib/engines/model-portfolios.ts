@@ -13,6 +13,8 @@ export type ModelHolding = {
   sector?: string;
   weight: number;
   rationale: string;
+  /** Trailing/indicative distribution yield, percent. Undefined if not stated. */
+  yield?: number;
 };
 
 export type ModelAssetClass = {

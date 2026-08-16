@@ -94,6 +94,8 @@ export type CoreSecurity = {
   rationale: string;
   inSecurityMaster: boolean;
   displayOrder: number;
+  /** Trailing/indicative distribution yield, percent. Null if not stated. */
+  yield: number | null;
 };
 
 type CoreSecurityRow = {
@@ -106,6 +108,7 @@ type CoreSecurityRow = {
   rationale: string;
   in_security_master: boolean;
   display_order: number;
+  yield: number | null;
 };
 
 function mapSecurityRow(row: CoreSecurityRow): CoreSecurity {
@@ -119,6 +122,7 @@ function mapSecurityRow(row: CoreSecurityRow): CoreSecurity {
     rationale: row.rationale,
     inSecurityMaster: row.in_security_master,
     displayOrder: row.display_order,
+    yield: row.yield === null || row.yield === undefined ? null : Number(row.yield),
   };
 }
 
@@ -243,6 +247,7 @@ export async function fetchModelPortfolio(riskProfile: RiskProfile): Promise<Mod
       sector: s.sector ?? undefined,
       weight: round2((targetWeight * s.inClassWeight) / 100),
       rationale: s.rationale,
+      yield: s.yield ?? undefined,
     }));
 
     return {
@@ -280,6 +285,7 @@ export async function addCoreSecurity(input: {
   sector?: string;
   rationale?: string;
   inSecurityMaster?: boolean;
+  yield?: number | null;
 }): Promise<CoreSecurity> {
   const { data, error } = await supabase
     .from(SECURITIES_TABLE)
@@ -292,6 +298,7 @@ export async function addCoreSecurity(input: {
       rationale: input.rationale ?? 'Added manually.',
       in_security_master: input.inSecurityMaster ?? false,
       display_order: 999,
+      yield: input.yield ?? null,
     })
     .select()
     .single();
@@ -300,6 +307,16 @@ export async function addCoreSecurity(input: {
     throw new Error(`Failed to add ${input.code}: ${error.message}`);
   }
   return mapSecurityRow(data as CoreSecurityRow);
+}
+
+export async function updateCoreSecurityYield(id: string, yieldPct: number | null): Promise<void> {
+  const { error } = await supabase
+    .from(SECURITIES_TABLE)
+    .update({ yield: yieldPct, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) {
+    throw new Error(`Failed to update security yield: ${error.message}`);
+  }
 }
 
 export async function removeCoreSecurity(id: string): Promise<void> {

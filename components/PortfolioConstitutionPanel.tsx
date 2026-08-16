@@ -8,10 +8,12 @@ import {
   fetchRiskProfileWeights,
   removeCoreSecurity,
   updateCoreSecurityInClassWeight,
+  updateCoreSecurityYield,
   updateRiskProfileAssetClassWeight,
   type CoreSecurity,
 } from '../lib/engines/model-portfolio-core';
 import { buildSecurityUniverse } from '../lib/engines/security-universe';
+import { computePortfolioYield } from '../lib/engines/yield-aggregation';
 import type { RiskProfile } from '../lib/engines/model-portfolios';
 import { useClientAdvice } from './ClientAdviceContext';
 import Panel from './ui/Panel';
@@ -111,6 +113,16 @@ export function PortfolioConstitutionPanel() {
     );
   }
 
+  function setHoldingYieldLocal(id: string, value: number | null) {
+    setSecurities((prev) => prev.map((s) => (s.id === id ? { ...s, yield: value } : s)));
+  }
+
+  async function saveHoldingYield(id: string) {
+    const sec = securities.find((s) => s.id === id);
+    if (!sec) return;
+    await withSaving(() => updateCoreSecurityYield(id, sec.yield));
+  }
+
   async function saveHoldingWeight(id: string) {
     const sec = securities.find((s) => s.id === id);
     if (!sec || !Number.isFinite(sec.inClassWeight)) return;
@@ -150,19 +162,66 @@ export function PortfolioConstitutionPanel() {
     }
   }
 
-  const [manualEntry, setManualEntry] = useState<Record<string, { code: string; name: string }>>({});
+  const [manualEntry, setManualEntry] = useState<
+    Record<string, { code: string; name: string; yield: string }>
+  >({});
+  const [lookupState, setLookupState] = useState<
+    Record<string, { loading: boolean; error: string | null; note: string | null }>
+  >({});
 
-  function updateManualEntry(assetClassName: string, field: 'code' | 'name', value: string) {
+  function updateManualEntry(assetClassName: string, field: 'code' | 'name' | 'yield', value: string) {
     setManualEntry((prev) => ({
       ...prev,
-      [assetClassName]: { code: '', name: '', ...prev[assetClassName], [field]: value },
+      [assetClassName]: { code: '', name: '', yield: '', ...prev[assetClassName], [field]: value },
     }));
+  }
+
+  async function handleLookup(assetClassName: string) {
+    const code = manualEntry[assetClassName]?.code?.trim();
+    if (!code) return;
+
+    setLookupState((prev) => ({ ...prev, [assetClassName]: { loading: true, error: null, note: null } }));
+    try {
+      const res = await fetch('/api/securities/lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error ?? 'Lookup failed.');
+
+      setManualEntry((prev) => ({
+        ...prev,
+        [assetClassName]: {
+          code,
+          name: data.result.name ?? prev[assetClassName]?.name ?? '',
+          yield:
+            typeof data.result.yield === 'number'
+              ? String(data.result.yield)
+              : prev[assetClassName]?.yield ?? '',
+        },
+      }));
+      setLookupState((prev) => ({
+        ...prev,
+        [assetClassName]: { loading: false, error: null, note: data.result.yieldNote ?? null },
+      }));
+    } catch (err) {
+      setLookupState((prev) => ({
+        ...prev,
+        [assetClassName]: {
+          loading: false,
+          error: err instanceof Error ? err.message : 'Lookup failed.',
+          note: null,
+        },
+      }));
+    }
   }
 
   async function handleManualAdd(assetClassName: string) {
     const entry = manualEntry[assetClassName];
     const code = entry?.code.trim().toUpperCase();
     const name = entry?.name.trim();
+    const yieldValue = entry?.yield?.trim();
     if (!code || !name) return;
 
     const added = await withSaving(() =>
@@ -172,11 +231,13 @@ export function PortfolioConstitutionPanel() {
         name,
         rationale: 'Added manually - not yet on the Approved List.',
         inSecurityMaster: false,
+        yield: yieldValue ? parseFloat(yieldValue) : null,
       })
     );
     if (added) {
       setSecurities((prev) => [...prev, added]);
-      setManualEntry((prev) => ({ ...prev, [assetClassName]: { code: '', name: '' } }));
+      setManualEntry((prev) => ({ ...prev, [assetClassName]: { code: '', name: '', yield: '' } }));
+      setLookupState((prev) => ({ ...prev, [assetClassName]: { loading: false, error: null, note: null } }));
     }
   }
 
@@ -192,6 +253,30 @@ export function PortfolioConstitutionPanel() {
     assetClasses.reduce((total, ac) => total + ac.targetWeight, 0)
   );
   const portfolioOk = Math.abs(portfolioTotal - 100) < 0.15;
+
+  // Weight-based yield rollup for the model itself - no dollar figures
+  // here since this view isn't tied to any one client's portfolio value
+  // (that happens in Construction, against the client's actual $).
+  const yieldSummary = computePortfolioYield({
+    riskProfile: selectedRiskProfile as RiskProfile,
+    objective: '',
+    growthWeight: 0,
+    defensiveWeight: 0,
+    assetClasses: assetClasses.map((ac) => ({
+      name: ac.name,
+      type: ac.type,
+      targetWeight: ac.targetWeight,
+      description: ac.description,
+      holdings: ac.holdings.map((h) => ({
+        code: h.code,
+        name: h.name,
+        sector: h.sector ?? undefined,
+        weight: round1((ac.targetWeight * h.inClassWeight) / 100),
+        rationale: h.rationale,
+        yield: h.yield ?? undefined,
+      })),
+    })),
+  });
 
   if (loading) {
     return (
@@ -226,6 +311,32 @@ export function PortfolioConstitutionPanel() {
       }
     >
       <p style={intro}>{OBJECTIVES[selectedRiskProfile] ?? ''}</p>
+
+      <div style={yieldSummaryBox}>
+        <div style={yieldSummaryHeader}>
+          <span style={yieldSummaryTitle}>Portfolio Yield ({selectedRiskProfile})</span>
+          <span style={yieldSummaryCoverage}>
+            {yieldSummary.totalYieldCoveragePct}% of weight has a stated yield
+          </span>
+        </div>
+        <div style={yieldSummaryValue}>
+          {yieldSummary.totalBlendedYieldPct !== null
+            ? `${yieldSummary.totalBlendedYieldPct}% blended`
+            : 'No yield data yet'}
+        </div>
+        <div style={yieldClassGrid}>
+          {yieldSummary.assetClasses
+            .filter((ac) => ac.weight > 0)
+            .map((ac) => (
+              <div key={ac.assetClass} style={yieldClassChip}>
+                <span style={yieldClassChipName}>{ac.assetClass}</span>
+                <span style={yieldClassChipValue}>
+                  {ac.blendedYieldPct !== null ? `${ac.blendedYieldPct}%` : '—'}
+                </span>
+              </div>
+            ))}
+        </div>
+      </div>
 
       <StatusBox variant="neutral" display="inline">
         Securities and their in-class weightings are the shared core model —
@@ -348,6 +459,24 @@ export function PortfolioConstitutionPanel() {
                         of {selectedRiskProfile}
                       </span>
                     </div>
+                    <div style={holdingWeightRow}>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={holding.yield ?? ''}
+                        placeholder="—"
+                        onChange={(e) =>
+                          setHoldingYieldLocal(
+                            holding.id,
+                            e.target.value === '' ? null : parseFloat(e.target.value)
+                          )
+                        }
+                        onBlur={() => saveHoldingYield(holding.id)}
+                        style={holdingYieldInput}
+                        aria-label={`${holding.name} yield`}
+                      />
+                      <span style={weightPercentSign}>% yield</span>
+                    </div>
                   </li>
                 ))}
                 {assetClass.holdings.length === 0 && (
@@ -398,12 +527,28 @@ export function PortfolioConstitutionPanel() {
                   onChange={(e) => updateManualEntry(assetClass.name, 'code', e.target.value)}
                   style={manualCodeInput}
                 />
+                <button
+                  type="button"
+                  onClick={() => handleLookup(assetClass.name)}
+                  disabled={lookupState[assetClass.name]?.loading}
+                  style={lookupButton}
+                >
+                  {lookupState[assetClass.name]?.loading ? 'Looking up…' : 'Look up'}
+                </button>
                 <input
                   type="text"
                   placeholder="Security name"
                   value={manualEntry[assetClass.name]?.name ?? ''}
                   onChange={(e) => updateManualEntry(assetClass.name, 'name', e.target.value)}
                   style={manualNameInput}
+                />
+                <input
+                  type="number"
+                  step="0.1"
+                  placeholder="Yield %"
+                  value={manualEntry[assetClass.name]?.yield ?? ''}
+                  onChange={(e) => updateManualEntry(assetClass.name, 'yield', e.target.value)}
+                  style={manualYieldInput}
                 />
                 <button
                   type="button"
@@ -413,6 +558,12 @@ export function PortfolioConstitutionPanel() {
                   Add
                 </button>
               </div>
+              {lookupState[assetClass.name]?.error && (
+                <p style={lookupErrorText}>{lookupState[assetClass.name]?.error}</p>
+              )}
+              {lookupState[assetClass.name]?.note && (
+                <p style={lookupNoteText}>{lookupState[assetClass.name]?.note}</p>
+              )}
               {candidates.length === 0 && (
                 <p style={emptyText}>
                   No suggested candidates on file for {assetClass.name} yet — add by code and name above.
@@ -759,4 +910,112 @@ const manualAddButton = {
   border: '1px solid #10b981',
   color: '#86efac',
   cursor: 'pointer',
+};
+
+const holdingYieldInput = {
+  width: '60px',
+  padding: '5px 8px',
+  borderRadius: '6px',
+  fontSize: '12px',
+  fontWeight: 700,
+  background: '#12345b',
+  border: '1px solid #2d4a6b',
+  color: '#4ade80',
+};
+
+const lookupButton = {
+  padding: '8px 12px',
+  borderRadius: '8px',
+  fontSize: '12px',
+  fontWeight: 600,
+  background: '#0b2447',
+  border: '1px solid #60a5fa',
+  color: '#93c5fd',
+  cursor: 'pointer',
+  whiteSpace: 'nowrap' as const,
+};
+
+const manualYieldInput = {
+  width: '80px',
+  padding: '8px 10px',
+  borderRadius: '8px',
+  fontSize: '13px',
+  background: '#0b2342',
+  border: '1px solid #2d4a6b',
+  color: '#4ade80',
+};
+
+const lookupErrorText = {
+  margin: '6px 0 0',
+  fontSize: '11px',
+  color: '#fca5a5',
+};
+
+const lookupNoteText = {
+  margin: '6px 0 0',
+  fontSize: '11px',
+  color: '#64748b',
+  fontStyle: 'italic' as const,
+};
+
+const yieldSummaryBox = {
+  padding: '12px 14px',
+  borderRadius: '10px',
+  background: '#0b2447',
+  border: '1px solid #2d4a6b',
+  marginBottom: '16px',
+};
+
+const yieldSummaryHeader = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'baseline',
+};
+
+const yieldSummaryTitle = {
+  fontSize: '12px',
+  fontWeight: 700,
+  color: '#93c5fd',
+  textTransform: 'uppercase' as const,
+  letterSpacing: '0.03em',
+};
+
+const yieldSummaryCoverage = {
+  fontSize: '11px',
+  color: '#64748b',
+};
+
+const yieldSummaryValue = {
+  fontSize: '22px',
+  fontWeight: 700,
+  color: '#4ade80',
+  marginTop: '4px',
+};
+
+const yieldClassGrid = {
+  display: 'flex',
+  flexWrap: 'wrap' as const,
+  gap: '8px',
+  marginTop: '10px',
+};
+
+const yieldClassChip = {
+  display: 'flex',
+  flexDirection: 'column' as const,
+  padding: '6px 10px',
+  borderRadius: '8px',
+  background: '#04142b',
+  border: '1px solid #1e3a5f',
+  minWidth: '110px',
+};
+
+const yieldClassChipName = {
+  fontSize: '10px',
+  color: '#94a3b8',
+};
+
+const yieldClassChipValue = {
+  fontSize: '13px',
+  fontWeight: 700,
+  color: '#e2e8f0',
 };

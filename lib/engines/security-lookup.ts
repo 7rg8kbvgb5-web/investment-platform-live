@@ -1,0 +1,84 @@
+import Anthropic from '@anthropic-ai/sdk'
+
+export type SecurityLookupResult = {
+  code: string
+  name: string | null
+  sector: string | null
+  /** Trailing/indicative distribution yield, percent (e.g. 5.2 for 5.2%). Null if not found or the security doesn't distribute. */
+  yield: number | null
+  /** Short note on where the yield figure came from / how current it is, for adviser judgement - not stored, display only. */
+  yieldNote: string | null
+}
+
+const SYSTEM_PROMPT = `You are a market data lookup assistant for Ord Minnett private wealth advisers.
+Given a single ASX (or, if clearly specified, other exchange) ticker code, use web search to find:
+1. The company/fund's full legal or common trading name.
+2. Its primary GICS-style sector (e.g. "Financials", "Materials", "Consumer Staples").
+3. Its current trailing or most recently declared distribution/dividend yield, as a percent (grossed-up/franked figure not required - use the plain trailing yield most commonly quoted).
+
+This is a data lookup only - never provide investment advice or commentary beyond the requested facts.
+
+After searching, respond with ONLY a JSON object and nothing else - no markdown fences, no preamble:
+{
+  "name": string | null,
+  "sector": string | null,
+  "yield": number | null,
+  "yieldNote": string | null
+}
+If you cannot find a field confidently, return null for it rather than guessing. yieldNote should be a short (under 15 words) note on the yield figure's source/timing, e.g. "FY25 trailing yield, as at Aug 2026" - or null if yield is null.`
+
+function extractJsonObject(text: string): string {
+  const withoutFences = text.replace(/```json|```/g, '').trim()
+  const firstBrace = withoutFences.indexOf('{')
+  const lastBrace = withoutFences.lastIndexOf('}')
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace < firstBrace) return withoutFences
+  return withoutFences.slice(firstBrace, lastBrace + 1)
+}
+
+export async function lookupSecurity(code: string): Promise<SecurityLookupResult> {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) {
+    throw new Error('ANTHROPIC_API_KEY is not configured.')
+  }
+
+  const trimmedCode = code.trim().toUpperCase()
+  if (!trimmedCode) {
+    throw new Error('No ticker code supplied.')
+  }
+
+  const client = new Anthropic({ apiKey })
+
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 2000,
+    system: SYSTEM_PROMPT,
+    messages: [
+      {
+        role: 'user',
+        content: `Ticker: ${trimmedCode}. Assume ASX-listed unless the code is clearly not an ASX code. Look it up and return the JSON.`,
+      },
+    ],
+    tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+  })
+
+  const textBlocks = response.content.filter(
+    (block): block is Extract<typeof block, { type: 'text' }> => block.type === 'text',
+  )
+  const rawText = textBlocks.length > 0 ? textBlocks[textBlocks.length - 1].text : '{}'
+  const cleaned = extractJsonObject(rawText)
+
+  let parsed: { name?: string | null; sector?: string | null; yield?: number | null; yieldNote?: string | null }
+  try {
+    parsed = JSON.parse(cleaned)
+  } catch {
+    parsed = {}
+  }
+
+  return {
+    code: trimmedCode,
+    name: parsed.name ?? null,
+    sector: parsed.sector ?? null,
+    yield: typeof parsed.yield === 'number' ? parsed.yield : null,
+    yieldNote: parsed.yieldNote ?? null,
+  }
+}
