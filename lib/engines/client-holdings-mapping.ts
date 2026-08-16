@@ -27,10 +27,21 @@ export type HoldingsMappingResult = {
   unknownWeight: number
 }
 
-export function mapClientHoldings(
+export const EMPTY_HOLDINGS_MAPPING_RESULT: HoldingsMappingResult = {
+  mappedHoldings: [],
+  mappedCount: 0,
+  unmappedCount: 0,
+  sectorExposure: {},
+  assetClassExposure: {},
+  growthWeight: 0,
+  defensiveWeight: 0,
+  unknownWeight: 0,
+}
+
+export async function mapClientHoldings(
   holdings: UploadedHolding[],
-): HoldingsMappingResult {
-  const universe = buildSecurityUniverse()
+): Promise<HoldingsMappingResult> {
+  const universe = await buildSecurityUniverse()
   const mappedHoldings: MappedHolding[] = []
 
   const sectorExposure: Record<string, number> = {}

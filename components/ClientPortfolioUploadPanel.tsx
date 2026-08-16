@@ -6,7 +6,11 @@ import {
   type ParsedPortfolioUpload,
   type UploadedHolding,
 } from '../lib/engines/client-portfolio-upload'
-import { mapClientHoldings } from '../lib/engines/client-holdings-mapping'
+import {
+  mapClientHoldings,
+  EMPTY_HOLDINGS_MAPPING_RESULT,
+  type HoldingsMappingResult,
+} from '../lib/engines/client-holdings-mapping'
 import { classifyPortfolioRiskProfile } from '../lib/engines/portfolio-risk-classification'
 import type { RiskProfile, ModelPortfolio } from '../lib/engines/model-portfolios'
 import {
@@ -177,7 +181,29 @@ export default function ClientPortfolioUploadPanel() {
     setWarnings(result.warnings)
   }
 
-  const mappingResult = useMemo(() => mapClientHoldings(holdings), [holdings])
+  const [mappingResult, setMappingResult] = useState<HoldingsMappingResult>(
+    EMPTY_HOLDINGS_MAPPING_RESULT,
+  )
+  const [mappingLoading, setMappingLoading] = useState(false)
+
+  useEffect(() => {
+    if (holdings.length === 0) {
+      setMappingResult(EMPTY_HOLDINGS_MAPPING_RESULT)
+      return
+    }
+    let cancelled = false
+    setMappingLoading(true)
+    mapClientHoldings(holdings)
+      .then((result) => {
+        if (!cancelled) setMappingResult(result)
+      })
+      .finally(() => {
+        if (!cancelled) setMappingLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [holdings])
 
   const growthDefensiveByProfile = useMemo(
     () => (allWeights ? computeGrowthDefensiveByProfile(allWeights) : null),
@@ -681,6 +707,10 @@ export default function ClientPortfolioUploadPanel() {
 
       {hasHoldings && (modelLoading || !allWeights) && !modelError ? (
         <StatusBox variant="neutral">Loading the live model portfolio…</StatusBox>
+      ) : null}
+
+      {hasHoldings && mappingLoading ? (
+        <StatusBox variant="neutral">Mapping holdings against the security universe…</StatusBox>
       ) : null}
 
       {hasHoldings && model && comparison && riskClassification && effectiveRiskProfile ? (

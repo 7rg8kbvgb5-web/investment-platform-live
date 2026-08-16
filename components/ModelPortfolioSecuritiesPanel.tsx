@@ -10,7 +10,7 @@ import {
   updateCoreSecurityYield,
   type CoreSecurity,
 } from '../lib/engines/model-portfolio-core';
-import { buildSecurityUniverse } from '../lib/engines/security-universe';
+import { buildSecurityUniverse, type SecurityUniverseEntry } from '../lib/engines/security-universe';
 import { stripExchangeSuffix } from '../lib/engines/security-lookup';
 import { computeConvictionRating, type ConvictionRating } from '../lib/engines/conviction-rating';
 import Panel from './ui/Panel';
@@ -33,6 +33,7 @@ export function ModelPortfolioSecuritiesPanel() {
   const [savingCount, setSavingCount] = useState(0);
   const [convictions, setConvictions] = useState<Record<string, ConvictionRating>>({});
   const [convictionsLoading, setConvictionsLoading] = useState(true);
+  const [universe, setUniverse] = useState<SecurityUniverseEntry[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,7 +56,15 @@ export function ModelPortfolioSecuritiesPanel() {
     };
   }, []);
 
-  const universe = useMemo(() => Array.from(buildSecurityUniverse().values()), []);
+  useEffect(() => {
+    let cancelled = false;
+    buildSecurityUniverse().then((map) => {
+      if (!cancelled) setUniverse(Array.from(map.values()));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [securities]);
 
   useEffect(() => {
     if (securities.length === 0) return;
