@@ -14,6 +14,7 @@ import {
 } from '../lib/engines/model-portfolio-core';
 import { buildSecurityUniverse } from '../lib/engines/security-universe';
 import { computePortfolioYield } from '../lib/engines/yield-aggregation';
+import { stripExchangeSuffix } from '../lib/engines/security-lookup';
 import type { RiskProfile } from '../lib/engines/model-portfolios';
 import { useClientAdvice } from './ClientAdviceContext';
 import Panel from './ui/Panel';
@@ -177,8 +178,9 @@ export function PortfolioConstitutionPanel() {
   }
 
   async function handleLookup(assetClassName: string) {
-    const code = manualEntry[assetClassName]?.code?.trim();
-    if (!code) return;
+    const rawCode = manualEntry[assetClassName]?.code?.trim();
+    if (!rawCode) return;
+    const code = stripExchangeSuffix(rawCode);
 
     setLookupState((prev) => ({ ...prev, [assetClassName]: { loading: true, error: null, note: null } }));
     try {
@@ -190,6 +192,9 @@ export function PortfolioConstitutionPanel() {
       const data = await res.json();
       if (!data.ok) throw new Error(data.error ?? 'Lookup failed.');
 
+      // Clean the code field itself too - the code that ends up saved
+      // needs to be the bare ticker, or it won't match a client's actual
+      // holding statement later on (which won't carry a ".ASX" suffix).
       setManualEntry((prev) => ({
         ...prev,
         [assetClassName]: {
@@ -201,9 +206,17 @@ export function PortfolioConstitutionPanel() {
               : prev[assetClassName]?.yield ?? '',
         },
       }));
+
+      const foundNothing = data.result.name === null && data.result.yield === null;
       setLookupState((prev) => ({
         ...prev,
-        [assetClassName]: { loading: false, error: null, note: data.result.yieldNote ?? null },
+        [assetClassName]: {
+          loading: false,
+          error: foundNothing
+            ? `Couldn't find "${code}" — check the ticker, or fill in name and yield manually.`
+            : null,
+          note: data.result.yieldNote ?? null,
+        },
       }));
     } catch (err) {
       setLookupState((prev) => ({
@@ -219,7 +232,7 @@ export function PortfolioConstitutionPanel() {
 
   async function handleManualAdd(assetClassName: string) {
     const entry = manualEntry[assetClassName];
-    const code = entry?.code.trim().toUpperCase();
+    const code = entry?.code ? stripExchangeSuffix(entry.code) : '';
     const name = entry?.name.trim();
     const yieldValue = entry?.yield?.trim();
     if (!code || !name) return;

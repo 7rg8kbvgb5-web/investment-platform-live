@@ -1,5 +1,20 @@
 import Anthropic from '@anthropic-ai/sdk'
 
+/**
+ * Strips exchange suffixes that aren't part of the actual ticker code
+ * (e.g. Yahoo Finance-style ".AX"/".ASX", or ".AU"). The rest of the app
+ * works with bare codes (a client's holding statement says "FMG", not
+ * "FMG.ASX"), so anything entered with a suffix needs cleaning before it
+ * goes anywhere near a lookup, a save, or the comparison engine - a
+ * mismatched code here would silently break matching downstream.
+ */
+export function stripExchangeSuffix(code: string): string {
+  return code
+    .trim()
+    .toUpperCase()
+    .replace(/\.(ASX|AX|AU|AXW)$/, '')
+}
+
 export type SecurityLookupResult = {
   code: string
   name: string | null
@@ -11,7 +26,7 @@ export type SecurityLookupResult = {
 }
 
 const SYSTEM_PROMPT = `You are a market data lookup assistant for Ord Minnett private wealth advisers.
-Given a single ASX (or, if clearly specified, other exchange) ticker code, use web search to find:
+Given a single ticker code (bare ASX codes have no suffix - e.g. "FMG" not "FMG.ASX" or "FMG.AX" - if a suffix is present it has already been stripped before reaching you), use web search to find:
 1. The company/fund's full legal or common trading name.
 2. Its primary GICS-style sector (e.g. "Financials", "Materials", "Consumer Staples").
 3. Its current trailing or most recently declared distribution/dividend yield, as a percent (grossed-up/franked figure not required - use the plain trailing yield most commonly quoted).
@@ -41,7 +56,7 @@ export async function lookupSecurity(code: string): Promise<SecurityLookupResult
     throw new Error('ANTHROPIC_API_KEY is not configured.')
   }
 
-  const trimmedCode = code.trim().toUpperCase()
+  const trimmedCode = stripExchangeSuffix(code)
   if (!trimmedCode) {
     throw new Error('No ticker code supplied.')
   }
