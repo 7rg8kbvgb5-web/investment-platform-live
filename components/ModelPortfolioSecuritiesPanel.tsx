@@ -8,7 +8,10 @@ import {
   removeCoreSecurity,
   updateCoreSecurityInClassWeight,
   updateCoreSecurityYield,
+  updateCoreSecurityHoldingType,
+  HOLDING_TYPE_LABELS,
   type CoreSecurity,
+  type HoldingType,
 } from '../lib/engines/model-portfolio-core';
 import { buildSecurityUniverse, type SecurityUniverseEntry } from '../lib/engines/security-universe';
 import { stripExchangeSuffix } from '../lib/engines/security-lookup';
@@ -160,6 +163,11 @@ export function ModelPortfolioSecuritiesPanel() {
     const sec = securities.find((s) => s.id === id);
     if (!sec) return;
     await withSaving(() => updateCoreSecurityYield(id, sec.yield));
+  }
+
+  async function changeHoldingType(id: string, holdingType: HoldingType) {
+    setSecurities((prev) => prev.map((s) => (s.id === id ? { ...s, holdingType } : s)));
+    await withSaving(() => updateCoreSecurityHoldingType(id, holdingType));
   }
 
   function setHoldingWeightLocal(id: string, value: number) {
@@ -556,6 +564,18 @@ export function ModelPortfolioSecuritiesPanel() {
                       <span style={holdingCode}>{holding.code}</span>
                       <span style={holdingName}>{holding.name}</span>
                       {holding.sector && <span style={sectorTag}>{holding.sector}</span>}
+                      <select
+                        value={holding.holdingType}
+                        onChange={(e) => changeHoldingType(holding.id, e.target.value as HoldingType)}
+                        style={holdingTypeSelect}
+                        aria-label={`${holding.name} holding type`}
+                      >
+                        {(Object.keys(HOLDING_TYPE_LABELS) as HoldingType[]).map((type) => (
+                          <option key={type} value={type}>
+                            {HOLDING_TYPE_LABELS[type]}
+                          </option>
+                        ))}
+                      </select>
                       <button
                         type="button"
                         onClick={() => handleRemove(holding)}
@@ -1045,6 +1065,17 @@ const holdingName = {
 const sectorTag = {
   fontSize: '11px',
   color: '#94a3b8',
+};
+
+const holdingTypeSelect = {
+  padding: '2px 6px',
+  borderRadius: '6px',
+  fontSize: '10px',
+  fontWeight: 600,
+  background: '#12203a',
+  border: '1px solid #2d4a6b',
+  color: '#93c5fd',
+  cursor: 'pointer',
 };
 
 function convictionBadge(houseView: string | null) {

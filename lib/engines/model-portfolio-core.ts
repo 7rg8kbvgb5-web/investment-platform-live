@@ -84,6 +84,23 @@ const OBJECTIVES: Record<RiskProfile, string> = {
     'Designed for investors with a long investment timeframe seeking maximum long-term growth and a high tolerance for volatility.',
 };
 
+export type HoldingType =
+  | 'direct_equity'
+  | 'listed_fund'
+  | 'unlisted_fund'
+  | 'direct_bond'
+  | 'cash'
+  | 'other';
+
+export const HOLDING_TYPE_LABELS: Record<HoldingType, string> = {
+  direct_equity: 'Direct Equity',
+  listed_fund: 'Listed Fund',
+  unlisted_fund: 'Unlisted Fund',
+  direct_bond: 'Direct Bond',
+  cash: 'Cash',
+  other: 'Other',
+};
+
 export type CoreSecurity = {
   id: string;
   assetClass: string;
@@ -96,6 +113,7 @@ export type CoreSecurity = {
   displayOrder: number;
   /** Forward (estimated, current FY) distribution yield, percent. Null if not stated. */
   yield: number | null;
+  holdingType: HoldingType;
 };
 
 type CoreSecurityRow = {
@@ -109,6 +127,7 @@ type CoreSecurityRow = {
   in_security_master: boolean;
   display_order: number;
   yield: number | null;
+  holding_type: HoldingType;
 };
 
 function mapSecurityRow(row: CoreSecurityRow): CoreSecurity {
@@ -123,6 +142,7 @@ function mapSecurityRow(row: CoreSecurityRow): CoreSecurity {
     inSecurityMaster: row.in_security_master,
     displayOrder: row.display_order,
     yield: row.yield === null || row.yield === undefined ? null : Number(row.yield),
+    holdingType: row.holding_type ?? 'direct_equity',
   };
 }
 
@@ -286,6 +306,7 @@ export async function addCoreSecurity(input: {
   rationale?: string;
   inSecurityMaster?: boolean;
   yield?: number | null;
+  holdingType?: HoldingType;
 }): Promise<CoreSecurity> {
   const { data, error } = await supabase
     .from(SECURITIES_TABLE)
@@ -299,6 +320,7 @@ export async function addCoreSecurity(input: {
       in_security_master: input.inSecurityMaster ?? false,
       display_order: 999,
       yield: input.yield ?? null,
+      holding_type: input.holdingType ?? 'direct_equity',
     })
     .select()
     .single();
@@ -316,6 +338,16 @@ export async function updateCoreSecurityYield(id: string, yieldPct: number | nul
     .eq('id', id);
   if (error) {
     throw new Error(`Failed to update security yield: ${error.message}`);
+  }
+}
+
+export async function updateCoreSecurityHoldingType(id: string, holdingType: HoldingType): Promise<void> {
+  const { error } = await supabase
+    .from(SECURITIES_TABLE)
+    .update({ holding_type: holdingType, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) {
+    throw new Error(`Failed to update holding type: ${error.message}`);
   }
 }
 
