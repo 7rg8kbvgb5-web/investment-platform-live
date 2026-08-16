@@ -1,4 +1,5 @@
-import { modelPortfolios, type ModelHolding } from './model-portfolios';
+import { fetchCoreSecurities } from './model-portfolio-core';
+import type { ModelHolding } from './model-portfolios';
 import {
   getQuote,
   getFundamentals,
@@ -28,15 +29,19 @@ export function isQuotableCode(code: string): boolean {
   return /^[A-Z]{2,5}$/.test(code);
 }
 
-export function dedupeHoldings(): ModelHolding[] {
+export async function dedupeHoldings(): Promise<ModelHolding[]> {
+  const securities = await fetchCoreSecurities();
   const seen = new Map<string, ModelHolding>();
-  for (const portfolio of modelPortfolios) {
-    for (const assetClass of portfolio.assetClasses) {
-      for (const holding of assetClass.holdings) {
-        if (!seen.has(holding.code)) {
-          seen.set(holding.code, { ...holding, sector: assetClass.name });
-        }
-      }
+  for (const security of securities) {
+    if (!seen.has(security.code)) {
+      seen.set(security.code, {
+        code: security.code,
+        name: security.name,
+        sector: security.assetClass,
+        weight: security.inClassWeight,
+        rationale: security.rationale,
+        yield: security.yield ?? undefined,
+      });
     }
   }
   return Array.from(seen.values());
@@ -85,7 +90,7 @@ export async function getQuotesForCodes(
 }
 
 export async function getModelPortfolioMarketData(): Promise<HoldingMarketData[]> {
-  const holdings = dedupeHoldings();
+  const holdings = await dedupeHoldings();
 
   if (!isEodhdConfigured()) {
     return holdings.map((holding) => ({

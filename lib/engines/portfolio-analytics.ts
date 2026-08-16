@@ -1,4 +1,4 @@
-import { modelPortfolios } from './model-portfolios';
+import { ASSET_CLASSES } from './model-portfolio-core';
 import { dedupeHoldings, isQuotableCode } from './market-data';
 import { getHistoricalEod, toEodhdTicker, isEodhdConfigured } from '../eodhd-client';
 import {
@@ -92,7 +92,8 @@ async function realReturns(code: string): Promise<number[] | null> {
 }
 
 export async function getPortfolioAnalytics(): Promise<PortfolioAnalytics> {
-  const holdings = dedupeHoldings().filter((h) => isQuotableCode(h.code));
+  const allHoldings = await dedupeHoldings();
+  const holdings = allHoldings.filter((h) => isQuotableCode(h.code));
   const connected = isEodhdConfigured();
 
   const returnsByCode: Record<string, number[]> = {};
@@ -100,7 +101,7 @@ export async function getPortfolioAnalytics(): Promise<PortfolioAnalytics> {
 
   for (const holding of holdings) {
     const assetClassType =
-      modelPortfolios[2].assetClasses.find((ac) => ac.name === holding.sector)?.type ?? 'Growth';
+      ASSET_CLASSES.find((ac) => ac.name === holding.sector)?.type ?? 'Growth';
 
     let returns: number[] | null = null;
     if (connected) {

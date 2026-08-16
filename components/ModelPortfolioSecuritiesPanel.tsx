@@ -14,6 +14,8 @@ import { buildSecurityUniverse, type SecurityUniverseEntry } from '../lib/engine
 import { stripExchangeSuffix } from '../lib/engines/security-lookup';
 import { computeConvictionRating, type ConvictionRating } from '../lib/engines/conviction-rating';
 import type { TacticalAssetClassView } from '../lib/engines/tactical-asset-view';
+import { averagePairwiseCorrelation } from '../lib/engines/portfolio-statistics';
+import type { PortfolioAnalytics } from '../lib/engines/portfolio-analytics';
 import {
   HoldingMetricGrid,
   HoldingMetricCell,
@@ -43,6 +45,20 @@ export function ModelPortfolioSecuritiesPanel() {
   const [tacticalView, setTacticalView] = useState<TacticalAssetClassView | null>(null);
   const [tacticalScanning, setTacticalScanning] = useState(false);
   const [tacticalError, setTacticalError] = useState<string | null>(null);
+  const [analytics, setAnalytics] = useState<PortfolioAnalytics | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(true);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/analytics/portfolio')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.ok) setAnalytics(data.analytics);
+        else setAnalyticsError(data.error ?? 'Failed to load correlation data.');
+      })
+      .catch((err) => setAnalyticsError(err instanceof Error ? err.message : 'Failed to load correlation data.'))
+      .finally(() => setAnalyticsLoading(false));
+  }, []);
 
   useEffect(() => {
     fetch('/api/tactical-view/latest')
@@ -351,33 +367,6 @@ export function ModelPortfolioSecuritiesPanel() {
         </StatusBox>
       )}
 
-      <div style={tacticalInlineHeader}>
-        <span style={tacticalInlineTitle}>Live Global Asset Class View</span>
-        {tacticalView && (
-          <span style={tacticalTimestamp}>
-            {new Date(tacticalView.generatedAt).toLocaleString('en-AU', {
-              day: 'numeric',
-              month: 'short',
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </span>
-        )}
-        <button
-          type="button"
-          onClick={runTacticalScan}
-          disabled={tacticalScanning}
-          style={tacticalScanButton}
-        >
-          {tacticalScanning ? 'Scanning…' : 'Run scan'}
-        </button>
-      </div>
-      {tacticalError && (
-        <StatusBox variant="error" display="inline">
-          {tacticalError}
-        </StatusBox>
-      )}
-
       <div style={statsRow}>
         <div style={statBox}>
           <span style={statLabel}>Securities</span>
@@ -395,12 +384,83 @@ export function ModelPortfolioSecuritiesPanel() {
           <span style={statLabel}>Yield data coverage</span>
           <span style={statValue}>{yieldCoveragePct}%</span>
         </div>
-        {tacticalView?.calls.map((call) => (
-          <div key={call.assetClass} title={call.rationale} style={statBox}>
-            <span style={statLabel}>{call.assetClass}</span>
-            <span style={tacticalStanceTag(call.stance)}>{call.stance}</span>
+        <div style={tacticalTableBox}>
+          <div style={tacticalTableBoxHeader}>
+            <span style={statLabel}>Live Global Asset Class View</span>
+            <div style={tacticalHeaderRight}>
+              {tacticalView && (
+                <span style={tacticalTimestamp}>
+                  {new Date(tacticalView.generatedAt).toLocaleString('en-AU', {
+                    day: 'numeric',
+                    month: 'short',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={runTacticalScan}
+                disabled={tacticalScanning}
+                style={tacticalScanButton}
+              >
+                {tacticalScanning ? '…' : 'Run scan'}
+              </button>
+            </div>
           </div>
-        ))}
+          {tacticalError && (
+            <StatusBox variant="error" display="inline">
+              {tacticalError}
+            </StatusBox>
+          )}
+          {!tacticalView && !tacticalError ? (
+            <p style={emptyText}>No scan run yet.</p>
+          ) : (
+            <table style={tacticalTable}>
+              <tbody>
+                {tacticalView?.calls.map((call) => (
+                  <tr key={call.assetClass} title={call.rationale}>
+                    <td style={tacticalTableTd}>{call.assetClass}</td>
+                    <td style={tacticalTableTdRight}>
+                      <span style={tacticalStanceTag(call.stance)}>{call.stance}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      <div style={correlationBox}>
+        <div style={correlationBoxHeader}>
+          <span style={statLabel}>Model Portfolio Correlation Rating</span>
+          {analytics && !analytics.connected && (
+            <span style={illustrativeTag}>Illustrative — connect EODHD for live data</span>
+          )}
+        </div>
+        {analyticsLoading ? (
+          <p style={emptyText}>Loading correlation data…</p>
+        ) : analyticsError ? (
+          <p style={emptyText}>{analyticsError}</p>
+        ) : analytics && analytics.assetClassCorrelation.codes.length > 1 ? (
+          (() => {
+            const avgCorrelation = averagePairwiseCorrelation(analytics.assetClassCorrelation.matrix);
+            const rating = Math.max(0, Math.round(100 - Math.abs(avgCorrelation) * 100));
+            const ratingColor = rating >= 70 ? '#4ade80' : rating >= 40 ? '#fbbf24' : '#fca5a5';
+            return (
+              <div style={correlationContent}>
+                <span style={{ ...correlationRatingValue, color: ratingColor }}>{rating}/100</span>
+                <span style={correlationSubtext}>
+                  Average cross-asset-class correlation: {avgCorrelation.toFixed(2)} (0 = a
+                  perfectly diversified, uncorrelated allocation)
+                </span>
+              </div>
+            );
+          })()
+        ) : (
+          <p style={emptyText}>Add securities across at least two asset classes to compute this.</p>
+        )}
       </div>
 
       <div style={overviewRow}>
@@ -691,20 +751,30 @@ const statValue = {
   marginTop: '2px',
 };
 
-const tacticalInlineHeader = {
+const tacticalTableBox = {
   display: 'flex',
-  alignItems: 'center',
-  flexWrap: 'wrap' as const,
-  gap: '10px',
-  marginBottom: '10px',
+  flexDirection: 'column' as const,
+  padding: '10px 16px',
+  borderRadius: '10px',
+  background: '#0b2447',
+  border: '1px solid #2d4a6b',
+  minWidth: '220px',
+  flex: '1 1 260px',
 };
 
-const tacticalInlineTitle = {
-  fontSize: '11px',
-  fontWeight: 700,
-  color: '#93c5fd',
-  textTransform: 'uppercase' as const,
-  letterSpacing: '0.03em',
+const tacticalTableBoxHeader = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  flexWrap: 'wrap' as const,
+  gap: '8px',
+  marginBottom: '6px',
+};
+
+const tacticalHeaderRight = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
 };
 
 const tacticalTimestamp = {
@@ -713,7 +783,7 @@ const tacticalTimestamp = {
 };
 
 const tacticalScanButton = {
-  padding: '4px 10px',
+  padding: '3px 10px',
   borderRadius: '6px',
   fontSize: '11px',
   fontWeight: 700,
@@ -721,6 +791,22 @@ const tacticalScanButton = {
   border: '1px solid #10b981',
   color: '#86efac',
   cursor: 'pointer',
+};
+
+const tacticalTable = {
+  width: '100%',
+  borderCollapse: 'collapse' as const,
+};
+
+const tacticalTableTd = {
+  padding: '3px 0',
+  fontSize: '12px',
+  color: '#e2e8f0',
+};
+
+const tacticalTableTdRight = {
+  ...tacticalTableTd,
+  textAlign: 'right' as const,
 };
 
 function tacticalStanceTag(stance: 'OW' | 'N' | 'UW') {
@@ -734,15 +820,54 @@ function tacticalStanceTag(stance: 'OW' | 'N' | 'UW') {
     display: 'inline-block',
     padding: '2px 8px',
     borderRadius: '999px',
-    fontSize: '13px',
+    fontSize: '11px',
     fontWeight: 700,
     background: c.bg,
     border: `1px solid ${c.border}`,
     color: c.text,
     cursor: 'help',
-    marginTop: '2px',
   };
 }
+
+const correlationBox = {
+  padding: '14px 16px',
+  borderRadius: '10px',
+  background: '#0b2447',
+  border: '1px solid #2d4a6b',
+  marginBottom: '18px',
+};
+
+const correlationBoxHeader = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  flexWrap: 'wrap' as const,
+  gap: '8px',
+  marginBottom: '8px',
+};
+
+const illustrativeTag = {
+  fontSize: '10px',
+  color: '#fbbf24',
+  fontStyle: 'italic' as const,
+};
+
+const correlationContent = {
+  display: 'flex',
+  alignItems: 'baseline',
+  gap: '14px',
+  flexWrap: 'wrap' as const,
+};
+
+const correlationRatingValue = {
+  fontSize: '32px',
+  fontWeight: 700,
+};
+
+const correlationSubtext = {
+  fontSize: '12px',
+  color: '#94a3b8',
+};
 
 const overviewRow = {
   display: 'flex',
