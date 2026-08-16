@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import PortfolioWorkspaceTabs from './PortfolioWorkspaceTabs'
 import { WorkflowStepper, WorkflowStep } from './WorkflowStepper'
 import ClientAdviceDecisionSummary from './ClientAdviceDecisionSummary'
@@ -39,8 +40,12 @@ function WorkspaceBody({
   construction,
   clientAdvice,
 }: Props) {
-  const [activeTab, setActiveTab] =
-    useState<PortfolioWorkspaceKey>('modelPortfolio')
+  const searchParams = useSearchParams()
+  const validTabs: PortfolioWorkspaceKey[] = ['modelPortfolio', 'riskProfile', 'construction', 'clientAdvice']
+  const tabFromUrl = searchParams.get('tab') as PortfolioWorkspaceKey | null
+  const [activeTab, setActiveTab] = useState<PortfolioWorkspaceKey>(
+    tabFromUrl && validTabs.includes(tabFromUrl) ? tabFromUrl : 'modelPortfolio',
+  )
 
   const { selectedRiskProfile, setSelectedRiskProfile } = useClientAdvice()
 
