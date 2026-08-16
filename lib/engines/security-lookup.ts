@@ -19,7 +19,7 @@ export type SecurityLookupResult = {
   code: string
   name: string | null
   sector: string | null
-  /** Trailing/indicative distribution yield, percent (e.g. 5.2 for 5.2%). Null if not found or the security doesn't distribute. */
+  /** Forward (estimated, current FY) distribution yield, percent (e.g. 5.2 for 5.2%). Null if not found or the security doesn't distribute. */
   yield: number | null
   /** Short note on where the yield figure came from / how current it is, for adviser judgement - not stored, display only. */
   yieldNote: string | null
@@ -29,7 +29,7 @@ const SYSTEM_PROMPT = `You are a market data lookup assistant for Ord Minnett pr
 Given a single ticker code (bare ASX codes have no suffix - e.g. "FMG" not "FMG.ASX" or "FMG.AX" - if a suffix is present it has already been stripped before reaching you), use web search to find:
 1. The company/fund's full legal or common trading name.
 2. Its primary GICS-style sector (e.g. "Financials", "Materials", "Consumer Staples").
-3. Its current trailing or most recently declared distribution/dividend yield, as a percent (grossed-up/franked figure not required - use the plain trailing yield most commonly quoted).
+3. Its FORWARD (prospective/estimated) distribution or dividend yield for the current Australian financial year (FY2026/27, i.e. 1 July 2026 - 30 June 2027), as a percent. This must be forward-looking, not trailing/historical - advisers need what the investor is expected to earn over the year ahead, not what was paid last year. Prefer, in this order: (a) analyst consensus forward yield estimates for FY27 if available, (b) the company's own guidance on upcoming distributions/dividends for FY27, (c) if neither is available, the most recent trailing yield clearly flagged as such via yieldNote rather than presented as forward. Grossed-up/franked figures not required - use the plain (unfranked) forward yield most commonly quoted.
 
 This is a data lookup only - never provide investment advice or commentary beyond the requested facts.
 
@@ -40,7 +40,7 @@ After searching, respond with ONLY a JSON object and nothing else - no markdown 
   "yield": number | null,
   "yieldNote": string | null
 }
-If you cannot find a field confidently, return null for it rather than guessing. yieldNote should be a short (under 15 words) note on the yield figure's source/timing, e.g. "FY25 trailing yield, as at Aug 2026" - or null if yield is null.`
+If you cannot find a field confidently, return null for it rather than guessing. yieldNote must always state whether the yield figure is forward (FY27 estimate) or trailing, and its source/timing - e.g. "FY27 consensus forward yield, as at Aug 2026" or "Trailing yield only - no FY27 estimate found" - or null if yield itself is null.`
 
 function extractJsonObject(text: string): string {
   const withoutFences = text.replace(/```json|```/g, '').trim()

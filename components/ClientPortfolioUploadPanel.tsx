@@ -684,15 +684,15 @@ export default function ClientPortfolioUploadPanel() {
               bespoke weight overrides above. */}
           {yieldSummary ? (
             <div style={subPanel}>
-              <p style={subHeading}>Target Portfolio Yield &amp; Income</p>
+              <p style={subHeading}>Target Portfolio Forward Yield &amp; Income (FY26/27)</p>
               <p style={bodyText}>
-                Blended yield and estimated annual income if this client&apos;s
+                Estimated forward yield (FY26/27) and annual income if this client&apos;s
                 portfolio is brought fully in line with the {effectiveRiskProfile}{' '}
                 model as proposed above.
               </p>
               <div style={yieldOverviewRow}>
                 <div style={yieldOverviewStat}>
-                  <span style={yieldOverviewLabel}>Blended portfolio yield</span>
+                  <span style={yieldOverviewLabel}>Blended forward yield</span>
                   <span style={yieldOverviewValue}>
                     {yieldSummary.totalBlendedYieldPct !== null
                       ? `${yieldSummary.totalBlendedYieldPct}%`
@@ -720,7 +720,7 @@ export default function ClientPortfolioUploadPanel() {
                     <tr>
                       <th style={th}>Asset Class</th>
                       <th style={th}>Weight</th>
-                      <th style={th}>Blended Yield</th>
+                      <th style={th}>Fwd. Yield</th>
                       <th style={th}>Est. Annual Income</th>
                     </tr>
                   </thead>

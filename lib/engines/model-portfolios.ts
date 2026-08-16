@@ -13,7 +13,7 @@ export type ModelHolding = {
   sector?: string;
   weight: number;
   rationale: string;
-  /** Trailing/indicative distribution yield, percent. Undefined if not stated. */
+  /** Forward (estimated, current FY) distribution yield, percent. Undefined if not stated. */
   yield?: number;
 };
 

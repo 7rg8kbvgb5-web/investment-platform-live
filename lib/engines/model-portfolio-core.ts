@@ -94,7 +94,7 @@ export type CoreSecurity = {
   rationale: string;
   inSecurityMaster: boolean;
   displayOrder: number;
-  /** Trailing/indicative distribution yield, percent. Null if not stated. */
+  /** Forward (estimated, current FY) distribution yield, percent. Null if not stated. */
   yield: number | null;
 };
 

@@ -8,4 +8,4 @@ alter table model_portfolio_securities
   add column if not exists yield numeric;
 
 comment on column model_portfolio_securities.yield is
-  'Trailing/indicative distribution yield, percent (e.g. 5.2 for 5.2%). Nullable - not every security has a stated yield.';
+  'Forward (estimated, current FY) distribution yield, percent (e.g. 5.2 for 5.2%). Nullable - not every security has a stated yield. Should reflect the year-ahead estimate, not last year''s trailing payout.';

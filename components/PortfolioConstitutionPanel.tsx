@@ -327,7 +327,7 @@ export function PortfolioConstitutionPanel() {
 
       <div style={yieldSummaryBox}>
         <div style={yieldSummaryHeader}>
-          <span style={yieldSummaryTitle}>Portfolio Yield ({selectedRiskProfile})</span>
+          <span style={yieldSummaryTitle}>Forward Portfolio Yield ({selectedRiskProfile}, FY26/27)</span>
           <span style={yieldSummaryCoverage}>
             {yieldSummary.totalYieldCoveragePct}% of weight has a stated yield
           </span>
@@ -488,7 +488,7 @@ export function PortfolioConstitutionPanel() {
                         style={holdingYieldInput}
                         aria-label={`${holding.name} yield`}
                       />
-                      <span style={weightPercentSign}>% yield</span>
+                      <span style={weightPercentSign}>% fwd. yield</span>
                     </div>
                   </li>
                 ))}
@@ -558,7 +558,7 @@ export function PortfolioConstitutionPanel() {
                 <input
                   type="number"
                   step="0.1"
-                  placeholder="Yield %"
+                  placeholder="Fwd yield %"
                   value={manualEntry[assetClass.name]?.yield ?? ''}
                   onChange={(e) => updateManualEntry(assetClass.name, 'yield', e.target.value)}
                   style={manualYieldInput}
