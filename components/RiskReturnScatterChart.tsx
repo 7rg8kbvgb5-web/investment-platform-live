@@ -27,8 +27,8 @@ export default function RiskReturnScatterChart({ holdings }: { holdings: Holding
   const assetClasses = Array.from(new Set(holdings.map((h) => h.assetClass)));
 
   return (
-    <ResponsiveContainer width="100%" height={360}>
-      <ScatterChart margin={{ top: 10, right: 20, bottom: 20, left: 10 }}>
+    <ResponsiveContainer width="100%" height={380}>
+      <ScatterChart margin={{ top: 10, right: 20, bottom: 40, left: 10 }}>
         <CartesianGrid stroke="#1e3a5f" />
         <XAxis
           type="number"
@@ -37,7 +37,7 @@ export default function RiskReturnScatterChart({ holdings }: { holdings: Holding
           unit="%"
           tickFormatter={(v) => (v * 100).toFixed(0)}
           stroke="#94a3b8"
-          label={{ value: 'Annualised Volatility', position: 'insideBottom', offset: -10, fill: '#94a3b8' }}
+          label={{ value: 'Annualised Volatility', position: 'insideBottom', offset: -25, fill: '#94a3b8' }}
         />
         <YAxis
           type="number"
@@ -65,7 +65,7 @@ export default function RiskReturnScatterChart({ holdings }: { holdings: Holding
             );
           }}
         />
-        <Legend wrapperStyle={{ fontSize: '12px' }} />
+        <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '12px' }} />
         {assetClasses.map((assetClass) => (
           <Scatter
             key={assetClass}

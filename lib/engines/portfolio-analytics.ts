@@ -25,6 +25,13 @@ export type HoldingRiskProfile = {
   sharpeRatio: number;
 };
 
+export type AssetClassRiskReturn = {
+  assetClass: string;
+  annualizedReturn: number;
+  annualizedVolatility: number;
+  sharpeRatio: number;
+};
+
 export type PortfolioAnalytics = {
   connected: boolean;
   holdings: HoldingRiskProfile[];
@@ -32,6 +39,8 @@ export type PortfolioAnalytics = {
   assetClassCorrelation: { codes: string[]; matrix: number[][] };
   overallDiversification: number;
   assetClassDiversification: Record<string, number>;
+  /** Weighted risk/return per asset class - the combined profile actually achieved by the weighted mix of its securities, not a simple average of their individual stats. */
+  assetClassRiskReturn: AssetClassRiskReturn[];
 };
 
 /** Deterministic PRNG (mulberry32) so mock series are stable across renders rather than jittering on every request. */
@@ -130,18 +139,39 @@ export async function getPortfolioAnalytics(customHoldings?: ModelHolding[]): Pr
 
   const holdingCorrelation = buildCorrelationMatrix(returnsByCode);
 
-  // Asset-class level series: equal-weighted average of member holdings' returns.
+  // Asset-class level series: weighted by each holding's actual weight
+  // within the class (normalised), not a simple equal-weighted average -
+  // this is the return series the class would actually have produced
+  // given the real mix of securities in it, correctly capturing the
+  // diversification effect between them rather than overstating risk.
   const assetClassNames = Array.from(new Set(holdings.map((h) => h.sector ?? 'Unclassified')));
   const assetClassReturns: Record<string, number[]> = {};
+  const assetClassRiskReturn: AssetClassRiskReturn[] = [];
   for (const assetClassName of assetClassNames) {
     const members = holdings.filter((h) => (h.sector ?? 'Unclassified') === assetClassName);
+    const totalWeight = members.reduce((sum, m) => sum + (m.weight || 0), 0);
     const length = Math.min(...members.map((m) => returnsByCode[m.code]?.length ?? TRADING_DAYS));
     const series: number[] = [];
     for (let i = 0; i < length; i++) {
-      const dayValues = members.map((m) => returnsByCode[m.code][i]);
-      series.push(dayValues.reduce((s, v) => s + v, 0) / dayValues.length);
+      if (totalWeight > 0) {
+        const dayValue = members.reduce(
+          (sum, m) => sum + ((m.weight || 0) / totalWeight) * returnsByCode[m.code][i],
+          0,
+        );
+        series.push(dayValue);
+      } else {
+        // No weight data available for this class - fall back to equal weighting.
+        const dayValues = members.map((m) => returnsByCode[m.code][i]);
+        series.push(dayValues.reduce((s, v) => s + v, 0) / dayValues.length);
+      }
     }
     assetClassReturns[assetClassName] = series;
+    assetClassRiskReturn.push({
+      assetClass: assetClassName,
+      annualizedReturn: annualizedReturn(series),
+      annualizedVolatility: annualizedVolatility(series),
+      sharpeRatio: sharpeRatio(series),
+    });
   }
   const assetClassCorrelation = buildCorrelationMatrix(assetClassReturns);
 
@@ -166,6 +196,7 @@ export async function getPortfolioAnalytics(customHoldings?: ModelHolding[]): Pr
     assetClassCorrelation,
     overallDiversification: averagePairwiseCorrelation(holdingCorrelation.matrix),
     assetClassDiversification,
+    assetClassRiskReturn,
   };
 }
 

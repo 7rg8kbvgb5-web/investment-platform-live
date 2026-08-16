@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { PortfolioAnalytics } from '../lib/engines/portfolio-analytics';
 import CorrelationHeatmap from './CorrelationHeatmap';
+import AssetClassRiskReturnScatterChart from './AssetClassRiskReturnScatterChart';
 import RiskReturnScatterChart from './RiskReturnScatterChart';
 import SharpeRankingChart from './SharpeRankingChart';
 import Panel from './ui/Panel';
@@ -92,12 +93,21 @@ export function HoldingLevelAnalyticsTabs({ modelAnalytics }: { modelAnalytics: 
             />
           </Panel>
 
+          <Panel eyebrow="Risk-Adjusted Return" title="Risk vs. Return by Asset Class">
+            <p style={intro}>
+              The same idea one level up: each point is an asset class&apos;s combined risk/return
+              profile, as actually achieved by the weighted mix of securities within it - not just an
+              average of their individual numbers, so diversification between them is properly reflected.
+            </p>
+            <AssetClassRiskReturnScatterChart assetClasses={activeAnalytics.assetClassRiskReturn} />
+          </Panel>
+
           <Panel eyebrow="Risk-Adjusted Return" title="Risk vs. Return by Holding">
             <p style={intro}>
-              Each point is a security - volatility on the x-axis, annualised return on the y-axis,
-              coloured by asset class. Look for holdings sitting below others in the same colour: same or
-              more risk for less return is the clearest sign a better-in-class alternative is worth
-              researching.
+              The same question one level down, at the individual security: volatility on the x-axis,
+              annualised return on the y-axis, coloured by asset class. Look for holdings sitting below
+              others in the same colour: same or more risk for less return is the clearest sign a
+              better-in-class alternative is worth researching.
             </p>
             <RiskReturnScatterChart holdings={activeAnalytics.holdings} />
           </Panel>
