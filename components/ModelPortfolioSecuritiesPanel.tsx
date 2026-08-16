@@ -351,6 +351,33 @@ export function ModelPortfolioSecuritiesPanel() {
         </StatusBox>
       )}
 
+      <div style={tacticalInlineHeader}>
+        <span style={tacticalInlineTitle}>Live Global Asset Class View</span>
+        {tacticalView && (
+          <span style={tacticalTimestamp}>
+            {new Date(tacticalView.generatedAt).toLocaleString('en-AU', {
+              day: 'numeric',
+              month: 'short',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={runTacticalScan}
+          disabled={tacticalScanning}
+          style={tacticalScanButton}
+        >
+          {tacticalScanning ? 'Scanning…' : 'Run scan'}
+        </button>
+      </div>
+      {tacticalError && (
+        <StatusBox variant="error" display="inline">
+          {tacticalError}
+        </StatusBox>
+      )}
+
       <div style={statsRow}>
         <div style={statBox}>
           <span style={statLabel}>Securities</span>
@@ -368,6 +395,12 @@ export function ModelPortfolioSecuritiesPanel() {
           <span style={statLabel}>Yield data coverage</span>
           <span style={statValue}>{yieldCoveragePct}%</span>
         </div>
+        {tacticalView?.calls.map((call) => (
+          <div key={call.assetClass} title={call.rationale} style={statBox}>
+            <span style={statLabel}>{call.assetClass}</span>
+            <span style={tacticalStanceTag(call.stance)}>{call.stance}</span>
+          </div>
+        ))}
       </div>
 
       <div style={overviewRow}>
@@ -390,62 +423,6 @@ export function ModelPortfolioSecuritiesPanel() {
           </table>
         </div>
         <div style={overviewChartCol}>
-          <div style={tacticalTableWrap}>
-            <div style={tacticalTableHeader}>
-              <span style={tacticalTitle}>Live Global Asset Class View</span>
-              <div style={tacticalHeaderRight}>
-                {tacticalView && (
-                  <span style={tacticalTimestamp}>
-                    {new Date(tacticalView.generatedAt).toLocaleString('en-AU', {
-                      day: 'numeric',
-                      month: 'short',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </span>
-                )}
-                <button
-                  type="button"
-                  onClick={runTacticalScan}
-                  disabled={tacticalScanning}
-                  style={tacticalScanButton}
-                >
-                  {tacticalScanning ? 'Scanning…' : 'Run scan'}
-                </button>
-              </div>
-            </div>
-            {tacticalError && (
-              <StatusBox variant="error" display="inline">
-                {tacticalError}
-              </StatusBox>
-            )}
-            {!tacticalView && !tacticalError ? (
-              <p style={emptyText}>
-                No scan run yet — click &quot;Run scan&quot; for a live macro/market
-                tactical read on each asset class.
-              </p>
-            ) : (
-              <table style={overviewTable}>
-                <thead>
-                  <tr>
-                    <th style={overviewTh}>Asset Class</th>
-                    <th style={overviewThRight}>Stance</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tacticalView?.calls.map((call) => (
-                    <tr key={call.assetClass} title={call.rationale}>
-                      <td style={overviewTd}>{call.assetClass}</td>
-                      <td style={overviewTdRight}>
-                        <span style={tacticalStanceTag(call.stance)}>{call.stance}</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-
           {sectorBreakdown.length > 0 ? (
             <>
               <p style={chartCaption}>Securities by sector</p>
@@ -714,35 +691,20 @@ const statValue = {
   marginTop: '2px',
 };
 
-const tacticalTableWrap = {
-  padding: '10px 12px',
-  borderRadius: '10px',
-  background: '#0b2447',
-  border: '1px solid #2d4a6b',
-  marginBottom: '14px',
-};
-
-const tacticalTableHeader = {
+const tacticalInlineHeader = {
   display: 'flex',
-  justifyContent: 'space-between',
   alignItems: 'center',
   flexWrap: 'wrap' as const,
-  gap: '8px',
-  marginBottom: '8px',
+  gap: '10px',
+  marginBottom: '10px',
 };
 
-const tacticalTitle = {
+const tacticalInlineTitle = {
   fontSize: '11px',
   fontWeight: 700,
   color: '#93c5fd',
   textTransform: 'uppercase' as const,
   letterSpacing: '0.03em',
-};
-
-const tacticalHeaderRight = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '8px',
 };
 
 const tacticalTimestamp = {
@@ -769,14 +731,16 @@ function tacticalStanceTag(stance: 'OW' | 'N' | 'UW') {
   };
   const c = colors[stance];
   return {
+    display: 'inline-block',
     padding: '2px 8px',
     borderRadius: '999px',
-    fontSize: '11px',
+    fontSize: '13px',
     fontWeight: 700,
     background: c.bg,
     border: `1px solid ${c.border}`,
     color: c.text,
     cursor: 'help',
+    marginTop: '2px',
   };
 }
 
