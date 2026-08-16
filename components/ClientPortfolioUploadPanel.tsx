@@ -16,6 +16,12 @@ import {
   computeGrowthDefensiveByProfile,
 } from '../lib/engines/model-portfolio-core'
 import { compareClientPortfolioToModel } from '../lib/engines/portfolio-review-comparison'
+import {
+  applyClientWeightOverrides,
+  type AssetClassWeightOverrides,
+  type HoldingWeightOverrides,
+} from '../lib/engines/client-weight-overrides'
+import { normaliseCode } from '../lib/engines/security-universe'
 import AssetClassComparisonChart from './AssetClassComparisonChart'
 import HoldingAdjustmentChart from './HoldingAdjustmentChart'
 import AllocationPieChart from './AllocationPieChart'
@@ -68,7 +74,7 @@ export default function ClientPortfolioUploadPanel() {
   // Supabase-backed core model once on mount, so risk classification
   // always ranks against the house model as it actually is right now -
   // not a hardcoded snapshot.
-  const [allWeights, setAllWeights] = useState<Record
+  const [allWeights, setAllWeights] = useState<Record<
     RiskProfile,
     Record<string, number>
   > | null>(null)
@@ -215,6 +221,56 @@ export default function ClientPortfolioUploadPanel() {
     }
   }, [effectiveRiskProfile])
 
+  // Client-specific bespoke weight overrides for this proposal only - never
+  // written back to the house model. Cleared whenever the risk profile
+  // being compared against changes, since overrides keyed to one model's
+  // asset classes/holdings don't carry meaning against a different one.
+  const [assetClassOverrides, setAssetClassOverrides] =
+    useState<AssetClassWeightOverrides>({})
+  const [holdingOverrides, setHoldingOverrides] = useState<HoldingWeightOverrides>({})
+
+  useEffect(() => {
+    setAssetClassOverrides({})
+    setHoldingOverrides({})
+  }, [effectiveRiskProfile])
+
+  const hasClientOverrides =
+    Object.keys(assetClassOverrides).length > 0 || Object.keys(holdingOverrides).length > 0
+
+  const clientAdjustedModel = useMemo(
+    () => (model ? applyClientWeightOverrides(model, assetClassOverrides, holdingOverrides) : null),
+    [model, assetClassOverrides, holdingOverrides],
+  )
+
+  function setAssetClassWeight(name: string, value: number) {
+    setAssetClassOverrides((prev) => ({ ...prev, [name]: value }))
+  }
+
+  function resetAssetClassWeight(name: string) {
+    setAssetClassOverrides((prev) => {
+      const next = { ...prev }
+      delete next[name]
+      return next
+    })
+  }
+
+  function setHoldingWeight(code: string, value: number) {
+    setHoldingOverrides((prev) => ({ ...prev, [normaliseCode(code)]: value }))
+  }
+
+  function resetHoldingWeight(code: string) {
+    setHoldingOverrides((prev) => {
+      const next = { ...prev }
+      delete next[normaliseCode(code)]
+      return next
+    })
+  }
+
+  function resetAllClientOverrides() {
+    setAssetClassOverrides({})
+    setHoldingOverrides({})
+  }
+
   // Every code that could plausibly need a live price: what the client
   // holds today, plus every holding in the model being compared against
   // (the buy candidates). Fetched once per (holdings, model) change.
@@ -223,13 +279,13 @@ export default function ClientPortfolioUploadPanel() {
     for (const holding of mappingResult.mappedHoldings) {
       if (holding.mapped) codes.add(holding.code)
     }
-    if (model) {
-      for (const assetClass of model.assetClasses) {
+    if (clientAdjustedModel) {
+      for (const assetClass of clientAdjustedModel.assetClasses) {
         for (const holding of assetClass.holdings) codes.add(holding.code)
       }
     }
     return Array.from(codes)
-  }, [mappingResult.mappedHoldings, model])
+  }, [mappingResult.mappedHoldings, clientAdjustedModel])
 
   useEffect(() => {
     if (codesToPrice.length === 0) {
@@ -274,13 +330,13 @@ export default function ClientPortfolioUploadPanel() {
 
   const comparison = useMemo(
     () =>
-      model
-        ? compareClientPortfolioToModel(mappingResult.mappedHoldings, model, {
+      clientAdjustedModel
+        ? compareClientPortfolioToModel(mappingResult.mappedHoldings, clientAdjustedModel, {
             totalPortfolioValue: effectiveTotalPortfolioValue,
             prices,
           })
         : null,
-    [mappingResult.mappedHoldings, model, effectiveTotalPortfolioValue, prices],
+    [mappingResult.mappedHoldings, clientAdjustedModel, effectiveTotalPortfolioValue, prices],
   )
 
   const pricesConnected = Object.values(prices).some((p) => p !== null && p !== undefined)
@@ -536,6 +592,18 @@ export default function ClientPortfolioUploadPanel() {
             <p style={subHeading}>
               Asset Class Allocation vs {effectiveRiskProfile} Model
             </p>
+            {hasClientOverrides ? (
+              <div style={bespokeBanner}>
+                <span>
+                  This proposal carries bespoke weight overrides for this
+                  client — the {effectiveRiskProfile} house model itself is
+                  unchanged.
+                </span>
+                <button style={resetAllButton} onClick={resetAllClientOverrides}>
+                  Reset all to model
+                </button>
+              </div>
+            ) : null}
             <AssetClassComparisonChart rows={comparison.assetClassComparison} />
             <div style={tableWrap}>
               <table style={table}>
@@ -555,7 +623,34 @@ export default function ClientPortfolioUploadPanel() {
                       <td style={td}>{row.assetClass}</td>
                       <td style={tdMuted}>{row.type}</td>
                       <td style={td}>{row.clientWeight}%</td>
-                      <td style={td}>{row.modelWeight}%</td>
+                      <td style={td}>
+                        <div style={weightEditCell}>
+                          <input
+                            type="number"
+                            step={0.5}
+                            style={
+                              assetClassOverrides[row.assetClass] !== undefined
+                                ? weightInputOverridden
+                                : weightInput
+                            }
+                            value={row.modelWeight}
+                            onChange={(e) => {
+                              const value = parseFloat(e.target.value)
+                              if (!Number.isNaN(value)) setAssetClassWeight(row.assetClass, value)
+                            }}
+                          />
+                          %
+                          {assetClassOverrides[row.assetClass] !== undefined ? (
+                            <button
+                              style={resetWeightButton}
+                              title="Reset to house model weight"
+                              onClick={() => resetAssetClassWeight(row.assetClass)}
+                            >
+                              ↺
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
                       <td style={td}>
                         {row.difference > 0 ? '+' : ''}
                         {row.difference}pp
@@ -600,7 +695,34 @@ export default function ClientPortfolioUploadPanel() {
                         </td>
                         <td style={tdMuted}>{rec.assetClass}</td>
                         <td style={td}>{rec.currentWeight}%</td>
-                        <td style={td}>{rec.targetWeight}%</td>
+                        <td style={td}>
+                          <div style={weightEditCell}>
+                            <input
+                              type="number"
+                              step={0.5}
+                              style={
+                                holdingOverrides[normaliseCode(rec.code)] !== undefined
+                                  ? weightInputOverridden
+                                  : weightInput
+                              }
+                              value={rec.targetWeight}
+                              onChange={(e) => {
+                                const value = parseFloat(e.target.value)
+                                if (!Number.isNaN(value)) setHoldingWeight(rec.code, value)
+                              }}
+                            />
+                            %
+                            {holdingOverrides[normaliseCode(rec.code)] !== undefined ? (
+                              <button
+                                style={resetWeightButton}
+                                title="Reset to house model weight"
+                                onClick={() => resetHoldingWeight(rec.code)}
+                              >
+                                ↺
+                              </button>
+                            ) : null}
+                          </div>
+                        </td>
                         <td style={td}>
                           {rec.changeWeight > 0 ? '+' : ''}
                           {rec.changeWeight}pp
@@ -1015,4 +1137,60 @@ const portfolioValueInput = {
   border: '1px solid #2d4a6b',
   color: '#e2e8f0',
   marginTop: '4px',
+}
+
+const weightEditCell = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '4px',
+}
+
+const weightInput = {
+  width: '58px',
+  padding: '3px 6px',
+  borderRadius: '6px',
+  fontSize: '13px',
+  background: '#04142b',
+  border: '1px solid #2d4a6b',
+  color: '#e2e8f0',
+}
+
+const weightInputOverridden = {
+  ...weightInput,
+  border: '1px solid #60a5fa',
+  background: '#0b2447',
+}
+
+const resetWeightButton = {
+  border: 'none',
+  background: 'transparent',
+  color: '#60a5fa',
+  fontSize: '11px',
+  cursor: 'pointer',
+  padding: '2px 4px',
+}
+
+const bespokeBanner = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: '12px',
+  padding: '8px 12px',
+  borderRadius: '8px',
+  background: '#0b2447',
+  border: '1px solid #2d4a6b',
+  color: '#93c5fd',
+  fontSize: '12px',
+  marginBottom: '10px',
+}
+
+const resetAllButton = {
+  border: '1px solid #2d4a6b',
+  background: 'transparent',
+  color: '#93c5fd',
+  fontSize: '11px',
+  fontWeight: 700,
+  cursor: 'pointer',
+  padding: '4px 10px',
+  borderRadius: '6px',
 }

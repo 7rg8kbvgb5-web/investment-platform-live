@@ -160,7 +160,7 @@ export async function fetchRiskProfileWeights(
 }
 
 /** All five risk profiles' asset-class weights in one call - used for risk classification and cross-profile summaries. */
-export async function fetchAllRiskProfileWeights(): Promise
+export async function fetchAllRiskProfileWeights(): Promise<
   Record<RiskProfile, Record<string, number>>
 > {
   const { data, error } = await supabase
@@ -171,7 +171,7 @@ export async function fetchAllRiskProfileWeights(): Promise
     throw new Error(`Failed to load risk profile weights: ${error.message}`);
   }
 
-  const result = Object.fromEntries(RISK_PROFILES.map((p) => [p, {}])) as Record
+  const result = Object.fromEntries(RISK_PROFILES.map((p) => [p, {}])) as Record<
     RiskProfile,
     Record<string, number>
   >;
