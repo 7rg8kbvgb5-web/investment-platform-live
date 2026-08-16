@@ -31,16 +31,16 @@ export function HoldingMetricCell({ label, children, tone = 'default' }: Holding
 const grid = {
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-  gap: '10px',
+  gap: '8px',
   width: '100%',
-  marginTop: '10px',
+  marginTop: '6px',
 };
 
 const cell = {
   display: 'flex',
   flexDirection: 'column' as const,
-  gap: '4px',
-  padding: '10px 12px',
+  gap: '2px',
+  padding: '6px 10px',
   borderRadius: '8px',
   background: '#0b2342',
   border: '1px solid #1e3a5f',
@@ -63,12 +63,12 @@ const cellLabel = {
 };
 
 const cellValue = {
-  fontSize: '16px',
+  fontSize: '15px',
   fontWeight: 700,
   color: '#e2e8f0',
   display: 'flex',
   alignItems: 'center',
-  gap: '6px',
+  gap: '4px',
   flexWrap: 'wrap' as const,
 };
 
@@ -76,18 +76,16 @@ const cellValue = {
 export const holdingMetricInput = {
   width: '100%',
   minWidth: 0,
-  padding: '4px 0',
+  padding: '2px 0',
   border: 'none',
-  borderBottom: '2px solid #2d4a6b',
   background: 'transparent',
   color: '#e2e8f0',
-  fontSize: '18px',
+  fontSize: '16px',
   fontWeight: 700,
   outline: 'none',
 };
 
 export const holdingMetricInputOverridden = {
   ...holdingMetricInput,
-  borderBottom: '2px solid #60a5fa',
   color: '#93c5fd',
 };

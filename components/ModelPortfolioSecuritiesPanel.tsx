@@ -391,7 +391,6 @@ export function ModelPortfolioSecuritiesPanel() {
               <ul style={holdingList}>
                 {assetClass.holdings.map((holding) => {
                   const conviction = convictions[holding.code];
-                  const houseView = conviction?.houseView ?? null;
                   const convictionScore = conviction?.convictionScore ?? null;
                   const sources = conviction?.sources ?? [];
                   const convictionTooltip =
@@ -452,13 +451,6 @@ export function ModelPortfolioSecuritiesPanel() {
                       </HoldingMetricCell>
                       <HoldingMetricCell
                         label="Conviction"
-                        tone={
-                          houseView === 'strong-positive' || houseView === 'positive'
-                            ? 'positive'
-                            : houseView === 'negative' || houseView === 'strong-negative'
-                              ? 'negative'
-                              : 'default'
-                        }
                       >
                         <span title={convictionTooltip}>
                           {convictionScore !== null
