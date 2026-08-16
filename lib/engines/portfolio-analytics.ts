@@ -1,6 +1,12 @@
-import { ASSET_CLASSES } from './model-portfolio-core';
+import { ASSET_CLASSES, fetchAllRiskProfileWeights, computeGrowthDefensiveByProfile, fetchModelPortfolio } from './model-portfolio-core';
 import { dedupeHoldings, isQuotableCode } from './market-data';
 import { getHistoricalEod, toEodhdTicker, isEodhdConfigured } from '../eodhd-client';
+import type { ModelHolding } from './model-portfolios';
+import { classifyPortfolioRiskProfile } from './portfolio-risk-classification';
+import { applyClientWeightOverrides } from './client-weight-overrides';
+import { compareClientPortfolioToModel } from './portfolio-review-comparison';
+import { mapClientHoldings } from './client-holdings-mapping';
+import { listClientReviews, fetchClientReview } from './client-portfolio-reviews';
 import {
   dailyReturns,
   annualizedReturn,
@@ -91,8 +97,8 @@ async function realReturns(code: string): Promise<number[] | null> {
   }
 }
 
-export async function getPortfolioAnalytics(): Promise<PortfolioAnalytics> {
-  const allHoldings = await dedupeHoldings();
+export async function getPortfolioAnalytics(customHoldings?: ModelHolding[]): Promise<PortfolioAnalytics> {
+  const allHoldings = customHoldings ?? (await dedupeHoldings());
   const holdings = allHoldings.filter((h) => isQuotableCode(h.code));
   const connected = isEodhdConfigured();
 
@@ -161,4 +167,74 @@ export async function getPortfolioAnalytics(): Promise<PortfolioAnalytics> {
     overallDiversification: averagePairwiseCorrelation(holdingCorrelation.matrix),
     assetClassDiversification,
   };
+}
+
+export type RecommendedPortfolioResult = {
+  analytics: PortfolioAnalytics | null
+  clientName: string | null
+}
+
+/**
+ * Analytics for "the recommended portfolio" - the resulting target
+ * holdings from whichever client review was most recently updated in
+ * Construction, reflecting that adviser's actual work in progress
+ * rather than the raw model universe. There's no single global
+ * "recommended portfolio" since Construction is per-client - this
+ * reads whichever client the adviser is currently working on, judged
+ * by which saved review was touched most recently (autosave updates
+ * that timestamp on every edit).
+ */
+export async function getRecommendedPortfolioAnalytics(): Promise<RecommendedPortfolioResult> {
+  const reviews = await listClientReviews()
+  if (reviews.length === 0) {
+    return { analytics: null, clientName: null }
+  }
+
+  const review = await fetchClientReview(reviews[0].id)
+  const { state } = review
+
+  if (state.holdings.length === 0) {
+    return { analytics: null, clientName: review.clientName }
+  }
+
+  const mappingResult = await mapClientHoldings(state.holdings)
+
+  const allWeights = await fetchAllRiskProfileWeights()
+  const growthDefensiveByProfile = computeGrowthDefensiveByProfile(allWeights)
+  const riskClassification = classifyPortfolioRiskProfile(
+    mappingResult.growthWeight,
+    mappingResult.defensiveWeight,
+    growthDefensiveByProfile,
+  )
+  const effectiveRiskProfile =
+    state.riskOverride === 'auto' ? riskClassification.nearestRiskProfile : state.riskOverride
+
+  const model = await fetchModelPortfolio(effectiveRiskProfile)
+  const clientAdjustedModel = applyClientWeightOverrides(
+    model,
+    state.assetClassOverrides,
+    state.holdingOverrides,
+  )
+
+  const comparison = compareClientPortfolioToModel(mappingResult.mappedHoldings, clientAdjustedModel)
+
+  // Only holdings that will actually remain/be bought under the
+  // recommendation - a full sell (targetWeight 0) isn't part of the
+  // resulting portfolio's risk profile.
+  const recommendedHoldings: ModelHolding[] = comparison.holdingRecommendations
+    .filter((rec) => rec.targetWeight > 0)
+    .map((rec) => ({
+      code: rec.code,
+      name: rec.name,
+      sector: rec.assetClass,
+      weight: rec.targetWeight,
+      rationale: rec.rationale,
+    }))
+
+  if (recommendedHoldings.length === 0) {
+    return { analytics: null, clientName: review.clientName }
+  }
+
+  const analytics = await getPortfolioAnalytics(recommendedHoldings)
+  return { analytics, clientName: review.clientName }
 }

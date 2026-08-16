@@ -1,7 +1,6 @@
 import { getPortfolioAnalytics } from '../lib/engines/portfolio-analytics';
+import { HoldingLevelAnalyticsTabs } from './HoldingLevelAnalyticsTabs';
 import CorrelationHeatmap from './CorrelationHeatmap';
-import RiskReturnScatterChart from './RiskReturnScatterChart';
-import SharpeRankingChart from './SharpeRankingChart';
 import Panel from './ui/Panel';
 import StatusBox from './dashboard/StatusBox';
 
@@ -13,7 +12,6 @@ function diversificationLabel(avgCorrelation: number): { label: string; color: s
 
 export default async function PortfolioAnalyticsPanel() {
   const analytics = await getPortfolioAnalytics();
-  const nameByCode = new Map(analytics.holdings.map((h) => [h.code, h.name]));
   const overall = diversificationLabel(analytics.overallDiversification);
 
   return (
@@ -64,38 +62,7 @@ export default async function PortfolioAnalyticsPanel() {
         />
       </Panel>
 
-      <Panel eyebrow="Diversification" title="Holding-Level Correlation">
-        <p style={intro}>
-          Correlation between the individual securities across every asset
-          class. Clusters of high correlation within an asset class suggest
-          redundant exposure worth reviewing.
-        </p>
-        <CorrelationHeatmap
-          codes={analytics.holdingCorrelation.codes}
-          matrix={analytics.holdingCorrelation.matrix}
-          labels={Object.fromEntries(nameByCode)}
-        />
-      </Panel>
-
-      <Panel eyebrow="Risk-Adjusted Return" title="Risk vs. Return by Holding">
-        <p style={intro}>
-          Each point is a security - volatility on the x-axis, annualised
-          return on the y-axis, coloured by asset class. Look for holdings
-          sitting below others in the same colour: same or more risk for
-          less return is the clearest sign a better-in-class alternative is
-          worth researching.
-        </p>
-        <RiskReturnScatterChart holdings={analytics.holdings} />
-      </Panel>
-
-      <Panel eyebrow="Risk-Adjusted Return" title="Sharpe Ratio Ranking">
-        <p style={intro}>
-          Return earned per unit of risk taken, ranked highest to lowest.
-          The most direct single number for comparing whether a security is
-          pulling its weight on a risk-adjusted basis.
-        </p>
-        <SharpeRankingChart holdings={analytics.holdings} />
-      </Panel>
+      <HoldingLevelAnalyticsTabs modelAnalytics={analytics} />
     </>
   );
 }
