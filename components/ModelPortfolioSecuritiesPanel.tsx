@@ -13,6 +13,11 @@ import {
 import { buildSecurityUniverse, type SecurityUniverseEntry } from '../lib/engines/security-universe';
 import { stripExchangeSuffix } from '../lib/engines/security-lookup';
 import { computeConvictionRating, type ConvictionRating } from '../lib/engines/conviction-rating';
+import {
+  HoldingMetricGrid,
+  HoldingMetricCell,
+  holdingMetricInput,
+} from './ui/HoldingMetricGrid';
 import Panel from './ui/Panel';
 import StatusBox from './dashboard/StatusBox';
 import AllocationPieChart from './AllocationPieChart';
@@ -402,13 +407,6 @@ export function ModelPortfolioSecuritiesPanel() {
                       <span style={holdingCode}>{holding.code}</span>
                       <span style={holdingName}>{holding.name}</span>
                       {holding.sector && <span style={sectorTag}>{holding.sector}</span>}
-                      <span title={convictionTooltip} style={convictionBadge(houseView)}>
-                        {convictionScore !== null
-                          ? `${convictionScore}/5 conviction`
-                          : convictionsLoading
-                            ? 'Conviction: loading…'
-                            : 'No rating data'}
-                      </span>
                       <button
                         type="button"
                         onClick={() => handleRemove(holding)}
@@ -419,38 +417,58 @@ export function ModelPortfolioSecuritiesPanel() {
                       </button>
                     </div>
                     <p style={holdingRationale}>{holding.rationale}</p>
-                    <div style={holdingWeightRow}>
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={holding.inClassWeight}
-                        onChange={(e) =>
-                          setHoldingWeightLocal(holding.id, parseFloat(e.target.value))
+                    <HoldingMetricGrid>
+                      <HoldingMetricCell label="Weight in class (all risk profiles)">
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={holding.inClassWeight}
+                          onChange={(e) =>
+                            setHoldingWeightLocal(holding.id, parseFloat(e.target.value))
+                          }
+                          onBlur={() => saveHoldingWeight(holding.id)}
+                          style={holdingMetricInput}
+                          aria-label={`${holding.name} weight within ${assetClass.name}`}
+                        />
+                        <span>%</span>
+                      </HoldingMetricCell>
+                      <HoldingMetricCell label="Forward yield (FY26/27)">
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={holding.yield ?? ''}
+                          placeholder="—"
+                          onChange={(e) =>
+                            setHoldingYieldLocal(
+                              holding.id,
+                              e.target.value === '' ? null : parseFloat(e.target.value)
+                            )
+                          }
+                          onBlur={() => saveHoldingYield(holding.id)}
+                          style={holdingMetricInput}
+                          aria-label={`${holding.name} forward yield`}
+                        />
+                        <span>%</span>
+                      </HoldingMetricCell>
+                      <HoldingMetricCell
+                        label="Conviction"
+                        tone={
+                          houseView === 'strong-positive' || houseView === 'positive'
+                            ? 'positive'
+                            : houseView === 'negative' || houseView === 'strong-negative'
+                              ? 'negative'
+                              : 'default'
                         }
-                        onBlur={() => saveHoldingWeight(holding.id)}
-                        style={holdingWeightInput}
-                        aria-label={`${holding.name} weight within ${assetClass.name}`}
-                      />
-                      <span style={weightPercentSign}>% of class (all risk profiles)</span>
-                    </div>
-                    <div style={holdingWeightRow}>
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={holding.yield ?? ''}
-                        placeholder="—"
-                        onChange={(e) =>
-                          setHoldingYieldLocal(
-                            holding.id,
-                            e.target.value === '' ? null : parseFloat(e.target.value)
-                          )
-                        }
-                        onBlur={() => saveHoldingYield(holding.id)}
-                        style={holdingYieldInput}
-                        aria-label={`${holding.name} forward yield`}
-                      />
-                      <span style={weightPercentSign}>% fwd. yield (FY26/27)</span>
-                    </div>
+                      >
+                        <span title={convictionTooltip}>
+                          {convictionScore !== null
+                            ? `${convictionScore}/5`
+                            : convictionsLoading
+                              ? 'Loading…'
+                              : 'No data'}
+                        </span>
+                      </HoldingMetricCell>
+                    </HoldingMetricGrid>
                   </li>
                   );
                 })}

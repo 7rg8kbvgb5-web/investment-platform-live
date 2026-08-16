@@ -27,6 +27,7 @@ import {
   type HoldingWeightOverrides,
 } from '../lib/engines/client-weight-overrides'
 import { normaliseCode } from '../lib/engines/security-universe'
+import { HoldingMetricGrid, HoldingMetricCell, holdingMetricInput } from './ui/HoldingMetricGrid'
 import {
   saveClientReview,
   listClientReviews,
@@ -1090,19 +1091,16 @@ export default function ClientPortfolioUploadPanel() {
                                 <span style={holdingCardCode}>{rec.code}</span>
                                 <span style={holdingCardName}>{rec.name}</span>
                               </div>
-                              <div style={holdingCardValueRow}>
-                                <span>
-                                  Weight: <strong>{rec.currentWeight}%</strong>
-                                </span>
-                                <span>
-                                  Value:{' '}
+                              <HoldingMetricGrid>
+                                <HoldingMetricCell label="Weight">{rec.currentWeight}%</HoldingMetricCell>
+                                <HoldingMetricCell label="Value">
                                   {rec.currentValue !== null ? (
-                                    <strong>{formatCurrency(rec.currentValue)}</strong>
+                                    formatCurrency(rec.currentValue)
                                   ) : (
                                     <span style={tdMutedInline}>—</span>
                                   )}
-                                </span>
-                              </div>
+                                </HoldingMetricCell>
+                              </HoldingMetricGrid>
                             </li>
                           ))}
                         </ul>
@@ -1143,65 +1141,64 @@ export default function ClientPortfolioUploadPanel() {
                                 </span>
                               </div>
 
-                              <div style={weightEditCell}>
-                                <span style={holdingCardFieldLabel}>Target</span>
-                                <input
-                                  type="number"
-                                  step={0.5}
-                                  style={
+                              <HoldingMetricGrid>
+                                <HoldingMetricCell
+                                  label="Target weight"
+                                  tone={
                                     holdingOverrides[normaliseCode(rec.code)] !== undefined
-                                      ? weightInputOverridden
-                                      : weightInput
+                                      ? 'accent'
+                                      : 'default'
                                   }
-                                  value={rec.targetWeight}
-                                  onChange={(e) => {
-                                    const value = parseFloat(e.target.value)
-                                    if (!Number.isNaN(value)) setHoldingWeight(rec.code, value)
-                                  }}
-                                  aria-label={`${rec.name} target weight`}
-                                />
-                                %
-                                <span style={holdingCardChange}>
-                                  ({rec.changeWeight > 0 ? '+' : ''}
-                                  {rec.changeWeight}pp)
-                                </span>
-                                {holdingOverrides[normaliseCode(rec.code)] !== undefined ? (
-                                  <button
-                                    style={resetWeightButton}
-                                    title="Reset to house model weight"
-                                    onClick={() => resetHoldingWeight(rec.code)}
-                                  >
-                                    ↺
-                                  </button>
-                                ) : null}
-                              </div>
-
-                              <div style={holdingCardValueRow}>
-                                <span>
-                                  Trade value:{' '}
+                                >
+                                  <input
+                                    type="number"
+                                    step={0.5}
+                                    style={holdingMetricInput}
+                                    value={rec.targetWeight}
+                                    onChange={(e) => {
+                                      const value = parseFloat(e.target.value)
+                                      if (!Number.isNaN(value)) setHoldingWeight(rec.code, value)
+                                    }}
+                                    aria-label={`${rec.name} target weight`}
+                                  />
+                                  <span>%</span>
+                                  {holdingOverrides[normaliseCode(rec.code)] !== undefined ? (
+                                    <button
+                                      style={resetWeightButton}
+                                      title="Reset to house model weight"
+                                      onClick={() => resetHoldingWeight(rec.code)}
+                                    >
+                                      ↺
+                                    </button>
+                                  ) : null}
+                                </HoldingMetricCell>
+                                <HoldingMetricCell label="Change">
+                                  {rec.changeWeight > 0 ? '+' : ''}
+                                  {rec.changeWeight}pp
+                                </HoldingMetricCell>
+                                <HoldingMetricCell label="Trade value">
                                   {rec.changeValue !== null ? (
-                                    <strong>
+                                    <>
                                       {rec.changeValue > 0 ? '+' : ''}
                                       {formatCurrency(rec.changeValue)}
-                                    </strong>
+                                    </>
                                   ) : (
                                     <span style={tdMutedInline}>—</span>
                                   )}
-                                </span>
-                                <span>
-                                  Units:{' '}
+                                </HoldingMetricCell>
+                                <HoldingMetricCell label="Units">
                                   {rec.units !== null ? (
-                                    <strong>
+                                    <>
                                       {rec.units > 0 ? '+' : ''}
                                       {rec.units.toLocaleString()}
-                                    </strong>
+                                    </>
                                   ) : (
                                     <span style={tdMutedInline}>
                                       {rec.changeValue !== null ? 'no price' : '—'}
                                     </span>
                                   )}
-                                </span>
-                              </div>
+                                </HoldingMetricCell>
+                              </HoldingMetricGrid>
 
                               <p style={holdingCardRationale}>{rec.rationale}</p>
                             </li>

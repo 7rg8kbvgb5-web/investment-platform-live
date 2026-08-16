@@ -9,11 +9,13 @@ import {
   type CoreSecurity,
 } from '../lib/engines/model-portfolio-core';
 import { computePortfolioYield } from '../lib/engines/yield-aggregation';
+import { computeConvictionRating, type ConvictionRating } from '../lib/engines/conviction-rating';
 import type { RiskProfile } from '../lib/engines/model-portfolios';
 import { useClientAdvice } from './ClientAdviceContext';
 import Panel from './ui/Panel';
 import StatusBox from './dashboard/StatusBox';
 import AllocationPieChart from './AllocationPieChart';
+import { HoldingMetricGrid, HoldingMetricCell } from './ui/HoldingMetricGrid';
 
 // This is the weighting layer of the house model, per risk profile - NOT
 // where securities themselves are added, removed, or given a yield. That
@@ -53,6 +55,8 @@ export function PortfolioConstitutionPanel() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savingCount, setSavingCount] = useState(0);
+  const [convictions, setConvictions] = useState<Record<string, ConvictionRating>>({});
+  const [convictionsLoading, setConvictionsLoading] = useState(true);
 
   const load = useCallback(async (profile: string) => {
     setLoading(true);
@@ -76,6 +80,28 @@ export function PortfolioConstitutionPanel() {
   useEffect(() => {
     load(selectedRiskProfile);
   }, [selectedRiskProfile, load]);
+
+  useEffect(() => {
+    if (securities.length === 0) return;
+    let cancelled = false;
+    Promise.all(
+      securities.map(async (s) => {
+        try {
+          const rating = await computeConvictionRating(s.code);
+          return [s.code, rating] as const;
+        } catch {
+          return [s.code, { houseView: null, convictionScore: null, sources: [] }] as const;
+        }
+      }),
+    ).then((results) => {
+      if (cancelled) return;
+      setConvictions(Object.fromEntries(results));
+      setConvictionsLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [securities]);
 
   async function withSaving<T>(action: () => Promise<T>): Promise<T | undefined> {
     setSavingCount((c) => c + 1);
@@ -274,26 +300,58 @@ export function PortfolioConstitutionPanel() {
             <p style={assetClassDescription}>{assetClass.description}</p>
 
             <ul style={holdingList}>
-              {assetClass.holdings.map((holding) => (
+              {assetClass.holdings.map((holding) => {
+                const conviction = convictions[holding.code];
+                const houseView = conviction?.houseView ?? null;
+                const convictionScore = conviction?.convictionScore ?? null;
+                const sources = conviction?.sources ?? [];
+                const convictionTooltip =
+                  sources.length > 0
+                    ? sources.map((s) => `${s.source}: ${s.rating}`).join(' · ')
+                    : convictionsLoading
+                      ? 'Loading…'
+                      : 'No rating data yet';
+
+                return (
                 <li key={holding.id} style={holdingRow}>
                   <div style={holdingHeader}>
                     <span style={holdingCode}>{holding.code}</span>
                     <span style={holdingName}>{holding.name}</span>
                     {holding.sector && <span style={sectorTag}>{holding.sector}</span>}
-                    <span style={holdingYieldTag}>
-                      {typeof holding.yield === 'number' ? `${holding.yield}% fwd. yield` : 'No yield set'}
-                    </span>
                   </div>
                   <p style={holdingRationale}>{holding.rationale}</p>
-                  <div style={holdingWeightRow}>
-                    <span style={readOnlyWeightTag}>{holding.inClassWeight}% of class</span>
-                    <span style={overallWeightLabel}>
-                      = {round1((assetClass.targetWeight * holding.inClassWeight) / 100)}%
-                      of {selectedRiskProfile}
-                    </span>
-                  </div>
+                  <HoldingMetricGrid>
+                    <HoldingMetricCell label="Weight in class (all profiles)">
+                      {holding.inClassWeight}%
+                    </HoldingMetricCell>
+                    <HoldingMetricCell label={`= % of ${selectedRiskProfile}`}>
+                      {round1((assetClass.targetWeight * holding.inClassWeight) / 100)}%
+                    </HoldingMetricCell>
+                    <HoldingMetricCell label="Forward yield (FY26/27)">
+                      {typeof holding.yield === 'number' ? `${holding.yield}%` : '—'}
+                    </HoldingMetricCell>
+                    <HoldingMetricCell
+                      label="Conviction"
+                      tone={
+                        houseView === 'strong-positive' || houseView === 'positive'
+                          ? 'positive'
+                          : houseView === 'negative' || houseView === 'strong-negative'
+                            ? 'negative'
+                            : 'default'
+                      }
+                    >
+                      <span title={convictionTooltip}>
+                        {convictionScore !== null
+                          ? `${convictionScore}/5`
+                          : convictionsLoading
+                            ? 'Loading…'
+                            : 'No data'}
+                      </span>
+                    </HoldingMetricCell>
+                  </HoldingMetricGrid>
                 </li>
-              ))}
+                );
+              })}
               {assetClass.holdings.length === 0 && (
                 <p style={emptyText}>
                   No securities in this asset class yet — add them on the Model
