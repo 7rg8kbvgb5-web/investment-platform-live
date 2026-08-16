@@ -150,7 +150,7 @@ export function SecurityMasterPanel() {
 
                   return (
                     <tr key={row.code}>
-                      <td style={{ fontWeight: 700 }}>{row.code}</td>
+                      <td style={{ fontWeight: 700, color: '#38bdf8' }}>{row.code}</td>
                       <td>{row.name}</td>
                       <td>{row.sector}</td>
                       <td>{row.assetClass ?? '—'}</td>

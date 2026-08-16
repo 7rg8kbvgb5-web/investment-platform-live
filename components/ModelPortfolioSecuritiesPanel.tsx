@@ -380,28 +380,28 @@ export function ModelPortfolioSecuritiesPanel() {
       )}
 
       <div style={statsRow}>
-        <div style={statBox}>
+        <div style={statBoxThin}>
           <span style={statLabel}>Securities</span>
           <span style={statValue}>{totalSecurities}</span>
         </div>
-        <div style={statBox}>
-          <span style={statLabel}>Asset classes covered</span>
+        <div style={statBoxThin}>
+          <span style={statLabel}>Asset classes</span>
           <span style={statValue}>{assetClasses.filter((ac) => ac.holdings.length > 0).length}</span>
         </div>
-        <div style={statBox}>
-          <span style={statLabel}>Avg. forward yield (FY26/27)</span>
+        <div style={statBoxThin}>
+          <span style={statLabel}>Avg. fwd yield</span>
           <span style={statValue}>{averageForwardYield !== null ? `${averageForwardYield}%` : '—'}</span>
         </div>
-        <div style={statBox}>
-          <span style={statLabel}>Yield data coverage</span>
+        <div style={statBoxThin}>
+          <span style={statLabel}>Yield coverage</span>
           <span style={statValue}>{yieldCoveragePct}%</span>
         </div>
-        <div style={statBox}>
-          <span style={statLabel}>Conviction data coverage</span>
+        <div style={statBoxThin}>
+          <span style={statLabel}>Conviction coverage</span>
           <span style={statValue}>{convictionsLoading ? '…' : `${convictionCoveragePct}%`}</span>
         </div>
-        <div style={statBox}>
-          <span style={statLabel}>Asset classes with weight issues</span>
+        <div style={statBoxThin}>
+          <span style={statLabel}>Weight issues</span>
           <span
             style={{
               ...statValue,
@@ -756,14 +756,15 @@ const statsRow = {
   marginBottom: '18px',
 };
 
-const statBox = {
+const statBoxThin = {
   display: 'flex',
   flexDirection: 'column' as const,
-  padding: '10px 16px',
+  padding: '10px 12px',
   borderRadius: '10px',
   background: '#0b2447',
   border: '1px solid #2d4a6b',
-  minWidth: '150px',
+  minWidth: '100px',
+  flex: '0 1 110px',
 };
 
 const statLabel = {
@@ -785,8 +786,8 @@ const tacticalTableBox = {
   borderRadius: '10px',
   background: '#0b2447',
   border: '1px solid #2d4a6b',
-  minWidth: '220px',
-  flex: '1 1 260px',
+  minWidth: '340px',
+  flex: '2 1 340px',
 };
 
 const tacticalTableBoxHeader = {
@@ -1033,7 +1034,7 @@ const holdingHeader = {
 const holdingCode = {
   fontSize: '13px',
   fontWeight: 700,
-  color: '#e2e8f0',
+  color: '#38bdf8',
 };
 
 const holdingName = {

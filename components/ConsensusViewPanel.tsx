@@ -254,7 +254,7 @@ const aggregateHeader = {
 const aggregateCode = {
   fontSize: '18px',
   fontWeight: 700,
-  color: '#e2e8f0',
+  color: '#38bdf8',
 };
 
 const aggregateName = {

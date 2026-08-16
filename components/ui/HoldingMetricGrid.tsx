@@ -69,12 +69,13 @@ const cellValue = {
   display: 'flex',
   alignItems: 'center',
   gap: '4px',
-  flexWrap: 'wrap' as const,
+  flexWrap: 'nowrap' as const,
 };
 
-/** A number input styled to fill a HoldingMetricCell - large, legible, full width. */
+/** A number input styled to fill a HoldingMetricCell - large, legible, sized to its digits so the % sign sits right beside it instead of wrapping below. */
 export const holdingMetricInput = {
-  width: '100%',
+  width: '52px',
+  flex: '0 0 auto',
   minWidth: 0,
   padding: '2px 0',
   border: 'none',

@@ -562,7 +562,7 @@ const holdingHeader = {
 const holdingCode = {
   fontSize: '13px',
   fontWeight: 700,
-  color: '#e2e8f0',
+  color: '#38bdf8',
 };
 
 const holdingName = {
