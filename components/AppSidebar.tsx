@@ -92,17 +92,6 @@ const NAV_ITEMS: NavItem[] = [
       </svg>
     ),
   },
-  {
-    href: '/governance',
-    label: 'Governance',
-    description: 'Approvals, deferrals and audit',
-    icon: (
-      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-        <path d="M10 3l6 3v5c0 3.5-2.6 5.8-6 7-3.4-1.2-6-3.5-6-7V6l6-3z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-        <path d="M7.5 10l1.8 1.8L12.5 8.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    ),
-  },
 ];
 
 function isNavItemActive(pathname: string, href: string): boolean {
