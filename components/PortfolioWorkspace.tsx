@@ -11,9 +11,13 @@ import {
 } from './ClientAdviceContext'
 import InstitutionalProposalBuilderPanel from "./InstitutionalProposalBuilderPanel";
 
-type PortfolioWorkspaceKey = 'riskProfile' | 'construction' | 'clientAdvice'
+type PortfolioWorkspaceKey = 'modelPortfolio' | 'riskProfile' | 'construction' | 'clientAdvice'
 
 interface Props {
+  // The static model portfolio itself - which securities exist, per
+  // asset class. Holds true across every risk profile; no weightings
+  // live here at all.
+  modelPortfolio: React.ReactNode
   // The formally-set model portfolio per risk profile - "under a perfect
   // scenario" - built and edited here.
   riskProfile: React.ReactNode
@@ -30,12 +34,13 @@ export default function PortfolioWorkspace(props: Props) {
 }
 
 function WorkspaceBody({
+  modelPortfolio,
   riskProfile,
   construction,
   clientAdvice,
 }: Props) {
   const [activeTab, setActiveTab] =
-    useState<PortfolioWorkspaceKey>('riskProfile')
+    useState<PortfolioWorkspaceKey>('modelPortfolio')
 
   const { selectedRiskProfile, setSelectedRiskProfile } = useClientAdvice()
 
@@ -69,6 +74,10 @@ function WorkspaceBody({
   return (
     <div className="space-y-6">
       <PortfolioWorkspaceTabs activeTab={activeTab} onChange={setActiveTab} />
+
+      {activeTab === 'modelPortfolio' && (
+        <div className="section">{modelPortfolio}</div>
+      )}
 
       {activeTab === 'riskProfile' && (
         <div className="section">

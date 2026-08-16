@@ -1,5 +1,6 @@
 import PageContent from '../../components/PageContent';
 import { PortfolioConstitutionPanel } from '../../components/PortfolioConstitutionPanel';
+import { ModelPortfolioSecuritiesPanel } from '../../components/ModelPortfolioSecuritiesPanel';
 import { PortfolioApprovalReadinessPanel } from '../../components/PortfolioApprovalReadinessPanel';
 import { InvestmentProposalPanel } from '../../components/InvestmentProposalPanel';
 import { buildClientAdviceWorkflow } from '../../lib/engines/client-advice-workflow';
@@ -19,6 +20,7 @@ export default function PortfoliosPage() {
     >
       <ClientAdviceProvider>
         <PortfolioWorkspace
+          modelPortfolio={<ModelPortfolioSecuritiesPanel />}
           riskProfile={
             <>
               <PortfolioConstitutionPanel />

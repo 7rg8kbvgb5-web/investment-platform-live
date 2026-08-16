@@ -1,17 +1,20 @@
 'use client'
 
-type PortfolioWorkspace = 'riskProfile' | 'construction' | 'clientAdvice'
+type PortfolioWorkspace = 'modelPortfolio' | 'riskProfile' | 'construction' | 'clientAdvice'
 
 interface Props {
   activeTab: PortfolioWorkspace
   onChange: (tab: PortfolioWorkspace) => void
 }
 
-// Order mirrors the actual workflow: define how each risk profile should
-// be constructed under a perfect scenario, then bring a specific client's
-// existing portfolio in line with it, then build the reasoning and
-// context that turns those changes into a proposal.
+// Order mirrors the actual workflow: define the static model portfolio
+// itself (which securities exist, per asset class - holds true across
+// every risk profile), then set each risk profile's weighting of that
+// model, then bring a specific client's existing portfolio in line with
+// it, then build the reasoning and context that turns those changes
+// into a proposal.
 const tabs = [
+  { id: 'modelPortfolio', label: 'Model Portfolio' },
   { id: 'riskProfile', label: 'Risk Profile' },
   { id: 'construction', label: 'Construction' },
   { id: 'clientAdvice', label: 'Client Advice' },

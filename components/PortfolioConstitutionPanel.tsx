@@ -1,32 +1,29 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ASSET_CLASSES,
-  addCoreSecurity,
   fetchCoreSecurities,
   fetchRiskProfileWeights,
-  removeCoreSecurity,
   updateCoreSecurityInClassWeight,
-  updateCoreSecurityYield,
   updateRiskProfileAssetClassWeight,
   type CoreSecurity,
 } from '../lib/engines/model-portfolio-core';
-import { buildSecurityUniverse } from '../lib/engines/security-universe';
 import { computePortfolioYield } from '../lib/engines/yield-aggregation';
-import { stripExchangeSuffix } from '../lib/engines/security-lookup';
 import type { RiskProfile } from '../lib/engines/model-portfolios';
 import { useClientAdvice } from './ClientAdviceContext';
 import Panel from './ui/Panel';
 import StatusBox from './dashboard/StatusBox';
 import AllocationPieChart from './AllocationPieChart';
 
-// This is the house model itself, not a client-specific working copy.
-// The securities in model_portfolio_securities are shared across every
-// risk profile - editing a security here (add, remove, reweight within
-// its asset class) changes it for all five profiles at once. Only each
-// asset class's overall weight-of-portfolio is specific to the
-// currently selected risk profile (risk_profile_asset_class_weights).
+// This is the weighting layer of the house model, per risk profile - NOT
+// where securities themselves are added, removed, or given a yield. That
+// happens once, on the Model Portfolio tab, and holds true across every
+// profile. Here, two things are specific to whichever risk profile is
+// selected: each asset class's overall weight of the portfolio, and each
+// holding's weight within its asset class (in-class weight is shared
+// across all five profiles by design - only the asset-class-level weight
+// varies - so editing it here changes it everywhere, same as before).
 // Every edit saves to Supabase immediately - there is no separate
 // "model" to reset to, because this IS the model. Client-specific
 // bespoke adjustments happen later, in Construction.
@@ -81,8 +78,6 @@ export function PortfolioConstitutionPanel() {
     load(selectedRiskProfile);
   }, [selectedRiskProfile, load]);
 
-  const universe = useMemo(() => Array.from(buildSecurityUniverse().values()), []);
-
   async function withSaving<T>(action: () => Promise<T>): Promise<T | undefined> {
     setSavingCount((c) => c + 1);
     setSaveError(null);
@@ -114,144 +109,10 @@ export function PortfolioConstitutionPanel() {
     );
   }
 
-  function setHoldingYieldLocal(id: string, value: number | null) {
-    setSecurities((prev) => prev.map((s) => (s.id === id ? { ...s, yield: value } : s)));
-  }
-
-  async function saveHoldingYield(id: string) {
-    const sec = securities.find((s) => s.id === id);
-    if (!sec) return;
-    await withSaving(() => updateCoreSecurityYield(id, sec.yield));
-  }
-
   async function saveHoldingWeight(id: string) {
     const sec = securities.find((s) => s.id === id);
     if (!sec || !Number.isFinite(sec.inClassWeight)) return;
     await withSaving(() => updateCoreSecurityInClassWeight(id, sec.inClassWeight));
-  }
-
-  async function handleRemove(sec: CoreSecurity) {
-    const confirmed = window.confirm(
-      `Remove ${sec.name} (${sec.code}) from the core model? This removes it from every risk profile, not just ${selectedRiskProfile}.`
-    );
-    if (!confirmed) return;
-    const result = await withSaving(() => removeCoreSecurity(sec.id));
-    if (result !== undefined || true) {
-      setSecurities((prev) => prev.filter((s) => s.id !== sec.id));
-    }
-  }
-
-  async function handleAdd(assetClassName: string, code: string) {
-    if (!code) return;
-    const candidate = universe.find((entry) => entry.code === code);
-    if (!candidate) return;
-
-    const added = await withSaving(() =>
-      addCoreSecurity({
-        assetClass: assetClassName,
-        code: candidate.code,
-        name: candidate.name,
-        sector: candidate.sector,
-        rationale: candidate.inSecurityMaster
-          ? 'Added from the Approved List.'
-          : 'Added manually.',
-        inSecurityMaster: candidate.inSecurityMaster,
-      })
-    );
-    if (added) {
-      setSecurities((prev) => [...prev, added]);
-    }
-  }
-
-  const [manualEntry, setManualEntry] = useState<
-    Record<string, { code: string; name: string; yield: string }>
-  >({});
-  const [lookupState, setLookupState] = useState<
-    Record<string, { loading: boolean; error: string | null; note: string | null }>
-  >({});
-
-  function updateManualEntry(assetClassName: string, field: 'code' | 'name' | 'yield', value: string) {
-    setManualEntry((prev) => ({
-      ...prev,
-      [assetClassName]: { code: '', name: '', yield: '', ...prev[assetClassName], [field]: value },
-    }));
-  }
-
-  async function handleLookup(assetClassName: string) {
-    const rawCode = manualEntry[assetClassName]?.code?.trim();
-    if (!rawCode) return;
-    const code = stripExchangeSuffix(rawCode);
-
-    setLookupState((prev) => ({ ...prev, [assetClassName]: { loading: true, error: null, note: null } }));
-    try {
-      const res = await fetch('/api/securities/lookup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code }),
-      });
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.error ?? 'Lookup failed.');
-
-      // Clean the code field itself too - the code that ends up saved
-      // needs to be the bare ticker, or it won't match a client's actual
-      // holding statement later on (which won't carry a ".ASX" suffix).
-      setManualEntry((prev) => ({
-        ...prev,
-        [assetClassName]: {
-          code,
-          name: data.result.name ?? prev[assetClassName]?.name ?? '',
-          yield:
-            typeof data.result.yield === 'number'
-              ? String(data.result.yield)
-              : prev[assetClassName]?.yield ?? '',
-        },
-      }));
-
-      const foundNothing = data.result.name === null && data.result.yield === null;
-      setLookupState((prev) => ({
-        ...prev,
-        [assetClassName]: {
-          loading: false,
-          error: foundNothing
-            ? `Couldn't find "${code}" — check the ticker, or fill in name and yield manually.`
-            : null,
-          note: data.result.yieldNote ?? null,
-        },
-      }));
-    } catch (err) {
-      setLookupState((prev) => ({
-        ...prev,
-        [assetClassName]: {
-          loading: false,
-          error: err instanceof Error ? err.message : 'Lookup failed.',
-          note: null,
-        },
-      }));
-    }
-  }
-
-  async function handleManualAdd(assetClassName: string) {
-    const entry = manualEntry[assetClassName];
-    const code = entry?.code ? stripExchangeSuffix(entry.code) : '';
-    const name = entry?.name.trim();
-    const yieldValue = entry?.yield?.trim();
-    if (!code || !name) return;
-
-    const added = await withSaving(() =>
-      addCoreSecurity({
-        assetClass: assetClassName,
-        code,
-        name,
-        rationale: 'Added manually - not yet on the Approved List.',
-        inSecurityMaster: false,
-        yield: yieldValue ? parseFloat(yieldValue) : null,
-      })
-    );
-    if (added) {
-      setSecurities((prev) => [...prev, added]);
-      setManualEntry((prev) => ({ ...prev, [assetClassName]: { code: '', name: '', yield: '' } }));
-      setLookupState((prev) => ({ ...prev, [assetClassName]: { loading: false, error: null, note: null } }));
-    }
   }
 
   const assetClasses = ASSET_CLASSES.map((meta) => ({
@@ -352,9 +213,10 @@ export function PortfolioConstitutionPanel() {
       </div>
 
       <StatusBox variant="neutral" display="inline">
-        Securities and their in-class weightings are the shared core model —
-        editing a holding here applies to every risk profile, not just{' '}
-        {selectedRiskProfile}. Each asset class&apos;s overall weight of the
+        Weighting only — the securities themselves are managed on the Model
+        Portfolio tab and are shared across every risk profile. A holding&apos;s
+        in-class weight also applies to every profile, not just{' '}
+        {selectedRiskProfile}; each asset class&apos;s overall weight of the
         portfolio is specific to {selectedRiskProfile} only. Every change
         saves automatically.
       </StatusBox>
@@ -404,12 +266,6 @@ export function PortfolioConstitutionPanel() {
 
       <div style={assetClassList}>
         {assetClasses.map((assetClass) => {
-          const candidates = universe.filter(
-            (entry) =>
-              entry.assetClass === assetClass.name &&
-              !assetClass.holdings.some((h) => h.code === entry.code)
-          );
-
           const inClassTotal = round1(
             assetClass.holdings.reduce((total, h) => total + h.inClassWeight, 0)
           );
@@ -444,14 +300,9 @@ export function PortfolioConstitutionPanel() {
                       <span style={holdingCode}>{holding.code}</span>
                       <span style={holdingName}>{holding.name}</span>
                       {holding.sector && <span style={sectorTag}>{holding.sector}</span>}
-                      <button
-                        type="button"
-                        onClick={() => handleRemove(holding)}
-                        style={removeButton}
-                        aria-label={`Remove ${holding.name} from the core model`}
-                      >
-                        Remove
-                      </button>
+                      <span style={holdingYieldTag}>
+                        {typeof holding.yield === 'number' ? `${holding.yield}% fwd. yield` : 'No yield set'}
+                      </span>
                     </div>
                     <p style={holdingRationale}>{holding.rationale}</p>
                     <div style={holdingWeightRow}>
@@ -472,28 +323,13 @@ export function PortfolioConstitutionPanel() {
                         of {selectedRiskProfile}
                       </span>
                     </div>
-                    <div style={holdingWeightRow}>
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={holding.yield ?? ''}
-                        placeholder="—"
-                        onChange={(e) =>
-                          setHoldingYieldLocal(
-                            holding.id,
-                            e.target.value === '' ? null : parseFloat(e.target.value)
-                          )
-                        }
-                        onBlur={() => saveHoldingYield(holding.id)}
-                        style={holdingYieldInput}
-                        aria-label={`${holding.name} yield`}
-                      />
-                      <span style={weightPercentSign}>% fwd. yield</span>
-                    </div>
                   </li>
                 ))}
                 {assetClass.holdings.length === 0 && (
-                  <p style={emptyText}>No securities in this asset class yet.</p>
+                  <p style={emptyText}>
+                    No securities in this asset class yet — add them on the Model
+                    Portfolio tab.
+                  </p>
                 )}
               </ul>
 
@@ -509,78 +345,6 @@ export function PortfolioConstitutionPanel() {
                     {inClassTotal}%
                   </span>
                 </div>
-              )}
-
-              {candidates.length > 0 && (
-                <select
-                  defaultValue=""
-                  onChange={(e) => {
-                    handleAdd(assetClass.name, e.target.value);
-                    e.target.value = '';
-                  }}
-                  style={addSelect}
-                >
-                  <option value="" disabled>
-                    + Add a security to {assetClass.name} (all risk profiles)
-                  </option>
-                  {candidates.map((entry) => (
-                    <option key={entry.code} value={entry.code}>
-                      {entry.code} — {entry.name}
-                      {entry.inSecurityMaster ? ' (Approved List)' : ''}
-                    </option>
-                  ))}
-                </select>
-              )}
-
-              <div style={manualAddRow}>
-                <input
-                  type="text"
-                  placeholder="Code"
-                  value={manualEntry[assetClass.name]?.code ?? ''}
-                  onChange={(e) => updateManualEntry(assetClass.name, 'code', e.target.value)}
-                  style={manualCodeInput}
-                />
-                <button
-                  type="button"
-                  onClick={() => handleLookup(assetClass.name)}
-                  disabled={lookupState[assetClass.name]?.loading}
-                  style={lookupButton}
-                >
-                  {lookupState[assetClass.name]?.loading ? 'Looking up…' : 'Look up'}
-                </button>
-                <input
-                  type="text"
-                  placeholder="Security name"
-                  value={manualEntry[assetClass.name]?.name ?? ''}
-                  onChange={(e) => updateManualEntry(assetClass.name, 'name', e.target.value)}
-                  style={manualNameInput}
-                />
-                <input
-                  type="number"
-                  step="0.1"
-                  placeholder="Fwd yield %"
-                  value={manualEntry[assetClass.name]?.yield ?? ''}
-                  onChange={(e) => updateManualEntry(assetClass.name, 'yield', e.target.value)}
-                  style={manualYieldInput}
-                />
-                <button
-                  type="button"
-                  onClick={() => handleManualAdd(assetClass.name)}
-                  style={manualAddButton}
-                >
-                  Add
-                </button>
-              </div>
-              {lookupState[assetClass.name]?.error && (
-                <p style={lookupErrorText}>{lookupState[assetClass.name]?.error}</p>
-              )}
-              {lookupState[assetClass.name]?.note && (
-                <p style={lookupNoteText}>{lookupState[assetClass.name]?.note}</p>
-              )}
-              {candidates.length === 0 && (
-                <p style={emptyText}>
-                  No suggested candidates on file for {assetClass.name} yet — add by code and name above.
-                </p>
               )}
             </div>
           );
@@ -805,6 +569,13 @@ const holdingName = {
 const sectorTag = {
   fontSize: '11px',
   color: '#94a3b8',
+};
+
+const holdingYieldTag = {
+  marginLeft: 'auto',
+  fontSize: '11px',
+  fontWeight: 600,
+  color: '#4ade80',
 };
 
 const removeButton = {
