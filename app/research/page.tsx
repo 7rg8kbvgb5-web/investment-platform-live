@@ -1,4 +1,6 @@
 import PageContent from "../../components/PageContent";
+import { ConsensusViewPanel } from "../../components/ConsensusViewPanel";
+import { HouseViewsPanel } from "../../components/HouseViewsPanel";
 import ResearchInboxPanel from "../../components/ResearchInboxPanel";
 import ResearchRequestPanel from "../../components/ResearchRequestPanel";
 import InvestmentCasePanel from "../../components/InvestmentCasePanel";
@@ -15,6 +17,10 @@ export default function ResearchPage() {
       title="Research"
       description="Research inbox workflow, investment cases, security master, approved list, and research request management."
     >
+      <ConsensusViewPanel />
+
+      <HouseViewsPanel />
+
       <WeeklyBriefPanel />
 
       <ResearchLibraryPanel />
