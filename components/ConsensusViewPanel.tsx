@@ -78,7 +78,20 @@ export function ConsensusViewPanel() {
             <div style={aggregateStatsRow}>
               <div style={aggregateStat}>
                 <span style={aggregateStatLabel}>Consensus</span>
-                <span style={aggregateStatValue}>{result.consensusRating ?? '—'}</span>
+                <span
+                  style={{
+                    ...aggregateStatValue,
+                    color: result.consensusRating
+                      ? {
+                          bullish: '#4ade80',
+                          neutral: '#e2e8f0',
+                          bearish: '#fca5a5',
+                        }[classifyRating(result.consensusRating)]
+                      : '#e2e8f0',
+                  }}
+                >
+                  {result.consensusRating ?? '—'}
+                </span>
               </div>
               <div style={aggregateStat}>
                 <span style={aggregateStatLabel}>Avg. price target</span>
@@ -158,7 +171,19 @@ export function ConsensusViewPanel() {
                   {result.recommendations.map((rec, i) => (
                     <tr key={`${rec.institution}-${i}`}>
                       <td style={td}>{rec.institution}</td>
-                      <td style={td}>{rec.rating}</td>
+                      <td
+                        style={{
+                          ...td,
+                          fontWeight: 700,
+                          color: {
+                            bullish: '#4ade80',
+                            neutral: '#e2e8f0',
+                            bearish: '#fca5a5',
+                          }[classifyRating(rec.rating)],
+                        }}
+                      >
+                        {rec.rating}
+                      </td>
                       <td style={td}>{rec.priceTarget !== null ? `$${rec.priceTarget}` : '—'}</td>
                       <td style={td}>{rec.yieldEstimate !== null ? `${rec.yieldEstimate}%` : '—'}</td>
                       <td style={tdMuted}>{rec.asOf ?? '—'}</td>
