@@ -952,38 +952,44 @@ export default function ClientPortfolioUploadPanel() {
             </div>
           ) : null}
 
-          {/* Holding-level recommendations */}
+          {/* Holding-level recommendations, broken out by asset class to
+              mirror the Model Portfolio / Risk Profile tabs' layout, so
+              the workflow reads the same way across the app. Every
+              holding is shown here now (not just ones flagged for
+              change), and every target weight is editable - this is
+              where bespoke amendments for this specific client/review
+              happen. */}
           <div style={subPanel}>
             <p style={subHeading}>Recommended Changes</p>
             <HoldingAdjustmentChart recommendations={comparison.holdingRecommendations} />
-            <div style={tableWrap}>
-              <table style={table}>
-                <thead>
-                  <tr>
-                    <th style={th}>Security</th>
-                    <th style={th}>Asset Class</th>
-                    <th style={th}>Current</th>
-                    <th style={th}>Target</th>
-                    <th style={th}>Change</th>
-                    <th style={th}>Trade Value</th>
-                    <th style={th}>Units</th>
-                    <th style={th}>Action</th>
-                    <th style={th}>Rationale</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {comparison.holdingRecommendations
-                    .filter((rec) => rec.action !== 'hold')
-                    .map((rec) => (
-                      <tr key={rec.code}>
-                        <td style={td}>
-                          <span style={titleCell}>{rec.code}</span>
-                          <span style={summaryCell}>{rec.name}</span>
-                        </td>
-                        <td style={tdMuted}>{rec.assetClass}</td>
-                        <td style={td}>{rec.currentWeight}%</td>
-                        <td style={td}>
+            <div style={assetClassList}>
+              {clientAdjustedModel.assetClasses.map((assetClass) => {
+                const classRecs = comparison.holdingRecommendations.filter(
+                  (rec) => rec.assetClass === assetClass.name,
+                )
+                if (classRecs.length === 0) return null
+
+                return (
+                  <div key={assetClass.name} style={assetClassCard}>
+                    <div style={assetClassCardHeader}>
+                      <h4 style={assetClassCardTitle}>{assetClass.name}</h4>
+                      <span style={typeBadgeSmall}>{assetClass.type}</span>
+                      <span style={countBadgeSmall}>{classRecs.length} holdings</span>
+                    </div>
+
+                    <ul style={holdingCardList}>
+                      {classRecs.map((rec) => (
+                        <li key={rec.code} style={holdingCardRow}>
+                          <div style={holdingCardHeader}>
+                            <span style={holdingCardCode}>{rec.code}</span>
+                            <span style={holdingCardName}>{rec.name}</span>
+                            <span style={holdingCardBadge}>
+                              <ActionBadge action={rec.action} />
+                            </span>
+                          </div>
+
                           <div style={weightEditCell}>
+                            <span style={holdingCardFieldLabel}>Current {rec.currentWeight}% → Target</span>
                             <input
                               type="number"
                               step={0.5}
@@ -997,8 +1003,13 @@ export default function ClientPortfolioUploadPanel() {
                                 const value = parseFloat(e.target.value)
                                 if (!Number.isNaN(value)) setHoldingWeight(rec.code, value)
                               }}
+                              aria-label={`${rec.name} target weight`}
                             />
                             %
+                            <span style={holdingCardChange}>
+                              ({rec.changeWeight > 0 ? '+' : ''}
+                              {rec.changeWeight}pp)
+                            </span>
                             {holdingOverrides[normaliseCode(rec.code)] !== undefined ? (
                               <button
                                 style={resetWeightButton}
@@ -1009,51 +1020,41 @@ export default function ClientPortfolioUploadPanel() {
                               </button>
                             ) : null}
                           </div>
-                        </td>
-                        <td style={td}>
-                          {rec.changeWeight > 0 ? '+' : ''}
-                          {rec.changeWeight}pp
-                        </td>
-                        <td style={td}>
-                          {rec.changeValue !== null ? (
-                            <>
-                              {rec.changeValue > 0 ? '+' : ''}
-                              {formatCurrency(rec.changeValue)}
-                            </>
-                          ) : (
-                            <span style={tdMutedInline}>—</span>
-                          )}
-                        </td>
-                        <td style={td}>
-                          {rec.units !== null ? (
-                            <>
-                              {rec.units > 0 ? '+' : ''}
-                              {rec.units.toLocaleString()}
-                            </>
-                          ) : (
-                            <span style={tdMutedInline}>
-                              {rec.changeValue !== null ? 'no price' : '—'}
+
+                          <div style={holdingCardValueRow}>
+                            <span>
+                              Trade value:{' '}
+                              {rec.changeValue !== null ? (
+                                <strong>
+                                  {rec.changeValue > 0 ? '+' : ''}
+                                  {formatCurrency(rec.changeValue)}
+                                </strong>
+                              ) : (
+                                <span style={tdMutedInline}>—</span>
+                              )}
                             </span>
-                          )}
-                        </td>
-                        <td style={td}>
-                          <ActionBadge action={rec.action} />
-                        </td>
-                        <td style={tdWrap}>{rec.rationale}</td>
-                      </tr>
-                    ))}
-                  {comparison.holdingRecommendations.every(
-                    (rec) => rec.action === 'hold',
-                  ) ? (
-                    <tr>
-                      <td style={td} colSpan={9}>
-                        No changes required — all mapped holdings are in
-                        line with the {effectiveRiskProfile} model.
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
+                            <span>
+                              Units:{' '}
+                              {rec.units !== null ? (
+                                <strong>
+                                  {rec.units > 0 ? '+' : ''}
+                                  {rec.units.toLocaleString()}
+                                </strong>
+                              ) : (
+                                <span style={tdMutedInline}>
+                                  {rec.changeValue !== null ? 'no price' : '—'}
+                                </span>
+                              )}
+                            </span>
+                          </div>
+
+                          <p style={holdingCardRationale}>{rec.rationale}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )
+              })}
             </div>
           </div>
 
@@ -1649,4 +1650,118 @@ const yieldOverviewValue = {
   fontWeight: 700,
   color: '#4ade80',
   marginTop: '2px',
+}
+
+const assetClassList = {
+  display: 'flex',
+  flexDirection: 'column' as const,
+  gap: '16px',
+  marginTop: '10px',
+}
+
+const assetClassCard = {
+  padding: '14px 16px',
+  borderRadius: '12px',
+  background: '#0d1f38',
+  border: '1px solid #1e3a5f',
+}
+
+const assetClassCardHeader = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '10px',
+  flexWrap: 'wrap' as const,
+  marginBottom: '10px',
+}
+
+const assetClassCardTitle = {
+  margin: 0,
+  fontSize: '14px',
+  fontWeight: 700,
+  color: '#e2e8f0',
+}
+
+const typeBadgeSmall = {
+  padding: '2px 8px',
+  borderRadius: '999px',
+  fontSize: '10px',
+  fontWeight: 700,
+  background: '#12345b',
+  color: '#93c5fd',
+}
+
+const countBadgeSmall = {
+  marginLeft: 'auto',
+  padding: '2px 8px',
+  borderRadius: '999px',
+  fontSize: '11px',
+  fontWeight: 600,
+  background: '#12203a',
+  color: '#94a3b8',
+}
+
+const holdingCardList = {
+  margin: 0,
+  padding: 0,
+  listStyle: 'none',
+  display: 'flex',
+  flexDirection: 'column' as const,
+  gap: '8px',
+}
+
+const holdingCardRow = {
+  padding: '10px 12px',
+  background: '#0b2342',
+  borderRadius: '8px',
+  border: '1px solid #1e3a5f',
+}
+
+const holdingCardHeader = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  flexWrap: 'wrap' as const,
+}
+
+const holdingCardCode = {
+  fontSize: '13px',
+  fontWeight: 700,
+  color: '#e2e8f0',
+}
+
+const holdingCardName = {
+  fontSize: '13px',
+  color: '#cbd5e1',
+}
+
+const holdingCardBadge = {
+  marginLeft: 'auto',
+}
+
+const holdingCardFieldLabel = {
+  fontSize: '11px',
+  color: '#94a3b8',
+  marginRight: '2px',
+}
+
+const holdingCardChange = {
+  fontSize: '11px',
+  color: '#93c5fd',
+  fontWeight: 600,
+}
+
+const holdingCardValueRow = {
+  display: 'flex',
+  gap: '18px',
+  flexWrap: 'wrap' as const,
+  marginTop: '6px',
+  fontSize: '12px',
+  color: '#94a3b8',
+}
+
+const holdingCardRationale = {
+  margin: '6px 0 0',
+  fontSize: '12px',
+  color: '#94a3b8',
+  lineHeight: 1.4,
 }
