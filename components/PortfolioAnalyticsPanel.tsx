@@ -24,9 +24,8 @@ export default async function PortfolioAnalyticsPanel() {
 
       <Panel eyebrow="Diversification" title="Correlation Dispersion">
         <p style={intro}>
-          How much the securities in this portfolio move together. Lower
-          average correlation means more genuine diversification and a
-          smoother return profile across the risk profile.
+          The headline diversification numbers — average pairwise correlation, portfolio-wide and
+          by asset class. Lower is better spread; the heatmaps below break this down visually.
         </p>
 
         <div style={summaryGrid}>
@@ -52,9 +51,8 @@ export default async function PortfolioAnalyticsPanel() {
 
       <Panel eyebrow="Diversification" title="Asset Class Correlation">
         <p style={intro}>
-          Correlation between asset classes. Asset classes near +1 rise and
-          fall together, offering little diversification benefit between
-          them; values near 0 or negative smooth the overall return.
+          Which asset classes actually move independently of each other, and which are
+          effectively duplicating the same risk despite being labelled differently.
         </p>
         <CorrelationHeatmap
           codes={analytics.assetClassCorrelation.codes}

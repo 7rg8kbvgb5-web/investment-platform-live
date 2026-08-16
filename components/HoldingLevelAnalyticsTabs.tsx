@@ -82,8 +82,8 @@ export function HoldingLevelAnalyticsTabs({ modelAnalytics }: { modelAnalytics: 
         <>
           <Panel eyebrow="Diversification" title="Holding-Level Correlation">
             <p style={intro}>
-              Correlation between the individual securities across every asset class. Clusters of high
-              correlation within an asset class suggest redundant exposure worth reviewing.
+              The same question one level down, at the individual security: spot specific holdings
+              that are redundant with each other, inside or across an asset class.
             </p>
             <CorrelationHeatmap
               codes={activeAnalytics.holdingCorrelation.codes}
@@ -118,6 +118,7 @@ export function HoldingLevelAnalyticsTabs({ modelAnalytics }: { modelAnalytics: 
 const tabBar = {
   display: 'flex',
   gap: '10px',
+  marginTop: '28px',
   marginBottom: '18px',
 };
 
