@@ -311,6 +311,18 @@ export function ModelPortfolioSecuritiesPanel() {
   const yieldCoveragePct =
     totalSecurities > 0 ? round1((securitiesWithYield.length / totalSecurities) * 100) : 0;
 
+  const securitiesWithConviction = securities.filter(
+    (s) => convictions[s.code]?.convictionScore !== null && convictions[s.code] !== undefined,
+  );
+  const convictionCoveragePct =
+    totalSecurities > 0 ? round1((securitiesWithConviction.length / totalSecurities) * 100) : 0;
+
+  const assetClassesWithWeightIssues = assetClasses.filter((ac) => {
+    if (ac.holdings.length === 0) return false;
+    const total = round1(ac.holdings.reduce((sum, h) => sum + h.inClassWeight, 0));
+    return Math.abs(total - 100) >= 0.15;
+  }).length;
+
   const sectorCounts = new Map<string, number>();
   for (const sec of securities) {
     const sector = sec.sector ?? 'Unclassified';
@@ -383,6 +395,21 @@ export function ModelPortfolioSecuritiesPanel() {
         <div style={statBox}>
           <span style={statLabel}>Yield data coverage</span>
           <span style={statValue}>{yieldCoveragePct}%</span>
+        </div>
+        <div style={statBox}>
+          <span style={statLabel}>Conviction data coverage</span>
+          <span style={statValue}>{convictionsLoading ? '…' : `${convictionCoveragePct}%`}</span>
+        </div>
+        <div style={statBox}>
+          <span style={statLabel}>Asset classes with weight issues</span>
+          <span
+            style={{
+              ...statValue,
+              color: assetClassesWithWeightIssues === 0 ? '#4ade80' : '#fca5a5',
+            }}
+          >
+            {assetClassesWithWeightIssues}
+          </span>
         </div>
         <div style={tacticalTableBox}>
           <div style={tacticalTableBoxHeader}>
@@ -915,7 +942,7 @@ const overviewThRight = {
 };
 
 const overviewTd = {
-  padding: '8px 10px',
+  padding: '15px 10px',
   borderBottom: '1px solid #1e293b',
   color: '#e2e8f0',
   fontSize: '13px',
