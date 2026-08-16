@@ -1,8 +1,8 @@
-import { fetchCoreSecurities, ASSET_CLASSES } from './model-portfolio-core'
+import { fetchCoreSecurities, ASSET_CLASSES, fetchModelPortfolio } from './model-portfolio-core'
 import { getLatestTacticalAssetClassView } from './tactical-asset-view'
 import { listClientReviews } from './client-portfolio-reviews'
 import { getLatestMonitoringAlerts } from './investment-monitoring'
-import { getLatestFundReviewAlerts } from './fund-review'
+import { getLatestFundReviewAlerts, getFundsHeld } from './fund-review'
 import { getLatestWeeklyBrief } from './weekly-brief'
 import { listResearchDocuments } from './research-library'
 import { listDeepDiveReviews } from './investment-deep-dive'
@@ -23,6 +23,7 @@ export type ModelPortfolioSummary = {
   weightIssues: number
   tacticalOverweight: number
   tacticalUnderweight: number
+  averageForwardYield: number | null
 }
 
 export type ConstructionSummary = {
@@ -42,6 +43,8 @@ export type FundReviewSummary = {
   highCount: number
   totalActive: number
   lastScanAt: string | null
+  listedFundsHeld: number
+  unlistedFundsHeld: number
 }
 
 export type ResearchSummary = {
@@ -54,12 +57,20 @@ export type InvestmentCommitteeSummary = {
   totalReviews: number
   mostRecentSubject: string | null
   mostRecentAt: string | null
+  mostRecentKeyRisksCount: number
 }
 
 export type DataAnalyticsSummary = {
   topSector: string | null
   topSectorRecommendation: string | null
+  worstSector: string | null
+  worstSectorRecommendation: string | null
   correlationRating: number | null
+}
+
+export type AssetAllocationSlice = {
+  assetClass: string
+  weight: number
 }
 
 export type DashboardSummary = {
@@ -70,6 +81,7 @@ export type DashboardSummary = {
   research: ResearchSummary | null
   investmentCommittee: InvestmentCommitteeSummary | null
   dataAnalytics: DataAnalyticsSummary | null
+  assetAllocation: AssetAllocationSlice[]
 }
 
 function settled<T>(result: PromiseSettledResult<T>): T | null {
@@ -83,22 +95,26 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     reviewsResult,
     monitoringResult,
     fundReviewResult,
+    fundsHeldResult,
     weeklyBriefResult,
     researchDocsResult,
     deepDivesResult,
     sectorHealthResult,
     analyticsResult,
+    balancedModelResult,
   ] = await Promise.allSettled([
     fetchCoreSecurities(),
     getLatestTacticalAssetClassView(),
     listClientReviews(),
     getLatestMonitoringAlerts(),
     getLatestFundReviewAlerts(),
+    getFundsHeld(),
     getLatestWeeklyBrief(),
     listResearchDocuments(),
     listDeepDiveReviews(),
     getLatestSectorHealthScores(),
     getPortfolioAnalytics(),
+    fetchModelPortfolio('Balanced'),
   ])
 
   // --- Model Portfolio ---
@@ -122,6 +138,12 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
       weightIssues,
       tacticalOverweight: tacticalView?.calls.filter((c) => c.stance === 'OW').length ?? 0,
       tacticalUnderweight: tacticalView?.calls.filter((c) => c.stance === 'UW').length ?? 0,
+      averageForwardYield: (() => {
+        const withYield = securities.filter((s) => typeof s.yield === 'number')
+        if (withYield.length === 0) return null
+        const sum = withYield.reduce((total, s) => total + (s.yield ?? 0), 0)
+        return Math.round((sum / withYield.length) * 100) / 100
+      })(),
     }
   }
 
@@ -147,12 +169,15 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
 
   // --- Fund Reviews ---
   const fundAlerts = settled(fundReviewResult)
+  const fundsHeld = settled(fundsHeldResult)
   const fundReviews: FundReviewSummary | null = fundAlerts
     ? {
         criticalCount: fundAlerts.filter((a) => a.severity === 'critical' && a.status !== 'dismissed').length,
         highCount: fundAlerts.filter((a) => a.severity === 'high' && a.status !== 'dismissed').length,
         totalActive: fundAlerts.filter((a) => a.status !== 'dismissed').length,
         lastScanAt: fundAlerts.length > 0 ? fundAlerts[0].generatedAt : null,
+        listedFundsHeld: fundsHeld?.filter((f) => f.holdingType === 'listed_fund').length ?? 0,
+        unlistedFundsHeld: fundsHeld?.filter((f) => f.holdingType === 'unlisted_fund').length ?? 0,
       }
     : null
 
@@ -175,6 +200,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
         totalReviews: deepDives.length,
         mostRecentSubject: deepDives.length > 0 ? deepDives[0].subjectName : null,
         mostRecentAt: deepDives.length > 0 ? deepDives[0].generatedAt : null,
+        mostRecentKeyRisksCount: deepDives.length > 0 ? deepDives[0].keyRisks.length : 0,
       }
     : null
 
@@ -182,6 +208,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   const sectorScores = settled(sectorHealthResult)
   const analytics = settled(analyticsResult)
   const topSector = sectorScores && sectorScores.length > 0 ? sectorScores[0] : null
+  const worstSector = sectorScores && sectorScores.length > 0 ? sectorScores[sectorScores.length - 1] : null
   const correlationRating = analytics
     ? Math.max(
         0,
@@ -191,8 +218,18 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   const dataAnalytics: DataAnalyticsSummary = {
     topSector: topSector?.sector ?? null,
     topSectorRecommendation: topSector?.recommendation ?? null,
+    worstSector: worstSector && worstSector !== topSector ? worstSector.sector : null,
+    worstSectorRecommendation: worstSector && worstSector !== topSector ? worstSector.recommendation : null,
     correlationRating,
   }
+
+  // --- Asset allocation snapshot (Balanced profile, as a representative shape) ---
+  const balancedModel = settled(balancedModelResult)
+  const assetAllocation: AssetAllocationSlice[] = balancedModel
+    ? balancedModel.assetClasses
+        .filter((ac) => ac.targetWeight > 0)
+        .map((ac) => ({ assetClass: ac.name, weight: ac.targetWeight }))
+    : []
 
   return {
     modelPortfolio,
@@ -202,5 +239,6 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     research,
     investmentCommittee,
     dataAnalytics,
+    assetAllocation,
   }
 }
