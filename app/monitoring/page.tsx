@@ -1,21 +1,13 @@
 import PageContent from '../../components/PageContent';
-import AlertRulesPanel from '../../components/AlertRulesPanel';
-import AlertSummaryPanel from '../../components/AlertSummaryPanel';
-import FundMonitoringPanel from '../../components/FundMonitoringPanel';
-import MonitoringSummaryPanel from '../../components/MonitoringSummaryPanel';
-import ModelPortfolioHealthSection from '../../components/ModelPortfolioHealthSection';
+import { InvestmentMonitoringPanel } from '../../components/InvestmentMonitoringPanel';
 
 export default function MonitoringPage() {
   return (
     <PageContent
       title="Monitoring"
-      description="Monitor portfolios, review alerts, assess managed funds, and identify investment issues requiring attention."
+      description="Live scan of the model portfolio's actual securities for macro events, holding-specific news, and better risk-adjusted alternatives."
     >
-      <MonitoringSummaryPanel />
-      <ModelPortfolioHealthSection />
-      <AlertSummaryPanel />
-      <AlertRulesPanel />
-      <FundMonitoringPanel />
+      <InvestmentMonitoringPanel />
     </PageContent>
   );
 }
