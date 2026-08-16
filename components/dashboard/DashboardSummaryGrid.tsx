@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { getDashboardSummary } from '../../lib/engines/dashboard-summary';
 import { DashboardPriorityBanner } from './DashboardPriorityBanner';
-import { DashboardAllocationSnapshot } from './DashboardAllocationSnapshot';
+import { DashboardNewsFeed } from './DashboardNewsFeed';
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
@@ -65,7 +65,7 @@ export default async function DashboardSummaryGrid() {
   return (
     <>
       <DashboardPriorityBanner summary={summary} />
-      <DashboardAllocationSnapshot allocation={summary.assetAllocation} />
+      <DashboardNewsFeed items={summary.newsFeed} />
 
       <div style={grid}>
         {/* Model Portfolio */}
@@ -153,6 +153,15 @@ export default async function DashboardSummaryGrid() {
                   {summary.monitoring.criticalCount} critical · {summary.monitoring.highCount} high ·{' '}
                   {summary.monitoring.totalActive} active total
                 </p>
+                {summary.monitoring.topAlerts.length > 0 && (
+                  <ul style={cardAlertList}>
+                    {summary.monitoring.topAlerts.map((alert) => (
+                      <li key={alert.id} style={cardAlertItem}>
+                        {alert.title}
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 <p style={cardStatMuted}>Last scan: {formatDate(summary.monitoring.lastScanAt)}</p>
               </>
             ) : (
@@ -189,6 +198,15 @@ export default async function DashboardSummaryGrid() {
                   </p>
                 ) : (
                   <p style={cardStatHighlight}>No active alerts</p>
+                )}
+                {summary.fundReviews.topAlerts.length > 0 && (
+                  <ul style={cardAlertList}>
+                    {summary.fundReviews.topAlerts.map((alert) => (
+                      <li key={alert.id} style={cardAlertItem}>
+                        {alert.title}
+                      </li>
+                    ))}
+                  </ul>
                 )}
                 <p style={cardStatMuted}>
                   {summary.fundReviews.listedFundsHeld} listed · {summary.fundReviews.unlistedFundsHeld} unlisted
@@ -354,4 +372,17 @@ const cardStatMuted = {
   fontSize: '12px',
   color: '#94a3b8',
   lineHeight: 1.4,
+};
+
+const cardAlertList = {
+  margin: '4px 0 6px',
+  padding: '0 0 0 16px',
+  listStyle: 'disc' as const,
+};
+
+const cardAlertItem = {
+  fontSize: '12px',
+  color: '#cbd5e1',
+  lineHeight: 1.5,
+  marginBottom: '2px',
 };

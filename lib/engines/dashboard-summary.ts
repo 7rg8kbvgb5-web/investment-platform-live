@@ -31,11 +31,22 @@ export type ConstructionSummary = {
   mostRecentClientName: string | null
 }
 
+export type AlertHeadline = {
+  id: string
+  title: string
+  severity: 'critical' | 'high' | 'medium' | 'low'
+  category: string
+  source: 'Monitoring' | 'Fund Reviews'
+  generatedAt: string
+  href: string
+}
+
 export type MonitoringSummary = {
   criticalCount: number
   highCount: number
   totalActive: number
   lastScanAt: string | null
+  topAlerts: AlertHeadline[]
 }
 
 export type FundReviewSummary = {
@@ -45,6 +56,7 @@ export type FundReviewSummary = {
   lastScanAt: string | null
   listedFundsHeld: number
   unlistedFundsHeld: number
+  topAlerts: AlertHeadline[]
 }
 
 export type ResearchSummary = {
@@ -82,6 +94,7 @@ export type DashboardSummary = {
   investmentCommittee: InvestmentCommitteeSummary | null
   dataAnalytics: DataAnalyticsSummary | null
   assetAllocation: AssetAllocationSlice[]
+  newsFeed: AlertHeadline[]
 }
 
 function settled<T>(result: PromiseSettledResult<T>): T | null {
@@ -156,30 +169,71 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
       }
     : null
 
+  const SEVERITY_RANK: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 }
+
   // --- Monitoring ---
   const monitoringAlerts = settled(monitoringResult)
+  const monitoringActive = monitoringAlerts?.filter((a) => a.status !== 'dismissed') ?? []
+  const monitoringTopAlerts: AlertHeadline[] = [...monitoringActive]
+    .sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity])
+    .slice(0, 3)
+    .map((a) => ({
+      id: a.id,
+      title: a.title,
+      severity: a.severity,
+      category: a.category,
+      source: 'Monitoring',
+      generatedAt: a.generatedAt,
+      href: '/monitoring',
+    }))
   const monitoring: MonitoringSummary | null = monitoringAlerts
     ? {
-        criticalCount: monitoringAlerts.filter((a) => a.severity === 'critical' && a.status !== 'dismissed').length,
-        highCount: monitoringAlerts.filter((a) => a.severity === 'high' && a.status !== 'dismissed').length,
-        totalActive: monitoringAlerts.filter((a) => a.status !== 'dismissed').length,
+        criticalCount: monitoringActive.filter((a) => a.severity === 'critical').length,
+        highCount: monitoringActive.filter((a) => a.severity === 'high').length,
+        totalActive: monitoringActive.length,
         lastScanAt: monitoringAlerts.length > 0 ? monitoringAlerts[0].generatedAt : null,
+        topAlerts: monitoringTopAlerts,
       }
     : null
 
   // --- Fund Reviews ---
   const fundAlerts = settled(fundReviewResult)
   const fundsHeld = settled(fundsHeldResult)
+  const fundActive = fundAlerts?.filter((a) => a.status !== 'dismissed') ?? []
+  const fundTopAlerts: AlertHeadline[] = [...fundActive]
+    .sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity])
+    .slice(0, 3)
+    .map((a) => ({
+      id: a.id,
+      title: a.title,
+      severity: a.severity,
+      category: a.category,
+      source: 'Fund Reviews',
+      generatedAt: a.generatedAt,
+      href: '/fund-reviews',
+    }))
   const fundReviews: FundReviewSummary | null = fundAlerts
     ? {
-        criticalCount: fundAlerts.filter((a) => a.severity === 'critical' && a.status !== 'dismissed').length,
-        highCount: fundAlerts.filter((a) => a.severity === 'high' && a.status !== 'dismissed').length,
-        totalActive: fundAlerts.filter((a) => a.status !== 'dismissed').length,
+        criticalCount: fundActive.filter((a) => a.severity === 'critical').length,
+        highCount: fundActive.filter((a) => a.severity === 'high').length,
+        totalActive: fundActive.length,
         lastScanAt: fundAlerts.length > 0 ? fundAlerts[0].generatedAt : null,
         listedFundsHeld: fundsHeld?.filter((f) => f.holdingType === 'listed_fund').length ?? 0,
         unlistedFundsHeld: fundsHeld?.filter((f) => f.holdingType === 'unlisted_fund').length ?? 0,
+        topAlerts: fundTopAlerts,
       }
     : null
+
+  // News feed: the most notable active alerts across Monitoring and Fund
+  // Reviews together, most severe and most recent first - a real,
+  // scannable digest of what's actually going on, not headline counts.
+  const newsFeed: AlertHeadline[] = [...monitoringTopAlerts, ...fundTopAlerts]
+    .sort((a, b) => {
+      const severityDiff = SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]
+      if (severityDiff !== 0) return severityDiff
+      return new Date(b.generatedAt).getTime() - new Date(a.generatedAt).getTime()
+    })
+    .slice(0, 8)
 
   // --- Research ---
   const brief = settled(weeklyBriefResult)
@@ -240,5 +294,6 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     investmentCommittee,
     dataAnalytics,
     assetAllocation,
+    newsFeed,
   }
 }
