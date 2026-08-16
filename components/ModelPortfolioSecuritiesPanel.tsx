@@ -6,6 +6,7 @@ import {
   addCoreSecurity,
   fetchCoreSecurities,
   removeCoreSecurity,
+  updateCoreSecurityInClassWeight,
   updateCoreSecurityYield,
   type CoreSecurity,
 } from '../lib/engines/model-portfolio-core';
@@ -74,6 +75,16 @@ export function ModelPortfolioSecuritiesPanel() {
     const sec = securities.find((s) => s.id === id);
     if (!sec) return;
     await withSaving(() => updateCoreSecurityYield(id, sec.yield));
+  }
+
+  function setHoldingWeightLocal(id: string, value: number) {
+    setSecurities((prev) => prev.map((s) => (s.id === id ? { ...s, inClassWeight: value } : s)));
+  }
+
+  async function saveHoldingWeight(id: string) {
+    const sec = securities.find((s) => s.id === id);
+    if (!sec || !Number.isFinite(sec.inClassWeight)) return;
+    await withSaving(() => updateCoreSecurityInClassWeight(id, sec.inClassWeight));
   }
 
   async function handleRemove(sec: CoreSecurity) {
@@ -258,10 +269,11 @@ export function ModelPortfolioSecuritiesPanel() {
       }
     >
       <p style={intro}>
-        The single list of securities that make up the model, by asset class.
-        This is static and holds true across all five risk profiles —
-        weightings (how much of the portfolio each asset class and holding
-        carries) are set per risk profile on the Risk Profile tab, not here.
+        The master list of specific investment weightings — which securities
+        make up the model, by asset class, and how much of its asset class
+        each one carries. This is static and holds true across all five risk
+        profiles. Asset allocation (how much of the overall portfolio each
+        asset class carries) is set per risk profile on the Risk Profile tab.
       </p>
 
       {saveError && (
@@ -358,6 +370,20 @@ export function ModelPortfolioSecuritiesPanel() {
                       <input
                         type="number"
                         step="0.1"
+                        value={holding.inClassWeight}
+                        onChange={(e) =>
+                          setHoldingWeightLocal(holding.id, parseFloat(e.target.value))
+                        }
+                        onBlur={() => saveHoldingWeight(holding.id)}
+                        style={holdingWeightInput}
+                        aria-label={`${holding.name} weight within ${assetClass.name}`}
+                      />
+                      <span style={weightPercentSign}>% of class (all risk profiles)</span>
+                    </div>
+                    <div style={holdingWeightRow}>
+                      <input
+                        type="number"
+                        step="0.1"
                         value={holding.yield ?? ''}
                         placeholder="—"
                         onChange={(e) =>
@@ -378,6 +404,25 @@ export function ModelPortfolioSecuritiesPanel() {
                   <p style={emptyText}>No securities in this asset class yet.</p>
                 )}
               </ul>
+
+              {assetClass.holdings.length > 0 && (
+                <div style={inClassTotalRow}>
+                  <span style={inClassTotalLabel}>Class total</span>
+                  <span
+                    style={{
+                      ...inClassTotalValue,
+                      color:
+                        Math.abs(
+                          round1(assetClass.holdings.reduce((t, h) => t + h.inClassWeight, 0)) - 100
+                        ) < 0.15
+                          ? '#86efac'
+                          : '#fca5a5',
+                    }}
+                  >
+                    {round1(assetClass.holdings.reduce((t, h) => t + h.inClassWeight, 0))}%
+                  </span>
+                </div>
+              )}
 
               {candidates.length > 0 && (
                 <select
@@ -694,6 +739,36 @@ const holdingWeightRow = {
   gap: '6px',
   flexWrap: 'wrap' as const,
   marginTop: '8px',
+};
+
+const holdingWeightInput = {
+  width: '60px',
+  padding: '5px 8px',
+  borderRadius: '6px',
+  fontSize: '12px',
+  fontWeight: 700,
+  background: '#12345b',
+  border: '1px solid #2d4a6b',
+  color: '#e2e8f0',
+};
+
+const inClassTotalRow = {
+  display: 'flex',
+  justifyContent: 'flex-end',
+  gap: '8px',
+  marginTop: '10px',
+  paddingTop: '8px',
+  borderTop: '1px dashed #2d4a6b',
+};
+
+const inClassTotalLabel = {
+  fontSize: '11px',
+  color: '#94a3b8',
+};
+
+const inClassTotalValue = {
+  fontSize: '12px',
+  fontWeight: 700,
 };
 
 const holdingYieldInput = {

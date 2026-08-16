@@ -5,7 +5,6 @@ import {
   ASSET_CLASSES,
   fetchCoreSecurities,
   fetchRiskProfileWeights,
-  updateCoreSecurityInClassWeight,
   updateRiskProfileAssetClassWeight,
   type CoreSecurity,
 } from '../lib/engines/model-portfolio-core';
@@ -101,18 +100,6 @@ export function PortfolioConstitutionPanel() {
     await withSaving(() =>
       updateRiskProfileAssetClassWeight(selectedRiskProfile as RiskProfile, assetClassName, value)
     );
-  }
-
-  function setHoldingWeightLocal(id: string, value: number) {
-    setSecurities((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, inClassWeight: value } : s))
-    );
-  }
-
-  async function saveHoldingWeight(id: string) {
-    const sec = securities.find((s) => s.id === id);
-    if (!sec || !Number.isFinite(sec.inClassWeight)) return;
-    await withSaving(() => updateCoreSecurityInClassWeight(id, sec.inClassWeight));
   }
 
   const assetClasses = ASSET_CLASSES.map((meta) => ({
@@ -213,12 +200,11 @@ export function PortfolioConstitutionPanel() {
       </div>
 
       <StatusBox variant="neutral" display="inline">
-        Weighting only — the securities themselves are managed on the Model
-        Portfolio tab and are shared across every risk profile. A holding&apos;s
-        in-class weight also applies to every profile, not just{' '}
-        {selectedRiskProfile}; each asset class&apos;s overall weight of the
-        portfolio is specific to {selectedRiskProfile} only. Every change
-        saves automatically.
+        Asset allocation only — each asset class&apos;s overall weight of the
+        portfolio for {selectedRiskProfile}. The securities themselves and
+        their specific investment weightings are managed on the Model
+        Portfolio tab and are shared across every risk profile. Every
+        change here saves automatically.
       </StatusBox>
 
       {saveError && (
@@ -265,90 +251,58 @@ export function PortfolioConstitutionPanel() {
       </div>
 
       <div style={assetClassList}>
-        {assetClasses.map((assetClass) => {
-          const inClassTotal = round1(
-            assetClass.holdings.reduce((total, h) => total + h.inClassWeight, 0)
-          );
-          const inClassOk = assetClass.holdings.length === 0 || Math.abs(inClassTotal - 100) < 0.15;
-
-          return (
-            <div key={assetClass.name} style={assetClassCard}>
-              <div style={assetClassHeader}>
-                <h4 style={assetClassTitle}>{assetClass.name}</h4>
-                <span style={typeBadge}>{assetClass.type}</span>
-                <div style={assetClassWeightControl}>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={assetClass.targetWeight}
-                    onChange={(e) =>
-                      setAssetClassWeightLocal(assetClass.name, parseFloat(e.target.value))
-                    }
-                    onBlur={() => saveAssetClassWeight(assetClass.name)}
-                    style={assetClassWeightInput}
-                    aria-label={`${assetClass.name} weight of overall portfolio for ${selectedRiskProfile}`}
-                  />
-                  <span style={weightPercentSign}>% of portfolio ({selectedRiskProfile})</span>
-                </div>
+        {assetClasses.map((assetClass) => (
+          <div key={assetClass.name} style={assetClassCard}>
+            <div style={assetClassHeader}>
+              <h4 style={assetClassTitle}>{assetClass.name}</h4>
+              <span style={typeBadge}>{assetClass.type}</span>
+              <div style={assetClassWeightControl}>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={assetClass.targetWeight}
+                  onChange={(e) =>
+                    setAssetClassWeightLocal(assetClass.name, parseFloat(e.target.value))
+                  }
+                  onBlur={() => saveAssetClassWeight(assetClass.name)}
+                  style={assetClassWeightInput}
+                  aria-label={`${assetClass.name} weight of overall portfolio for ${selectedRiskProfile}`}
+                />
+                <span style={weightPercentSign}>% of portfolio ({selectedRiskProfile})</span>
               </div>
-              <p style={assetClassDescription}>{assetClass.description}</p>
-
-              <ul style={holdingList}>
-                {assetClass.holdings.map((holding) => (
-                  <li key={holding.id} style={holdingRow}>
-                    <div style={holdingHeader}>
-                      <span style={holdingCode}>{holding.code}</span>
-                      <span style={holdingName}>{holding.name}</span>
-                      {holding.sector && <span style={sectorTag}>{holding.sector}</span>}
-                      <span style={holdingYieldTag}>
-                        {typeof holding.yield === 'number' ? `${holding.yield}% fwd. yield` : 'No yield set'}
-                      </span>
-                    </div>
-                    <p style={holdingRationale}>{holding.rationale}</p>
-                    <div style={holdingWeightRow}>
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={holding.inClassWeight}
-                        onChange={(e) =>
-                          setHoldingWeightLocal(holding.id, parseFloat(e.target.value))
-                        }
-                        onBlur={() => saveHoldingWeight(holding.id)}
-                        style={holdingWeightInput}
-                        aria-label={`${holding.name} weight within ${assetClass.name} (shared across all risk profiles)`}
-                      />
-                      <span style={weightPercentSign}>% of class (all profiles)</span>
-                      <span style={overallWeightLabel}>
-                        = {round1((assetClass.targetWeight * holding.inClassWeight) / 100)}%
-                        of {selectedRiskProfile}
-                      </span>
-                    </div>
-                  </li>
-                ))}
-                {assetClass.holdings.length === 0 && (
-                  <p style={emptyText}>
-                    No securities in this asset class yet — add them on the Model
-                    Portfolio tab.
-                  </p>
-                )}
-              </ul>
-
-              {assetClass.holdings.length > 0 && (
-                <div style={inClassTotalRow}>
-                  <span style={inClassTotalLabel}>Class total</span>
-                  <span
-                    style={{
-                      ...inClassTotalValue,
-                      color: inClassOk ? '#86efac' : '#fca5a5',
-                    }}
-                  >
-                    {inClassTotal}%
-                  </span>
-                </div>
-              )}
             </div>
-          );
-        })}
+            <p style={assetClassDescription}>{assetClass.description}</p>
+
+            <ul style={holdingList}>
+              {assetClass.holdings.map((holding) => (
+                <li key={holding.id} style={holdingRow}>
+                  <div style={holdingHeader}>
+                    <span style={holdingCode}>{holding.code}</span>
+                    <span style={holdingName}>{holding.name}</span>
+                    {holding.sector && <span style={sectorTag}>{holding.sector}</span>}
+                    <span style={holdingYieldTag}>
+                      {typeof holding.yield === 'number' ? `${holding.yield}% fwd. yield` : 'No yield set'}
+                    </span>
+                  </div>
+                  <p style={holdingRationale}>{holding.rationale}</p>
+                  <div style={holdingWeightRow}>
+                    <span style={readOnlyWeightTag}>{holding.inClassWeight}% of class</span>
+                    <span style={overallWeightLabel}>
+                      = {round1((assetClass.targetWeight * holding.inClassWeight) / 100)}%
+                      of {selectedRiskProfile}
+                    </span>
+                  </div>
+                </li>
+              ))}
+              {assetClass.holdings.length === 0 && (
+                <p style={emptyText}>
+                  No securities in this asset class yet — add them on the Model
+                  Portfolio tab.
+                </p>
+              )}
+            </ul>
+          </div>
+        ))}
       </div>
     </Panel>
   );
@@ -620,6 +574,12 @@ const overallWeightLabel = {
   fontSize: '11px',
   color: '#93c5fd',
   fontWeight: 600,
+};
+
+const readOnlyWeightTag = {
+  fontSize: '12px',
+  fontWeight: 700,
+  color: '#94a3b8',
 };
 
 const inClassTotalRow = {
