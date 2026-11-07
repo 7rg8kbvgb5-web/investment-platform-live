@@ -25,11 +25,19 @@ export type ClientPortfolioReviewState = {
   modelVersion?: number | null
 }
 
+export type ClientStatus = 'in_progress' | 'proposed' | 'implemented'
+
 export type ClientPortfolioReview = {
   id: string
   clientName: string
   updatedAt: string
   state: ClientPortfolioReviewState
+  /** Advice lifecycle (migration 0021). */
+  status: ClientStatus
+  adviceApproach: 'rebalance' | 'new-cash' | null
+  adviserNotes: string
+  proposedAt: string | null
+  implementedAt: string | null
 }
 
 type ReviewRow = {
@@ -44,6 +52,11 @@ type ReviewRow = {
   holding_overrides: HoldingWeightOverrides
   entry_mode?: string | null
   model_version?: number | null
+  status?: ClientStatus | null
+  advice_approach?: 'rebalance' | 'new-cash' | null
+  adviser_notes?: string | null
+  proposed_at?: string | null
+  implemented_at?: string | null
   updated_at: string
 }
 
@@ -63,6 +76,11 @@ function mapRow(row: ReviewRow): ClientPortfolioReview {
       entryMode: row.entry_mode === 'new-money' ? 'new-money' : 'portfolio',
       modelVersion: row.model_version ?? null,
     },
+    status: row.status ?? 'in_progress',
+    adviceApproach: row.advice_approach ?? null,
+    adviserNotes: row.adviser_notes ?? '',
+    proposedAt: row.proposed_at ?? null,
+    implementedAt: row.implemented_at ?? null,
   }
 }
 
@@ -79,6 +97,37 @@ export async function listClientReviews(): Promise<{ id: string; clientName: str
     clientName: row.client_name,
     updatedAt: row.updated_at,
   }))
+}
+
+/** Every review in full - for the client register and drift monitoring. */
+export async function listClientReviewsFull(): Promise<ClientPortfolioReview[]> {
+  const { data, error } = await supabase.from(TABLE).select('*').order('updated_at', { ascending: false })
+  if (error) throw new Error(`Failed to load client reviews: ${error.message}`)
+  return (data ?? []).map((row) => mapRow(row as ReviewRow))
+}
+
+/** Advice-stage fields, set from the Client Advice tab (migration 0021). */
+export async function updateClientAdvice(
+  id: string,
+  fields: {
+    status?: ClientStatus
+    adviceApproach?: 'rebalance' | 'new-cash'
+    adviserNotes?: string
+    proposalSnapshot?: unknown
+  },
+): Promise<void> {
+  const update: Record<string, unknown> = {}
+  if (fields.adviceApproach) update.advice_approach = fields.adviceApproach
+  if (fields.adviserNotes !== undefined) update.adviser_notes = fields.adviserNotes
+  if (fields.status) {
+    update.status = fields.status
+    if (fields.status === 'proposed') update.proposed_at = new Date().toISOString()
+    if (fields.status === 'implemented') update.implemented_at = new Date().toISOString()
+  }
+  if (fields.proposalSnapshot !== undefined) update.proposal_snapshot = fields.proposalSnapshot
+  if (Object.keys(update).length === 0) return
+  const { error } = await supabase.from(TABLE).update(update).eq('id', id)
+  if (error) throw new Error(`Failed to update client advice: ${error.message}`)
 }
 
 export async function fetchClientReview(id: string): Promise<ClientPortfolioReview> {

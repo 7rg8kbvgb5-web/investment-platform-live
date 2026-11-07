@@ -4,7 +4,7 @@ import { ModelPortfolioSecuritiesPanel } from '../../components/ModelPortfolioSe
 import PortfolioWorkspace from '../../components/PortfolioWorkspace';
 import ClientPortfolioUploadPanel from '../../components/ClientPortfolioUploadPanel';
 import ModelVersionPanel from '../../components/ModelVersionPanel';
-import ClientAdvicePlaceholder from '../../components/ClientAdvicePlaceholder';
+import ClientAdvicePanel from '../../components/ClientAdvicePanel';
 import { ClientAdviceProvider } from '../../components/ClientAdviceContext';
 
 export const dynamic = 'force-dynamic';
@@ -30,7 +30,7 @@ export default function PortfoliosPage() {
             </>
           }
           construction={<ClientPortfolioUploadPanel />}
-          clientAdvice={<ClientAdvicePlaceholder />}
+          clientAdvice={<ClientAdvicePanel />}
         />
       </ClientAdviceProvider>
     </PageContent>

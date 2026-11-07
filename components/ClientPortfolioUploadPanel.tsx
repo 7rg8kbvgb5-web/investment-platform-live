@@ -426,6 +426,13 @@ export default function ClientPortfolioUploadPanel() {
     }
   }
 
+  // Opened from the Clients register (?review=<id>) - load that client.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('review')
+    if (id) loadReview(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   async function removeReview(id: string, e: React.MouseEvent) {
     e.stopPropagation()
     const confirmed = window.confirm('Delete this saved client review? This cannot be undone.')
@@ -930,7 +937,7 @@ export default function ClientPortfolioUploadPanel() {
               <p style={subHeading}>Risk Profile Classification</p>
 
               <label style={selectLabel}>
-                Compare against
+                Agreed risk profile
                 <select
                   style={select}
                   value={riskOverride}
@@ -939,7 +946,7 @@ export default function ClientPortfolioUploadPanel() {
                   }
                 >
                   <option value="auto">
-                    Auto (nearest: {riskClassification.nearestRiskProfile})
+                    Not yet agreed (nearest: {riskClassification.nearestRiskProfile})
                   </option>
                   {RISK_PROFILES.map((profile) => (
                     <option key={profile} value={profile}>

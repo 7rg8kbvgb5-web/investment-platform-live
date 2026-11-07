@@ -3,14 +3,10 @@
 import { useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import PortfolioWorkspaceTabs from './PortfolioWorkspaceTabs'
-import { WorkflowStepper, WorkflowStep } from './WorkflowStepper'
-import ClientAdviceDecisionSummary from './ClientAdviceDecisionSummary'
-import ProposalV3Panel from './ProposalV3Panel'
 import ClientRiskProfileSelector from './ClientRiskProfileSelector'
 import {
   useClientAdvice,
 } from './ClientAdviceContext'
-import InstitutionalProposalBuilderPanel from "./InstitutionalProposalBuilderPanel";
 
 type PortfolioWorkspaceKey = 'modelPortfolio' | 'riskProfile' | 'construction' | 'clientAdvice'
 
@@ -49,32 +45,6 @@ function WorkspaceBody({
 
   const { selectedRiskProfile, setSelectedRiskProfile } = useClientAdvice()
 
-  const clientAdviceWorkflow: WorkflowStep[] = [
-    {
-      id: 'upload',
-      label: 'Upload Portfolio',
-      description: "Import the client's holdings.",
-      status: 'complete',
-    },
-    {
-      id: 'analysis',
-      label: 'Analyse Portfolio',
-      description: 'Calculate drift, diversification and quality.',
-      status: 'complete',
-    },
-    {
-      id: 'comparison',
-      label: 'Compare to Model',
-      description: 'Review differences against the selected model portfolio.',
-      status: 'active',
-    },
-    {
-      id: 'proposal',
-      label: 'Generate Proposal',
-      description: 'Create a professional investment recommendation.',
-      status: 'pending',
-    },
-  ]
 
   return (
     <div className="space-y-6">
@@ -99,29 +69,7 @@ function WorkspaceBody({
       )}
 
       {activeTab === 'clientAdvice' && (
-        <div className="section">
-          <WorkflowStepper
-            title="Client Portfolio Recommendation"
-            description="Upload holdings, analyse the current position, compare against the house model and prepare a professional investment proposal."
-            steps={clientAdviceWorkflow}
-          />
-
-          <ClientAdviceDecisionSummary />
-
-          {clientAdvice}
-
-          <ProposalV3Panel />
-
-          <InstitutionalProposalBuilderPanel
-            proposal={{
-              executiveSummary:
-                'This proposal summarises the current portfolio position, recommended changes and investment committee evidence supporting the advice.',
-            }}
-            approvalReadiness={{
-              status: 'Draft',
-            }}
-          />
-        </div>
+        <div className="section">{clientAdvice}</div>
       )}
     </div>
   )
