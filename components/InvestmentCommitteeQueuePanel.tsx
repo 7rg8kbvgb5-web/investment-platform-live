@@ -7,9 +7,10 @@ import type {
   CommitteeDecision,
   DecisionStatus,
   DecisionSeverity,
+  ProposalType,
 } from '../lib/engines/investment-committee-decisions'
 import type { SecurityImpact } from '../lib/engines/client-impact'
-import { fetchCoreSecurities, type CoreSecurity } from '../lib/engines/model-portfolio-core'
+import { fetchCoreSecurities, ASSET_CLASSES, type CoreSecurity } from '../lib/engines/model-portfolio-core'
 
 // Investment Committee decision queue + client impact.
 //
@@ -33,6 +34,22 @@ const SOURCE_LABELS: Record<CommitteeDecision['source'], string> = {
   monitoring: 'Monitoring scan',
   fund_review: 'Fund Review scan',
   manual: 'Raised by adviser',
+  tactical: 'Tactical View',
+  conviction: 'Conviction rating',
+  sector_health: 'Sector Health',
+}
+
+const TYPE_LABELS: Record<ProposalType, string> = {
+  swap: 'Security swap',
+  allocation: 'Allocation change',
+  review: 'Holding review',
+}
+
+// A review has nothing to apply - its outcomes are "act" or "retain".
+const DECISION_LABELS: Record<ProposalType, { approved: string; rejected: string }> = {
+  swap: { approved: 'Approve', rejected: 'Reject' },
+  allocation: { approved: 'Approve', rejected: 'Reject' },
+  review: { approved: 'Action required', rejected: 'Retain' },
 }
 
 const SEVERITY_STYLE: Record<DecisionSeverity, { bg: string; fg: string }> = {
@@ -76,10 +93,11 @@ export function InvestmentCommitteeQueuePanel() {
       const data = await res.json()
       if (!data.ok) throw new Error(data.error ?? 'Failed to load the queue.')
       setDecisions(data.decisions)
-      if (sync && data.added > 0) {
-        setAddedNote(
-          `${data.added} new proposal${data.added === 1 ? '' : 's'} pulled in from the latest scans.`,
-        )
+      if (sync) {
+        const parts: string[] = []
+        if (data.added > 0) parts.push(`${data.added} new item${data.added === 1 ? '' : 's'} pulled in from the latest scans.`)
+        if (Array.isArray(data.warnings) && data.warnings.length > 0) parts.push(data.warnings.join(' '))
+        setAddedNote(parts.length > 0 ? parts.join(' ') : null)
       }
       loadImpact(data.decisions)
     } catch (err) {
@@ -95,7 +113,7 @@ export function InvestmentCommitteeQueuePanel() {
   }
 
   async function loadImpact(list: CommitteeDecision[]) {
-    const codes = Array.from(new Set(list.map((d) => d.currentCode)))
+    const codes = Array.from(new Set(list.map((d) => d.currentCode).filter((c): c is string => !!c)))
     if (codes.length === 0) return
     try {
       const res = await fetch('/api/investment-committee/client-impact', {
@@ -163,10 +181,11 @@ export function InvestmentCommitteeQueuePanel() {
       }
     >
       <p style={intro}>
-        Every proposed swap — a named replacement for a security the model holds — comes here for a
-        formal decision. Swaps flagged by Monitoring and Fund Reviews are pulled in automatically.
-        Each decision is recorded with its rationale, who made it and when. Approved swaps can then be
-        applied to the house model, and the clients affected are listed against each proposal.
+        Everything that could change the house model comes here for a formal decision: named swaps
+        from Monitoring and Fund Reviews, tactical overweight/underweight calls as allocation changes,
+        and holdings whose conviction has turned negative or whose sector has deteriorated. Each
+        decision is recorded with its rationale, who made it and when. Approved swaps and allocation
+        changes are applied to the house model in one step, which publishes a new model version.
       </p>
 
       {showManual ? (
@@ -210,7 +229,7 @@ export function InvestmentCommitteeQueuePanel() {
             <DecisionCard
               key={d.id}
               decision={d}
-              impact={impact[d.currentCode.toUpperCase()]}
+              impact={d.currentCode ? impact[d.currentCode.toUpperCase()] : undefined}
               onUpdated={replaceDecision}
             />
           ))}
@@ -264,6 +283,9 @@ function DecisionCard({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showClients, setShowClients] = useState(false)
+  const [tilt, setTilt] = useState<string>(d.tiltPp !== null ? String(d.tiltPp) : '')
+  const [offset, setOffset] = useState<string>(d.offsetAssetClass ?? 'Cash')
+  const labels = DECISION_LABELS[d.proposalType]
 
   const isOpen = d.status === 'pending' || d.status === 'deferred'
   const sev = SEVERITY_STYLE[d.severity]
@@ -276,7 +298,13 @@ function DecisionCard({
       const res = await fetch('/api/investment-committee/decide', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: d.id, status, rationale, decidedBy }),
+        body: JSON.stringify({
+          id: d.id,
+          status,
+          rationale,
+          decidedBy,
+          ...(d.proposalType === 'allocation' ? { tiltPp: parseFloat(tilt), offsetAssetClass: offset } : {}),
+        }),
       })
       const data = await res.json()
       if (!data.ok) throw new Error(data.error ?? 'Failed to record the decision.')
@@ -296,7 +324,9 @@ function DecisionCard({
 
   async function applyToModel() {
     const ok = window.confirm(
-      `Apply this swap to the house model?\n\n${d.currentCode} will be replaced by ${d.proposedCode} in ${d.assetClass ?? 'its asset class'} at the same weight, across every risk profile. Every client review will then show the swap in its recommended adjustments.`,
+      d.proposalType === 'allocation'
+        ? `Apply this allocation change to the house model?\n\n${d.assetClass} ${(d.tiltPp ?? 0) > 0 ? '+' : ''}${d.tiltPp}pp, funded via ${d.offsetAssetClass}, in ${d.riskProfiles?.join(', ') ?? 'every risk profile'}. A new model version is published.`
+        : `Apply this swap to the house model?\n\n${d.currentCode} will be replaced by ${d.proposedCode} in ${d.assetClass ?? 'its asset class'} at the same weight, across every risk profile. A new model version is published, and every client review will show the swap in its recommended adjustments.`,
     )
     if (!ok) return
     setSaving(true)
@@ -322,28 +352,60 @@ function DecisionCard({
       <div style={cardHeader}>
         <span style={{ ...pill, background: st.bg, color: st.fg }}>{st.label}</span>
         <span style={{ ...pill, background: sev.bg, color: sev.fg }}>{d.severity.toUpperCase()}</span>
+        <span style={typeTag}>{TYPE_LABELS[d.proposalType]}</span>
         <span style={sourceTag}>{SOURCE_LABELS[d.source]}</span>
         <span style={dateTag}>{new Date(d.createdAt).toLocaleDateString('en-AU')}</span>
       </div>
 
-      <div style={swapRow}>
-        <div style={swapSide}>
-          <span style={swapLabel}>Currently held</span>
-          <span style={swapCode}>{d.currentCode}</span>
-          <span style={swapName}>{d.currentName ?? ''}</span>
+      {d.proposalType === 'swap' ? (
+        <div style={swapRow}>
+          <div style={swapSide}>
+            <span style={swapLabel}>Currently held</span>
+            <span style={swapCode}>{d.currentCode}</span>
+            <span style={swapName}>{d.currentName ?? ''}</span>
+          </div>
+          <span style={swapArrow}>→</span>
+          <div style={swapSide}>
+            <span style={swapLabel}>Proposed replacement</span>
+            <span style={swapCode}>{d.proposedCode}</span>
+            <span style={swapName}>{d.proposedName ?? ''}</span>
+          </div>
+          {d.assetClass ? <span style={assetClassTag}>{d.assetClass}</span> : null}
         </div>
-        <span style={swapArrow}>→</span>
-        <div style={swapSide}>
-          <span style={swapLabel}>Proposed replacement</span>
-          <span style={swapCode}>{d.proposedCode}</span>
-          <span style={swapName}>{d.proposedName ?? ''}</span>
+      ) : d.proposalType === 'allocation' ? (
+        <div style={swapRow}>
+          <div style={swapSide}>
+            <span style={swapLabel}>Asset class</span>
+            <span style={swapCode}>{d.assetClass}</span>
+          </div>
+          <div style={swapSide}>
+            <span style={swapLabel}>Tilt</span>
+            <span style={swapCode}>
+              {(d.tiltPp ?? 0) > 0 ? '+' : ''}
+              {d.tiltPp}pp
+            </span>
+          </div>
+          <div style={swapSide}>
+            <span style={swapLabel}>Funded via</span>
+            <span style={swapName}>{d.offsetAssetClass}</span>
+          </div>
+          <span style={assetClassTag}>{d.riskProfiles?.join(', ') ?? 'All risk profiles'}</span>
         </div>
-        {d.assetClass ? <span style={assetClassTag}>{d.assetClass}</span> : null}
-      </div>
+      ) : (
+        <div style={swapRow}>
+          <div style={swapSide}>
+            <span style={swapLabel}>Under review</span>
+            <span style={swapCode}>{d.currentCode ?? d.assetClass ?? '—'}</span>
+            <span style={swapName}>{d.currentName ?? ''}</span>
+          </div>
+          {d.assetClass ? <span style={assetClassTag}>{d.assetClass}</span> : null}
+        </div>
+      )}
 
       <h4 style={cardTitle}>{d.title}</h4>
       <p style={reasoning}>{d.reasoning}</p>
 
+      {d.currentCode ? (
       <div style={impactRow}>
         {impact === undefined ? (
           <span style={smallText}>Checking client holdings…</span>
@@ -368,6 +430,7 @@ function DecisionCard({
           </>
         )}
       </div>
+      ) : null}
       {showClients && impact ? <ImpactList impact={impact} /> : null}
 
       {isOpen ? (
@@ -378,6 +441,30 @@ function DecisionCard({
             onChange={(e) => setRationale(e.target.value)}
             style={textarea}
           />
+          {d.proposalType === 'allocation' ? (
+            <div style={decisionRow}>
+              <label style={inlineLabel}>
+                Tilt (pp)
+                <input
+                  type="number"
+                  step={0.5}
+                  value={tilt}
+                  onChange={(e) => setTilt(e.target.value)}
+                  style={{ ...textInput, width: '90px' }}
+                />
+              </label>
+              <label style={inlineLabel}>
+                Funded via
+                <select value={offset} onChange={(e) => setOffset(e.target.value)} style={{ ...textInput, width: 'auto' }}>
+                  {ASSET_CLASSES.filter((ac) => ac.name !== d.assetClass).map((ac) => (
+                    <option key={ac.name} value={ac.name}>
+                      {ac.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          ) : null}
           <div style={decisionRow}>
             <input
               type="text"
@@ -387,13 +474,13 @@ function DecisionCard({
               style={{ ...textInput, maxWidth: '220px' }}
             />
             <button type="button" style={approveButton} disabled={saving} onClick={() => decide('approved')}>
-              Approve
+              {labels.approved}
             </button>
             <button type="button" style={deferButton} disabled={saving} onClick={() => decide('deferred')}>
               Defer
             </button>
             <button type="button" style={rejectButton} disabled={saving} onClick={() => decide('rejected')}>
-              Reject
+              {labels.rejected}
             </button>
           </div>
           {d.status === 'deferred' && d.decisionRationale ? (
@@ -406,22 +493,41 @@ function DecisionCard({
       ) : (
         <div style={recordBox}>
           <p style={recordLine}>
-            <strong>{STATUS_STYLE[d.status].label}</strong> by {d.decidedBy ?? '—'}
+            <strong>
+              {d.status === 'approved'
+                ? labels.approved === 'Approve'
+                  ? 'Approved'
+                  : labels.approved
+                : d.status === 'rejected'
+                  ? labels.rejected === 'Reject'
+                    ? 'Rejected'
+                    : 'Retained'
+                  : STATUS_STYLE[d.status].label}
+            </strong>{' '}
+            by {d.decidedBy ?? '—'}
             {d.decidedAt ? ` on ${new Date(d.decidedAt).toLocaleDateString('en-AU')}` : ''}
           </p>
           {d.decisionRationale ? <p style={recordRationale}>{d.decisionRationale}</p> : null}
-          {d.status === 'approved' ? (
+          {d.status === 'approved' && d.proposalType === 'review' ? (
+            <p style={priorNote}>
+              Next step: raise a swap for {d.currentCode ?? 'the affected holdings'} with a named replacement, or
+              adjust its weight on the Model Portfolio tab.
+            </p>
+          ) : null}
+          {d.status === 'approved' && d.proposalType !== 'review' ? (
             d.appliedToModel ? (
               <>
                 <p style={appliedNote}>
                   Applied to the house model
                   {d.appliedAt ? ` on ${new Date(d.appliedAt).toLocaleDateString('en-AU')}` : ''}.
                 </p>
-                <p style={priorNote}>
-                  Check {d.proposedCode} on the Model Portfolio tab: set its forward yield and holding
-                  type (listed/unlisted fund, direct equity, etc.) so income figures and Fund Reviews pick
-                  it up correctly.
-                </p>
+                {d.proposalType === 'swap' ? (
+                  <p style={priorNote}>
+                    Check {d.proposedCode} on the Model Portfolio tab: set its forward yield and holding
+                    type (listed/unlisted fund, direct equity, etc.) so income figures and Fund Reviews pick
+                    it up correctly.
+                  </p>
+                ) : null}
               </>
             ) : (
               <button type="button" style={primaryButton} disabled={saving} onClick={applyToModel}>
@@ -593,6 +699,8 @@ const pill = {
   letterSpacing: '0.04em',
 }
 const sourceTag = { fontSize: '11px', color: '#94a3b8' }
+const typeTag = { fontSize: '11px', fontWeight: 700, color: '#5eead4' }
+const inlineLabel = { display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#94a3b8' }
 const dateTag = { marginLeft: 'auto', fontSize: '11px', color: '#64748b' }
 const swapRow = { display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' as const, marginBottom: '10px' }
 const swapSide = { display: 'flex', flexDirection: 'column' as const, gap: '2px', minWidth: '160px' }

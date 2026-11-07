@@ -15,6 +15,8 @@ export async function POST(request: Request) {
       status,
       rationale: typeof body?.rationale === 'string' ? body.rationale : '',
       decidedBy: typeof body?.decidedBy === 'string' ? body.decidedBy : '',
+      tiltPp: typeof body?.tiltPp === 'number' ? body.tiltPp : null,
+      offsetAssetClass: typeof body?.offsetAssetClass === 'string' ? body.offsetAssetClass : null,
     })
     return Response.json({ ok: true, decision })
   } catch (error) {

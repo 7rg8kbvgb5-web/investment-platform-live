@@ -26,7 +26,7 @@ export default function ApprovedSwapsBanner({ heldCodes }: { heldCodes: string[]
   }, [])
 
   const held = useMemo(() => new Set(heldCodes.map(normaliseCode)), [heldCodes])
-  const relevant = swaps.filter((s) => held.has(normaliseCode(s.currentCode)))
+  const relevant = swaps.filter((s) => s.currentCode && held.has(normaliseCode(s.currentCode)))
   if (relevant.length === 0) return null
 
   return (

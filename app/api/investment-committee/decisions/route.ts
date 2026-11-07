@@ -1,10 +1,11 @@
 import {
   listCommitteeDecisions,
-  syncProposedSwaps,
+  syncProposals,
   createManualProposal,
 } from '../../../../lib/engines/investment-committee-decisions'
 
 export const runtime = 'nodejs'
+export const maxDuration = 60
 export const dynamic = 'force-dynamic'
 
 /** The full queue. Pass ?sync=1 to pull any new scan-flagged swaps in first. */
@@ -12,9 +13,14 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url)
     let added = 0
-    if (url.searchParams.get('sync') === '1') added = await syncProposedSwaps()
+    let warnings: string[] = []
+    if (url.searchParams.get('sync') === '1') {
+      const result = await syncProposals({ includeConviction: url.searchParams.get('conviction') !== '0' })
+      added = result.added
+      warnings = result.warnings
+    }
     const decisions = await listCommitteeDecisions()
-    return Response.json({ ok: true, decisions, added })
+    return Response.json({ ok: true, decisions, added, warnings })
   } catch (error) {
     console.error('Failed to load Investment Committee queue:', error)
     return Response.json(

@@ -1,36 +1,56 @@
 import { supabase } from '../supabase'
-import { fetchCoreSecurities } from './model-portfolio-core'
+import { fetchCoreSecurities, RISK_PROFILES } from './model-portfolio-core'
 import { normaliseCode } from './codes'
 import { ensureApproved } from './approved-list'
 import { logModelChange, publishModelVersion } from './model-versioning'
+import { getLatestTacticalAssetClassView } from './tactical-asset-view'
+import { getLatestSectorHealthScores } from './sector-health-live'
+import { computeConvictionRating } from './conviction-rating'
 
-// Investment Committee decision queue.
+// Investment Committee decision queue - where every input that could change
+// the house model gets a formal decision.
 //
-// The live scans (Monitoring, Fund Reviews) flag a "better risk-adjusted
-// alternative" with a real, named replacement security. Those flags are
-// only proposals - this is where they get a formal committee decision,
-// with rationale, who decided and when, so there is a permanent record of
-// how and why the house view changed. Advisers can also raise a swap
-// manually. An approved swap can then be applied to the house model in
-// one step, which is what flows it through to every client's Construction
-// comparison.
+// Three kinds of proposal:
+//   swap       - replace a model holding with a named alternative. Raised by
+//                Monitoring / Fund Review scans or manually.
+//   allocation - tilt an asset class's weight across the risk profiles.
+//                Raised from Tactical View overweight/underweight calls.
+//   review     - put a holding, or a sector's holdings, in front of the
+//                committee. Raised when conviction turns negative or a
+//                sector's health score deteriorates.
+//
+// Every decision is recorded with rationale, decider and date. Approved
+// swaps and allocation changes can be applied to the house model in one
+// step, which logs the change and publishes a new model version.
 
 const TABLE = 'investment_committee_decisions'
 const SECURITIES_TABLE = 'model_portfolio_securities'
+const WEIGHTS_TABLE = 'risk_profile_asset_class_weights'
 
-export type DecisionSource = 'monitoring' | 'fund_review' | 'manual'
+export type ProposalType = 'swap' | 'allocation' | 'review'
+export type DecisionSource = 'monitoring' | 'fund_review' | 'manual' | 'tactical' | 'conviction' | 'sector_health'
 export type DecisionStatus = 'pending' | 'approved' | 'rejected' | 'deferred'
 export type DecisionSeverity = 'critical' | 'high' | 'medium' | 'low'
 
+export const DEFAULT_TACTICAL_TILT_PP = 2
+
 export type CommitteeDecision = {
   id: string
+  proposalType: ProposalType
   source: DecisionSource
   sourceAlertId: string | null
+  sourceKey: string | null
   assetClass: string | null
-  currentCode: string
+  currentCode: string | null
   currentName: string | null
-  proposedCode: string
+  proposedCode: string | null
   proposedName: string | null
+  /** Allocation proposals: which risk profiles the tilt applies to (null = all). */
+  riskProfiles: string[] | null
+  /** Allocation proposals: percentage points added to the asset class (negative = reduce). */
+  tiltPp: number | null
+  /** Allocation proposals: the asset class that funds (or absorbs) the tilt. */
+  offsetAssetClass: string | null
   title: string
   reasoning: string
   severity: DecisionSeverity
@@ -45,13 +65,18 @@ export type CommitteeDecision = {
 
 type DecisionRow = {
   id: string
+  proposal_type: ProposalType | null
   source: DecisionSource
   source_alert_id: string | null
+  source_key: string | null
   asset_class: string | null
-  current_code: string
+  current_code: string | null
   current_name: string | null
-  proposed_code: string
+  proposed_code: string | null
   proposed_name: string | null
+  risk_profiles: string[] | null
+  tilt_pp: number | null
+  offset_asset_class: string | null
   title: string
   reasoning: string
   severity: DecisionSeverity
@@ -67,13 +92,18 @@ type DecisionRow = {
 function mapRow(row: DecisionRow): CommitteeDecision {
   return {
     id: row.id,
+    proposalType: row.proposal_type ?? 'swap',
     source: row.source,
     sourceAlertId: row.source_alert_id,
+    sourceKey: row.source_key ?? null,
     assetClass: row.asset_class,
     currentCode: row.current_code,
     currentName: row.current_name,
     proposedCode: row.proposed_code,
     proposedName: row.proposed_name,
+    riskProfiles: row.risk_profiles ?? null,
+    tiltPp: row.tilt_pp === null || row.tilt_pp === undefined ? null : Number(row.tilt_pp),
+    offsetAssetClass: row.offset_asset_class ?? null,
     title: row.title,
     reasoning: row.reasoning,
     severity: row.severity,
@@ -88,10 +118,7 @@ function mapRow(row: DecisionRow): CommitteeDecision {
 }
 
 export async function listCommitteeDecisions(): Promise<CommitteeDecision[]> {
-  const { data, error } = await supabase
-    .from(TABLE)
-    .select('*')
-    .order('created_at', { ascending: false })
+  const { data, error } = await supabase.from(TABLE).select('*').order('created_at', { ascending: false })
   if (error) throw new Error(`Failed to load Investment Committee queue: ${error.message}`)
   return (data ?? []).map((row) => mapRow(row as DecisionRow))
 }
@@ -104,7 +131,17 @@ export async function listApprovedSwaps(): Promise<CommitteeDecision[]> {
     .eq('status', 'approved')
     .order('decided_at', { ascending: false })
   if (error) throw new Error(`Failed to load approved swaps: ${error.message}`)
-  return (data ?? []).map((row) => mapRow(row as DecisionRow))
+  return (data ?? [])
+    .map((row) => mapRow(row as DecisionRow))
+    .filter((d) => d.proposalType === 'swap' && d.currentCode && d.proposedCode)
+}
+
+// --- Sync: pull every input into the queue ---
+
+type Insert = Partial<Omit<DecisionRow, 'id' | 'created_at'>> & {
+  source: DecisionSource
+  title: string
+  reasoning: string
 }
 
 type MonitoringAltRow = {
@@ -129,14 +166,23 @@ type FundAltRow = {
   suggested_alternative_name: string | null
 }
 
+export type SyncResult = { added: number; bySource: Partial<Record<DecisionSource, number>>; warnings: string[] }
+
 /**
- * Pulls every not-dismissed "better alternative" flag from Monitoring and
- * Fund Reviews into the queue. Safe to call repeatedly: an alert already
- * queued is skipped, and so is a swap (same current -> proposed pair)
- * that's already pending or deferred, so repeated scans re-flagging the
- * same idea don't clutter the queue. Returns how many were added.
+ * Pulls every input into the queue: named swaps from Monitoring and Fund
+ * Reviews, overweight/underweight calls from the Tactical View, holdings
+ * whose conviction has turned negative, and sectors rated Underweight by
+ * Sector Health. Safe to call repeatedly - an item already queued (same
+ * alert, or same source key) is skipped, and so is anything that already
+ * has an open (pending/deferred) item for the same subject.
+ *
+ * Pass includeConviction=false to skip the conviction pass (it reads three
+ * research sources per model holding).
  */
-export async function syncProposedSwaps(): Promise<number> {
+export async function syncProposals(options: { includeConviction?: boolean } = {}): Promise<SyncResult> {
+  const includeConviction = options.includeConviction ?? true
+  const warnings: string[] = []
+
   const [monitoringRes, fundRes, existingRes, securities] = await Promise.all([
     supabase
       .from('investment_monitoring_alerts')
@@ -152,43 +198,40 @@ export async function syncProposedSwaps(): Promise<number> {
       .eq('category', 'alternative')
       .neq('status', 'dismissed')
       .not('suggested_alternative_code', 'is', null),
-    supabase.from(TABLE).select('source_alert_id, current_code, proposed_code, status'),
+    supabase.from(TABLE).select('*'),
     fetchCoreSecurities(),
   ])
 
-  if (monitoringRes.error) throw new Error(`Failed to read Monitoring alerts: ${monitoringRes.error.message}`)
-  if (fundRes.error) throw new Error(`Failed to read Fund Review alerts: ${fundRes.error.message}`)
   if (existingRes.error) throw new Error(`Failed to read Investment Committee queue: ${existingRes.error.message}`)
+  if (monitoringRes.error) warnings.push(`Monitoring alerts unavailable: ${monitoringRes.error.message}`)
+  if (fundRes.error) warnings.push(`Fund Review alerts unavailable: ${fundRes.error.message}`)
 
-  const existing = (existingRes.data ?? []) as {
-    source_alert_id: string | null
-    current_code: string
-    proposed_code: string
-    status: DecisionStatus
-  }[]
-  const queuedAlertIds = new Set(existing.map((r) => r.source_alert_id).filter(Boolean))
-  const openPairs = new Set(
-    existing
-      .filter((r) => r.status === 'pending' || r.status === 'deferred')
-      .map((r) => pairKey(r.current_code, r.proposed_code)),
-  )
+  const existing = ((existingRes.data ?? []) as DecisionRow[]).map(mapRow)
+  const open = existing.filter((d) => d.status === 'pending' || d.status === 'deferred')
+  const queuedAlertIds = new Set(existing.map((d) => d.sourceAlertId).filter(Boolean))
+  const queuedKeys = new Set(existing.map((d) => d.sourceKey).filter(Boolean))
+  const openSubjects = new Set(open.map(subjectKey))
 
   const securityByCode = new Map(securities.map((s) => [normaliseCode(s.code), s]))
-  const inserts: Omit<DecisionRow, 'id' | 'status' | 'decision_rationale' | 'decided_by' | 'decided_at' | 'applied_to_model' | 'applied_at' | 'created_at'>[] = []
+  const inserts: Insert[] = []
 
-  function consider(entry: (typeof inserts)[number]) {
+  function consider(entry: Insert) {
     if (entry.source_alert_id && queuedAlertIds.has(entry.source_alert_id)) return
-    const key = pairKey(entry.current_code, entry.proposed_code)
-    if (openPairs.has(key)) return
-    openPairs.add(key)
+    if (entry.source_key && queuedKeys.has(entry.source_key)) return
+    const subject = subjectKeyFromInsert(entry)
+    if (openSubjects.has(subject)) return
+    openSubjects.add(subject)
+    if (entry.source_key) queuedKeys.add(entry.source_key)
     inserts.push(entry)
   }
 
+  // 1. Named swaps from Monitoring.
   for (const alert of (monitoringRes.data ?? []) as MonitoringAltRow[]) {
     const currentCode = alert.affected_codes?.[0]
     if (!currentCode || !alert.suggested_alternative_code) continue
     const held = securityByCode.get(normaliseCode(currentCode))
     consider({
+      proposal_type: 'swap',
       source: 'monitoring',
       source_alert_id: alert.id,
       asset_class: held?.assetClass ?? alert.affected_asset_class,
@@ -202,10 +245,12 @@ export async function syncProposedSwaps(): Promise<number> {
     })
   }
 
+  // 2. Named swaps from Fund Reviews.
   for (const alert of (fundRes.data ?? []) as FundAltRow[]) {
     if (!alert.suggested_alternative_code) continue
     const held = securityByCode.get(normaliseCode(alert.fund_code))
     consider({
+      proposal_type: 'swap',
       source: 'fund_review',
       source_alert_id: alert.id,
       asset_class: held?.assetClass ?? null,
@@ -219,11 +264,125 @@ export async function syncProposedSwaps(): Promise<number> {
     })
   }
 
-  if (inserts.length === 0) return 0
-  const { error } = await supabase.from(TABLE).insert(inserts)
-  if (error) throw new Error(`Failed to add proposals to the queue: ${error.message}`)
-  return inserts.length
+  // 3. Tactical View calls -> allocation tilts across all risk profiles.
+  try {
+    const view = await getLatestTacticalAssetClassView()
+    for (const call of view?.calls ?? []) {
+      if (call.stance === 'N') continue
+      const tilt = call.stance === 'OW' ? DEFAULT_TACTICAL_TILT_PP : -DEFAULT_TACTICAL_TILT_PP
+      const offset = call.assetClass === 'Cash' ? 'Australian Fixed Interest' : 'Cash'
+      consider({
+        proposal_type: 'allocation',
+        source: 'tactical',
+        source_key: `tactical:${view!.id}:${call.assetClass}`,
+        asset_class: call.assetClass,
+        risk_profiles: null,
+        tilt_pp: tilt,
+        offset_asset_class: offset,
+        title: `Tactical ${call.stance === 'OW' ? 'overweight' : 'underweight'}: ${call.assetClass}`,
+        reasoning: call.rationale,
+        severity: 'medium',
+      })
+    }
+  } catch (err) {
+    warnings.push(`Tactical View unavailable: ${err instanceof Error ? err.message : String(err)}`)
+  }
+
+  // 4. Sector Health -> review of the model's holdings in a deteriorating sector.
+  try {
+    const scores = await getLatestSectorHealthScores()
+    for (const score of scores) {
+      if (score.recommendation !== 'Underweight' && score.recommendation !== 'Strong Underweight') continue
+      const holdings = securities.filter((s) => (s.sector ?? s.assetClass) === score.sector)
+      if (holdings.length === 0) continue
+      consider({
+        proposal_type: 'review',
+        source: 'sector_health',
+        source_key: `sector:${score.scanId}:${score.sector}`,
+        asset_class: holdings[0].assetClass,
+        current_code: holdings.length === 1 ? holdings[0].code : null,
+        current_name: holdings.length === 1 ? holdings[0].name : null,
+        title: `Sector review: ${score.sector} rated ${score.recommendation} (score ${Math.round(score.totalScore)})`,
+        reasoning: `${score.rationale ?? 'Sector health has deteriorated.'} Model holdings in this sector: ${holdings
+          .map((h) => h.code)
+          .join(', ')}.`,
+        severity: score.recommendation === 'Strong Underweight' ? 'high' : 'medium',
+      })
+    }
+  } catch (err) {
+    warnings.push(`Sector Health unavailable: ${err instanceof Error ? err.message : String(err)}`)
+  }
+
+  // 5. Conviction -> review of any model holding whose combined view has turned negative.
+  if (includeConviction) {
+    const results = await Promise.all(
+      securities.map(async (s) => {
+        try {
+          return { s, rating: await computeConvictionRating(s.code) }
+        } catch {
+          return { s, rating: null }
+        }
+      }),
+    )
+    for (const { s, rating } of results) {
+      if (!rating || (rating.houseView !== 'negative' && rating.houseView !== 'strong-negative')) continue
+      const sources = rating.sources.map((src) => `${src.source}: ${src.rating}`).join('; ')
+      consider({
+        proposal_type: 'review',
+        source: 'conviction',
+        source_key: `conviction:${normaliseCode(s.code)}:${rating.houseView}`,
+        asset_class: s.assetClass,
+        current_code: s.code,
+        current_name: s.name,
+        title: `Conviction turned ${rating.houseView.replace('-', ' ')}: ${s.code}`,
+        reasoning: `Combined research view on ${s.name} is now ${rating.houseView.replace('-', ' ')} (${sources}). The committee should decide whether to retain it or find a replacement.`,
+        severity: rating.houseView === 'strong-negative' ? 'high' : 'medium',
+      })
+    }
+  }
+
+  const bySource: Partial<Record<DecisionSource, number>> = {}
+  for (const i of inserts) bySource[i.source] = (bySource[i.source] ?? 0) + 1
+
+  if (inserts.length > 0) {
+    const { error } = await supabase.from(TABLE).insert(inserts)
+    if (error) {
+      // Before migration 0020, only swaps can be stored - fall back to those.
+      const swapsOnly = inserts.filter((i) => i.proposal_type === 'swap' && (i.source === 'monitoring' || i.source === 'fund_review'))
+      if (swapsOnly.length > 0 && swapsOnly.length < inserts.length) {
+        const legacy = swapsOnly.map(({ proposal_type: _pt, source_key: _sk, risk_profiles: _rp, tilt_pp: _t, offset_asset_class: _o, ...rest }) => rest)
+        const { error: legacyError } = await supabase.from(TABLE).insert(legacy)
+        if (legacyError) throw new Error(`Failed to add proposals to the queue: ${legacyError.message}`)
+        warnings.push('Only swaps were added - run migration 0020 to queue tactical, sector and conviction items.')
+        return { added: swapsOnly.length, bySource: {}, warnings }
+      }
+      throw new Error(`Failed to add proposals to the queue: ${error.message}`)
+    }
+  }
+
+  return { added: inserts.length, bySource, warnings }
 }
+
+/** Kept for existing callers. */
+export async function syncProposedSwaps(): Promise<number> {
+  const result = await syncProposals({ includeConviction: false })
+  return result.added
+}
+
+function subjectKey(d: CommitteeDecision): string {
+  if (d.proposalType === 'allocation') return `allocation:${d.assetClass}`
+  if (d.proposalType === 'review') return `review:${d.currentCode ? normaliseCode(d.currentCode) : d.title}`
+  return `swap:${normaliseCode(d.currentCode ?? '')}->${normaliseCode(d.proposedCode ?? '')}`
+}
+
+function subjectKeyFromInsert(i: Insert): string {
+  const type = i.proposal_type ?? 'swap'
+  if (type === 'allocation') return `allocation:${i.asset_class}`
+  if (type === 'review') return `review:${i.current_code ? normaliseCode(i.current_code) : i.title}`
+  return `swap:${normaliseCode(i.current_code ?? '')}->${normaliseCode(i.proposed_code ?? '')}`
+}
+
+// --- Manual proposals ---
 
 export async function createManualProposal(input: {
   currentCode: string
@@ -257,66 +416,86 @@ export async function createManualProposal(input: {
   return mapRow(data as DecisionRow)
 }
 
+// --- Decisions ---
+
 /**
- * Records the committee's decision. A rationale and decider are required
- * for approve/reject - that's the point of the audit trail. The scan alert
- * that raised it (if any) is marked reviewed so it stops showing as new.
+ * Records the committee's decision. A rationale and decider are required.
+ * For allocation proposals the committee can adjust the tilt size and the
+ * funding asset class as part of the decision. The scan alert that raised
+ * a swap (if any) is marked reviewed so it stops showing as new.
  */
 export async function recordDecision(input: {
   id: string
   status: Exclude<DecisionStatus, 'pending'>
   rationale: string
   decidedBy: string
+  tiltPp?: number | null
+  offsetAssetClass?: string | null
 }): Promise<CommitteeDecision> {
   const rationale = input.rationale.trim()
   const decidedBy = input.decidedBy.trim()
   if (!rationale) throw new Error('A rationale is required for the decision record.')
   if (!decidedBy) throw new Error('Record who made the decision.')
 
-  const { data, error } = await supabase
-    .from(TABLE)
-    .update({
-      status: input.status,
-      decision_rationale: rationale,
-      decided_by: decidedBy,
-      decided_at: new Date().toISOString(),
-    })
-    .eq('id', input.id)
-    .select('*')
-    .single()
+  const update: Record<string, unknown> = {
+    status: input.status,
+    decision_rationale: rationale,
+    decided_by: decidedBy,
+    decided_at: new Date().toISOString(),
+  }
+  if (typeof input.tiltPp === 'number' && Number.isFinite(input.tiltPp)) update.tilt_pp = input.tiltPp
+  if (input.offsetAssetClass) update.offset_asset_class = input.offsetAssetClass
+
+  const { data, error } = await supabase.from(TABLE).update(update).eq('id', input.id).select('*').single()
   if (error) throw new Error(`Failed to record decision: ${error.message}`)
   const decision = mapRow(data as DecisionRow)
 
-  if (decision.sourceAlertId && decision.source !== 'manual') {
+  if (decision.sourceAlertId && (decision.source === 'monitoring' || decision.source === 'fund_review')) {
     const alertTable = decision.source === 'monitoring' ? 'investment_monitoring_alerts' : 'fund_review_alerts'
-    // Best effort - the decision itself is already recorded.
     await supabase.from(alertTable).update({ status: 'reviewed' }).eq('id', decision.sourceAlertId)
   }
 
   return decision
 }
 
-/**
- * Applies an approved swap to the shared house model. The proposed
- * security takes over the current one's in-class weight. If the proposed
- * security is already in the same asset class, the weight is merged into
- * it and the current holding removed. Yield is cleared on a replaced
- * security (it belonged to the old one) - set it on the Model Portfolio tab.
- */
+// --- Applying approved changes to the house model ---
+
 export async function applySwapToModel(id: string): Promise<CommitteeDecision> {
   const { data: row, error: readError } = await supabase.from(TABLE).select('*').eq('id', id).single()
   if (readError) throw new Error(`Failed to load decision: ${readError.message}`)
   const decision = mapRow(row as DecisionRow)
-  if (decision.status !== 'approved') throw new Error('Only approved swaps can be applied to the model.')
-  if (decision.appliedToModel) throw new Error('This swap has already been applied to the model.')
+  if (decision.status !== 'approved') throw new Error('Only approved proposals can be applied to the model.')
+  if (decision.appliedToModel) throw new Error('This has already been applied to the model.')
+
+  if (decision.proposalType === 'allocation') await applyAllocation(decision)
+  else if (decision.proposalType === 'swap') await applySwap(decision)
+  else throw new Error('A review decision has nothing to apply directly - raise a swap if a replacement is needed.')
+
+  const { data: updated, error: markError } = await supabase
+    .from(TABLE)
+    .update({ applied_to_model: true, applied_at: new Date().toISOString() })
+    .eq('id', id)
+    .select('*')
+    .single()
+  if (markError) throw new Error(`Applied, but failed to mark it as applied: ${markError.message}`)
+  return mapRow(updated as DecisionRow)
+}
+
+/**
+ * The proposed security takes over the current one's in-class weight. If
+ * it's already in the same asset class, the weights are merged and the
+ * current holding removed. Yield is cleared on a replaced security (it
+ * belonged to the old one).
+ */
+async function applySwap(decision: CommitteeDecision): Promise<void> {
+  if (!decision.currentCode || !decision.proposedCode) throw new Error('This swap is missing a security code.')
+  const proposedCode = decision.proposedCode.trim().toUpperCase()
 
   const securities = await fetchCoreSecurities()
-  const current = securities.find((s) => normaliseCode(s.code) === normaliseCode(decision.currentCode))
-  if (!current) {
-    throw new Error(`${decision.currentCode} is no longer in the model portfolio - nothing to replace.`)
-  }
+  const current = securities.find((s) => normaliseCode(s.code) === normaliseCode(decision.currentCode!))
+  if (!current) throw new Error(`${decision.currentCode} is no longer in the model portfolio - nothing to replace.`)
   const existingProposed = securities.find(
-    (s) => normaliseCode(s.code) === normaliseCode(decision.proposedCode) && s.assetClass === current.assetClass,
+    (s) => normaliseCode(s.code) === normaliseCode(proposedCode) && s.assetClass === current.assetClass,
   )
 
   const rationale = `Investment Committee approved ${new Date().toLocaleDateString('en-AU')}: ${decision.decisionRationale ?? decision.reasoning}`
@@ -332,22 +511,14 @@ export async function applySwapToModel(id: string): Promise<CommitteeDecision> {
   } else {
     const { error: replaceError } = await supabase
       .from(SECURITIES_TABLE)
-      .update({
-        code: decision.proposedCode.trim().toUpperCase(),
-        name: decision.proposedName ?? decision.proposedCode,
-        rationale,
-        yield: null,
-      })
+      .update({ code: proposedCode, name: decision.proposedName ?? proposedCode, rationale, yield: null })
       .eq('id', current.id)
     if (replaceError) throw new Error(`Failed to apply swap to the model: ${replaceError.message}`)
   }
 
-  // The replacement joins the Approved List, the change is logged, and the
-  // model is published as a new version tied to this decision - so every
-  // client review built on the old version shows as needing a refresh.
   await ensureApproved({
-    code: decision.proposedCode,
-    name: decision.proposedName ?? decision.proposedCode,
+    code: proposedCode,
+    name: decision.proposedName ?? proposedCode,
     assetClass: current.assetClass,
     notes: `Approved by the Investment Committee as a replacement for ${current.code}.`,
     addedBy: decision.decidedBy,
@@ -356,35 +527,100 @@ export async function applySwapToModel(id: string): Promise<CommitteeDecision> {
   await logModelChange({
     changeType: 'security_swapped',
     assetClass: current.assetClass,
-    code: decision.proposedCode.trim().toUpperCase(),
+    code: proposedCode,
     before: { code: current.code, name: current.name, inClassWeight: current.inClassWeight },
     after: {
-      code: decision.proposedCode.trim().toUpperCase(),
-      name: decision.proposedName ?? decision.proposedCode,
+      code: proposedCode,
+      name: decision.proposedName ?? proposedCode,
       inClassWeight: existingProposed ? round2(existingProposed.inClassWeight + current.inClassWeight) : current.inClassWeight,
     },
-    description: `IC-approved swap: ${current.code} → ${decision.proposedCode.trim().toUpperCase()} in ${current.assetClass}`,
+    description: `IC-approved swap: ${current.code} → ${proposedCode} in ${current.assetClass}`,
     changedBy: decision.decidedBy,
     icDecisionId: decision.id,
   })
   await publishModelVersion({
-    summary: `Investment Committee approved replacing ${current.code} with ${decision.proposedCode.trim().toUpperCase()} in ${current.assetClass}.`,
+    summary: `Investment Committee approved replacing ${current.code} with ${proposedCode} in ${current.assetClass}.`,
     publishedBy: decision.decidedBy,
     icDecisionId: decision.id,
   })
-
-  const { data: updated, error: markError } = await supabase
-    .from(TABLE)
-    .update({ applied_to_model: true, applied_at: new Date().toISOString() })
-    .eq('id', id)
-    .select('*')
-    .single()
-  if (markError) throw new Error(`Swap applied, but failed to mark it as applied: ${markError.message}`)
-  return mapRow(updated as DecisionRow)
 }
 
-function pairKey(current: string, proposed: string): string {
-  return `${normaliseCode(current)}->${normaliseCode(proposed)}`
+/**
+ * Tilts the asset class by tiltPp in each affected risk profile, funded
+ * from (or returned to) the offset asset class. Neither weight is taken
+ * below zero - if the funding class doesn't have enough, the tilt for that
+ * profile is reduced to what's available, so every profile still sums to
+ * the same total.
+ */
+async function applyAllocation(decision: CommitteeDecision): Promise<void> {
+  const assetClass = decision.assetClass
+  const offset = decision.offsetAssetClass
+  const tilt = decision.tiltPp ?? 0
+  if (!assetClass || !offset) throw new Error('This allocation change is missing its asset classes.')
+  if (assetClass === offset) throw new Error('The tilt and its funding asset class must differ.')
+  if (tilt === 0) throw new Error('The tilt is zero - nothing to apply.')
+
+  const profiles = decision.riskProfiles && decision.riskProfiles.length > 0 ? decision.riskProfiles : RISK_PROFILES
+  const { data, error } = await supabase
+    .from(WEIGHTS_TABLE)
+    .select('risk_profile, asset_class, target_weight')
+    .in('risk_profile', profiles)
+    .in('asset_class', [assetClass, offset])
+  if (error) throw new Error(`Failed to read risk profile weights: ${error.message}`)
+  const rows = (data ?? []) as { risk_profile: string; asset_class: string; target_weight: number }[]
+  const weightOf = (profile: string, ac: string) =>
+    Number(rows.find((r) => r.risk_profile === profile && r.asset_class === ac)?.target_weight ?? 0)
+
+  const applied: string[] = []
+  for (const profile of profiles) {
+    const target = weightOf(profile, assetClass)
+    const funding = weightOf(profile, offset)
+    // Positive tilt: limited by what the funding class holds. Negative: by what the target holds.
+    const effective = tilt > 0 ? Math.min(tilt, funding) : -Math.min(-tilt, target)
+    if (effective === 0) continue
+    const newTarget = round2(target + effective)
+    const newFunding = round2(funding - effective)
+
+    const now = new Date().toISOString()
+    const { error: upsertError } = await supabase.from(WEIGHTS_TABLE).upsert(
+      [
+        { risk_profile: profile, asset_class: assetClass, target_weight: newTarget, updated_at: now },
+        { risk_profile: profile, asset_class: offset, target_weight: newFunding, updated_at: now },
+      ],
+      { onConflict: 'risk_profile,asset_class' },
+    )
+    if (upsertError) throw new Error(`Failed to update ${profile}: ${upsertError.message}`)
+
+    await logModelChange({
+      changeType: 'asset_class_weight',
+      riskProfile: profile,
+      assetClass,
+      before: target,
+      after: newTarget,
+      description: `${profile}: ${assetClass} ${target}% → ${newTarget}% (IC-approved tactical tilt)`,
+      changedBy: decision.decidedBy,
+      icDecisionId: decision.id,
+    })
+    await logModelChange({
+      changeType: 'asset_class_weight',
+      riskProfile: profile,
+      assetClass: offset,
+      before: funding,
+      after: newFunding,
+      description: `${profile}: ${offset} ${funding}% → ${newFunding}% (funding the ${assetClass} tilt)`,
+      changedBy: decision.decidedBy,
+      icDecisionId: decision.id,
+    })
+    applied.push(`${profile} ${effective > 0 ? '+' : ''}${round2(effective)}pp`)
+  }
+
+  if (applied.length === 0) throw new Error(`No room to tilt - ${tilt > 0 ? offset : assetClass} is already at 0% in every profile.`)
+
+  await publishModelVersion({
+    summary: `Investment Committee approved a tactical ${tilt > 0 ? 'overweight' : 'underweight'} in ${assetClass}, funded via ${offset} (${applied.join(', ')}).`,
+    publishedBy: decision.decidedBy,
+    icDecisionId: decision.id,
+  })
 }
 
 function round2(value: number): number {
