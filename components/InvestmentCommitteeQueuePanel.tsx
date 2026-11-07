@@ -412,10 +412,17 @@ function DecisionCard({
           {d.decisionRationale ? <p style={recordRationale}>{d.decisionRationale}</p> : null}
           {d.status === 'approved' ? (
             d.appliedToModel ? (
-              <p style={appliedNote}>
-                Applied to the house model
-                {d.appliedAt ? ` on ${new Date(d.appliedAt).toLocaleDateString('en-AU')}` : ''}.
-              </p>
+              <>
+                <p style={appliedNote}>
+                  Applied to the house model
+                  {d.appliedAt ? ` on ${new Date(d.appliedAt).toLocaleDateString('en-AU')}` : ''}.
+                </p>
+                <p style={priorNote}>
+                  Check {d.proposedCode} on the Model Portfolio tab: set its forward yield and holding
+                  type (listed/unlisted fund, direct equity, etc.) so income figures and Fund Reviews pick
+                  it up correctly.
+                </p>
+              </>
             ) : (
               <button type="button" style={primaryButton} disabled={saving} onClick={applyToModel}>
                 Apply to model portfolio

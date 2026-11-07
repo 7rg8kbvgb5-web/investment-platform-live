@@ -1,26 +1,9 @@
-import { renderToBuffer } from "@react-pdf/renderer";
-import { generateInvestmentProposal } from "../../../../lib/engines/investment-proposal-generator";
-import { evaluateApprovalReadiness } from "../../../../lib/engines/portfolio-approval-readiness";
-import { InvestmentProposalDocument } from "../../../../lib/pdf/InvestmentProposalDocument";
-
-export const runtime = "nodejs";
-
+// Withdrawn: this endpoint generated a proposal from a mock engine with
+// hardcoded sample holdings. It returns 410 until Client Advice is rebuilt
+// on real Construction data.
 export async function GET() {
-  const proposal = generateInvestmentProposal();
-  const approvalReadiness = evaluateApprovalReadiness();
-
-  const buffer = await renderToBuffer(
-    InvestmentProposalDocument({ proposal, approvalReadiness })
-  );
-
-  const fileName = `${proposal.clientName.replace(/\s+/g, "-")}-Investment-Proposal.pdf`;
-
-  return new Response(new Uint8Array(buffer), {
-    status: 200,
-    headers: {
-      "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${fileName}"`,
-      "Cache-Control": "no-store",
-    },
-  });
+  return Response.json(
+    { ok: false, error: 'Proposal export is being rebuilt and is temporarily unavailable.' },
+    { status: 410 },
+  )
 }

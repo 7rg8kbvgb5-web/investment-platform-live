@@ -1,18 +1,14 @@
 import PageContent from '../../components/PageContent';
 import { PortfolioConstitutionPanel } from '../../components/PortfolioConstitutionPanel';
 import { ModelPortfolioSecuritiesPanel } from '../../components/ModelPortfolioSecuritiesPanel';
-import { PortfolioApprovalReadinessPanel } from '../../components/PortfolioApprovalReadinessPanel';
-import { InvestmentProposalPanel } from '../../components/InvestmentProposalPanel';
-import { buildClientAdviceWorkflow } from '../../lib/engines/client-advice-workflow';
 import PortfolioWorkspace from '../../components/PortfolioWorkspace';
 import ClientPortfolioUploadPanel from '../../components/ClientPortfolioUploadPanel';
+import ClientAdvicePlaceholder from '../../components/ClientAdvicePlaceholder';
 import { ClientAdviceProvider } from '../../components/ClientAdviceContext';
 
 export const dynamic = 'force-dynamic';
 
 export default function PortfoliosPage() {
-  const clientAdviceWorkflow = buildClientAdviceWorkflow();
-
   return (
     <PageContent
       title="Portfolios"
@@ -21,22 +17,9 @@ export default function PortfoliosPage() {
       <ClientAdviceProvider>
         <PortfolioWorkspace
           modelPortfolio={<ModelPortfolioSecuritiesPanel />}
-          riskProfile={
-            <>
-              <PortfolioConstitutionPanel />
-            </>
-          }
+          riskProfile={<PortfolioConstitutionPanel />}
           construction={<ClientPortfolioUploadPanel />}
-          clientAdvice={
-            <>
-              <InvestmentProposalPanel
-                proposal={clientAdviceWorkflow.proposal}
-                approvalReadiness={clientAdviceWorkflow.approvalReadiness}
-              />
-
-              <PortfolioApprovalReadinessPanel />
-            </>
-          }
+          clientAdvice={<ClientAdvicePlaceholder />}
         />
       </ClientAdviceProvider>
     </PageContent>

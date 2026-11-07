@@ -6,6 +6,7 @@ import { getLatestFundReviewAlerts, getFundsHeld } from './fund-review'
 import { getLatestWeeklyBrief } from './weekly-brief'
 import { listResearchDocuments } from './research-library'
 import { listDeepDiveReviews } from './investment-deep-dive'
+import { listCommitteeDecisions } from './investment-committee-decisions'
 import { getLatestSectorHealthScores } from './sector-health-live'
 import { getPortfolioAnalytics } from './portfolio-analytics'
 import { averagePairwiseCorrelation } from './portfolio-statistics'
@@ -70,6 +71,10 @@ export type InvestmentCommitteeSummary = {
   mostRecentSubject: string | null
   mostRecentAt: string | null
   mostRecentKeyRisksCount: number
+  /** Proposed swaps waiting on a committee decision (pending + deferred). */
+  awaitingDecision: number
+  /** Approved swaps not yet applied to the house model. */
+  approvedNotApplied: number
 }
 
 export type DataAnalyticsSummary = {
@@ -115,6 +120,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     sectorHealthResult,
     analyticsResult,
     balancedModelResult,
+    decisionsResult,
   ] = await Promise.allSettled([
     fetchCoreSecurities(),
     getLatestTacticalAssetClassView(),
@@ -128,6 +134,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     getLatestSectorHealthScores(),
     getPortfolioAnalytics(),
     fetchModelPortfolio('Balanced'),
+    listCommitteeDecisions(),
   ])
 
   // --- Model Portfolio ---
@@ -249,8 +256,11 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
 
   // --- Investment Committee ---
   const deepDives = settled(deepDivesResult)
+  const decisions = settled(decisionsResult) ?? []
   const investmentCommittee: InvestmentCommitteeSummary | null = deepDives
     ? {
+        awaitingDecision: decisions.filter((d) => d.status === 'pending' || d.status === 'deferred').length,
+        approvedNotApplied: decisions.filter((d) => d.status === 'approved' && !d.appliedToModel).length,
         totalReviews: deepDives.length,
         mostRecentSubject: deepDives.length > 0 ? deepDives[0].subjectName : null,
         mostRecentAt: deepDives.length > 0 ? deepDives[0].generatedAt : null,

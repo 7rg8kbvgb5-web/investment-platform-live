@@ -251,7 +251,21 @@ export default async function DashboardSummaryGrid() {
           <div style={card('default')}>
             <div style={cardIcon}>{ICONS.committee}</div>
             <p style={cardEyebrow}>Investment Committee</p>
-            <h3 style={cardTitle}>Deep dive reviews</h3>
+            <h3 style={cardTitle}>Decisions &amp; deep dives</h3>
+            {summary.investmentCommittee ? (
+              <>
+                <p style={summary.investmentCommittee.awaitingDecision > 0 ? cardStatHighlight : cardStatMuted}>
+                  {summary.investmentCommittee.awaitingDecision > 0
+                    ? `${summary.investmentCommittee.awaitingDecision} swap${summary.investmentCommittee.awaitingDecision === 1 ? '' : 's'} awaiting a decision`
+                    : 'No swaps awaiting a decision'}
+                </p>
+                {summary.investmentCommittee.approvedNotApplied > 0 ? (
+                  <p style={cardStatMuted}>
+                    {summary.investmentCommittee.approvedNotApplied} approved, not yet applied to the model
+                  </p>
+                ) : null}
+              </>
+            ) : null}
             {summary.investmentCommittee && summary.investmentCommittee.totalReviews > 0 ? (
               <>
                 <p style={cardStatHighlight}>{summary.investmentCommittee.totalReviews} reviews on file</p>

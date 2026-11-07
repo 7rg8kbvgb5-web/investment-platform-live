@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { supabase } from '../lib/supabase';
 import type { ReactNode } from 'react';
 
 type NavItem = {
@@ -102,8 +103,14 @@ function isNavItemActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+async function signOut() {
+  await supabase.auth.signOut();
+  window.location.href = '/login';
+}
+
 export default function AppSidebar() {
   const pathname = usePathname();
+  if (pathname === '/login') return null;
 
   return (
     <aside className="sidebar">
@@ -134,6 +141,21 @@ export default function AppSidebar() {
           );
         })}
       </nav>
+
+      <button type="button" className="nav-link" onClick={signOut} style={signOutButton}>
+        <span className="nav-link-text">
+          <span className="nav-link-label">Sign out</span>
+        </span>
+      </button>
     </aside>
   );
 }
+
+const signOutButton = {
+  marginTop: 'auto',
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  width: '100%',
+  textAlign: 'left' as const,
+};

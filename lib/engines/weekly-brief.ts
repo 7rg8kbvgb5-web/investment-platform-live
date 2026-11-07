@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { supabase } from "../supabase";
-import { buildApprovedList } from "./approved-list";
+import { fetchCoreSecurities } from "./model-portfolio-core";
 import type { WeeklyBrief } from "../../domain/types/weekly-brief";
 
 const TABLE = "weekly_briefs";
@@ -10,9 +10,9 @@ const TABLE = "weekly_briefs";
 const SYSTEM_PROMPT = `You are a research assistant for Ord Minnett private wealth advisers.
 Your job is to produce a concise weekly research brief. Use web search to check for:
 1. Macro/market events from the past 7 days relevant to an Australian private wealth client base.
-2. Company-specific news for the Approved List securities provided, that an adviser should know about.
+2. Company-specific news for the model portfolio securities provided, that an adviser should know about.
 3. Any "best-in-class alternative" flags — cases where a materially better-positioned alternative
-   security exists for a given Approved List holding, based on recent developments.
+   security exists for a given model portfolio holding, based on recent developments.
 
 Everything you produce is a recommendation for a human adviser to review — never phrase anything as
 an instruction to trade, and never claim an action has been taken.
@@ -60,12 +60,11 @@ export async function generateWeeklyBrief(): Promise<WeeklyBrief> {
   }
 
   const client = new Anthropic({ apiKey });
-  const approvedList = buildApprovedList().filter(
-    (security) => security.approvedListStatus === "approved"
-  );
-
-  const holdingsList = approvedList
-    .map((security) => `${security.code} — ${security.name} (${security.sector})`)
+  // The live model portfolio, not the old static Approved List - the brief
+  // should watch what clients are actually being positioned into.
+  const modelHoldings = await fetchCoreSecurities();
+  const holdingsList = modelHoldings
+    .map((security) => `${security.code} — ${security.name} (${security.assetClass}${security.sector ? `, ${security.sector}` : ""})`)
     .join("\n");
 
   const response = await client.messages.create({
@@ -75,7 +74,7 @@ export async function generateWeeklyBrief(): Promise<WeeklyBrief> {
     messages: [
       {
         role: "user",
-        content: `Approved List holdings to check:\n${holdingsList}\n\nProduce this week's brief.`,
+        content: `Model portfolio holdings to check:\n${holdingsList}\n\nProduce this week's brief.`,
       },
     ],
     tools: [{ type: "web_search_20250305", name: "web_search" }],
