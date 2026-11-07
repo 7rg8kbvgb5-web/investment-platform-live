@@ -19,6 +19,8 @@ export type ClientPortfolioReviewState = {
   additionalCash: string
   assetClassOverrides: AssetClassWeightOverrides
   holdingOverrides: HoldingWeightOverrides
+  /** 'new-money' = a lump sum being invested with no existing portfolio (additionalCash holds the amount). */
+  entryMode?: 'portfolio' | 'new-money'
 }
 
 export type ClientPortfolioReview = {
@@ -38,6 +40,7 @@ type ReviewRow = {
   extraction_meta: ExtractionMeta
   asset_class_overrides: AssetClassWeightOverrides
   holding_overrides: HoldingWeightOverrides
+  entry_mode?: string | null
   updated_at: string
 }
 
@@ -54,6 +57,7 @@ function mapRow(row: ReviewRow): ClientPortfolioReview {
       additionalCash: row.additional_cash ?? '',
       assetClassOverrides: row.asset_class_overrides ?? {},
       holdingOverrides: row.holding_overrides ?? {},
+      entryMode: row.entry_mode === 'new-money' ? 'new-money' : 'portfolio',
     },
   }
 }
@@ -91,7 +95,7 @@ export async function saveClientReview(
   clientName: string,
   state: ClientPortfolioReviewState,
 ): Promise<string> {
-  const payload = {
+  const payload: Record<string, unknown> = {
     client_name: clientName,
     risk_override: state.riskOverride,
     manual_portfolio_value: state.manualPortfolioValue,
@@ -102,6 +106,9 @@ export async function saveClientReview(
     holding_overrides: state.holdingOverrides,
     updated_at: new Date().toISOString(),
   }
+  // Only written for new-money reviews, so ordinary portfolio reviews keep
+  // saving even before migration 0017 (which adds the column) has been run.
+  if (state.entryMode === 'new-money') payload.entry_mode = 'new-money'
 
   if (id) {
     const { error } = await supabase.from(TABLE).update(payload).eq('id', id)

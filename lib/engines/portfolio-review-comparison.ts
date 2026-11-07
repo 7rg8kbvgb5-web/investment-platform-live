@@ -50,6 +50,12 @@ export type ComparisonContext = {
    * stated total, or entered manually. Powers weight -> dollar sizing for
    * any holding that doesn't have its own stated value. */
   totalPortfolioValue?: number
+  /** Value of the client's existing holdings BEFORE any additional cash is
+   * added. Current positions are valued against this, not against the
+   * enlarged total - otherwise adding $200k to a $1m portfolio would
+   * overstate every weight-derived current holding by 20%. Defaults to
+   * totalPortfolioValue when no extra cash is involved. */
+  currentPortfolioValue?: number
   /** Live prices keyed by normalised code, for converting dollar trade
    * sizes into unit counts. Missing/null entries just mean units can't
    * be shown for that security - dollar figures still work without it. */
@@ -65,6 +71,7 @@ export function compareClientPortfolioToModel(
   context: ComparisonContext = {},
 ): PortfolioReviewComparison {
   const { totalPortfolioValue, prices } = context
+  const currentPortfolioValue = context.currentPortfolioValue ?? totalPortfolioValue
 
   function priceFor(code: string): number | null {
     return prices?.[normaliseCode(code)] ?? null
@@ -72,6 +79,10 @@ export function compareClientPortfolioToModel(
 
   function valueFromWeight(weight: number): number | null {
     return totalPortfolioValue ? round2((weight / 100) * totalPortfolioValue) : null
+  }
+
+  function currentValueFromWeight(weight: number): number | null {
+    return currentPortfolioValue ? round2((weight / 100) * currentPortfolioValue) : null
   }
 
   function unitsFor(value: number | null, code: string): number | null {
@@ -151,7 +162,7 @@ export function compareClientPortfolioToModel(
       // Prefer the client's actual stated dollar value for what they
       // currently hold (exact) over deriving it from weight (estimated).
       const currentValue =
-        clientHoldingValues.get(normalisedModelCode) ?? valueFromWeight(currentWeight)
+        clientHoldingValues.get(normalisedModelCode) ?? currentValueFromWeight(currentWeight)
       const targetValue = valueFromWeight(targetWeight)
       const changeValue =
         currentValue !== null && targetValue !== null
@@ -210,7 +221,7 @@ export function compareClientPortfolioToModel(
 
     // Actual stated value/quantity from the upload is authoritative for a
     // full sell - it's what the client genuinely holds, not an estimate.
-    const currentValue = holding.value ?? valueFromWeight(holding.weight)
+    const currentValue = holding.value ?? currentValueFromWeight(holding.weight)
     const changeValue = currentValue !== null ? round2(-currentValue) : null
     const actualQuantity = clientHoldingQuantities.get(code)
     const price = priceFor(holding.code)

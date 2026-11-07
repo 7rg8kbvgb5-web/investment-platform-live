@@ -38,6 +38,9 @@ import AssetClassComparisonChart from './AssetClassComparisonChart'
 import HoldingAdjustmentChart from './HoldingAdjustmentChart'
 import AllocationPieChart from './AllocationPieChart'
 import StatusBox from './dashboard/StatusBox'
+import { deployCash } from '../lib/engines/cash-deployment'
+import CashDeploymentView from './CashDeploymentView'
+import ApprovedSwapsBanner from './ApprovedSwapsBanner'
 
 type ExtractionMeta = {
   clientName: string | null
@@ -65,7 +68,8 @@ const EXAMPLE_HOLDINGS: UploadedHolding[] = [
 ]
 
 export default function ClientPortfolioUploadPanel() {
-  const [mode, setMode] = useState<'pdf' | 'csv'>('pdf')
+  const [mode, setMode] = useState<'pdf' | 'csv' | 'new-money'>('pdf')
+  const isNewMoney = mode === 'new-money'
   const [csvText, setCsvText] = useState('')
   const [holdings, setHoldings] = useState<UploadedHolding[]>([])
   const [warnings, setWarnings] = useState<string[]>([])
@@ -224,7 +228,11 @@ export default function ClientPortfolioUploadPanel() {
   )
 
   const effectiveRiskProfile: RiskProfile | null =
-    riskOverride === 'auto' ? riskClassification?.nearestRiskProfile ?? null : riskOverride
+    riskOverride === 'auto'
+      ? isNewMoney
+        ? null
+        : riskClassification?.nearestRiskProfile ?? null
+      : riskOverride
 
   // The target model itself now lives in Supabase (shared core securities +
   // per-profile weights) rather than a static file, so it's fetched live
@@ -336,7 +344,8 @@ export default function ClientPortfolioUploadPanel() {
       return
     }
     const name = clientReviewName.trim()
-    if (!name || holdings.length === 0) return
+    if (!name) return
+    if (isNewMoney ? !additionalCash : holdings.length === 0) return
 
     if (saveTimer.current) clearTimeout(saveTimer.current)
     setReviewStatus('saving')
@@ -350,6 +359,7 @@ export default function ClientPortfolioUploadPanel() {
           additionalCash,
           assetClassOverrides,
           holdingOverrides,
+          entryMode: isNewMoney ? 'new-money' : 'portfolio',
         })
         setReviewId((prev) => prev ?? savedId)
         setReviewStatus('saved')
@@ -366,7 +376,7 @@ export default function ClientPortfolioUploadPanel() {
     // change - editing it retriggers via the other dependencies changing
     // too, and including it directly would refire on every keystroke.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [holdings, meta, riskOverride, manualPortfolioValue, additionalCash, assetClassOverrides, holdingOverrides, clientReviewName])
+  }, [holdings, meta, riskOverride, manualPortfolioValue, additionalCash, assetClassOverrides, holdingOverrides, clientReviewName, isNewMoney])
 
   async function openLoadPicker() {
     setShowLoadPicker(true)
@@ -394,6 +404,7 @@ export default function ClientPortfolioUploadPanel() {
       setAdditionalCash(review.state.additionalCash)
       setAssetClassOverrides(review.state.assetClassOverrides)
       setHoldingOverrides(review.state.holdingOverrides)
+      setMode(review.state.entryMode === 'new-money' ? 'new-money' : 'pdf')
       setReviewStatus('saved')
       setShowLoadPicker(false)
     } catch (err) {
@@ -430,6 +441,20 @@ export default function ClientPortfolioUploadPanel() {
     setAdditionalCash('')
     setAssetClassOverrides({})
     setHoldingOverrides({})
+    setMode('pdf')
+  }
+
+  // Switching into "new money" means there's no existing portfolio - clear
+  // any loaded holdings so the two flows never mix.
+  function startNewMoney() {
+    setMode('new-money')
+    setHoldings([])
+    setCsvText('')
+    setWarnings([])
+    setParseError(null)
+    setMeta({ clientName: null, asAtDate: null, totalPortfolioValue: null })
+    setManualPortfolioValue('')
+    setRiskOverride((prev) => (prev === 'auto' ? 'Balanced' : prev))
   }
 
   // Every code that could plausibly need a live price: what the client
@@ -494,11 +519,37 @@ export default function ClientPortfolioUploadPanel() {
       clientAdjustedModel
         ? compareClientPortfolioToModel(mappingResult.mappedHoldings, clientAdjustedModel, {
             totalPortfolioValue: effectiveTotalPortfolioValue,
+            currentPortfolioValue: baseTotalPortfolioValue,
             prices,
           })
         : null,
-    [mappingResult.mappedHoldings, clientAdjustedModel, effectiveTotalPortfolioValue, prices],
+    [mappingResult.mappedHoldings, clientAdjustedModel, effectiveTotalPortfolioValue, baseTotalPortfolioValue, prices],
   )
+
+  // New cash, invested without selling anything: either a lump sum into
+  // the model from scratch (new money), or a top-up directed at the
+  // existing portfolio's underweights first. Null until there's both a
+  // model and an amount (and, for a top-up, a known portfolio value).
+  const cashDeployment = useMemo(() => {
+    if (!clientAdjustedModel || additionalCashValue <= 0) return null
+    if (isNewMoney) {
+      return deployCash({
+        model: clientAdjustedModel,
+        cashAmount: additionalCashValue,
+        mappedHoldings: [],
+        existingPortfolioValue: 0,
+        prices,
+      })
+    }
+    if (baseTotalPortfolioValue === undefined || mappingResult.mappedHoldings.length === 0) return null
+    return deployCash({
+      model: clientAdjustedModel,
+      cashAmount: additionalCashValue,
+      mappedHoldings: mappingResult.mappedHoldings,
+      existingPortfolioValue: baseTotalPortfolioValue,
+      prices,
+    })
+  }, [clientAdjustedModel, additionalCashValue, isNewMoney, baseTotalPortfolioValue, mappingResult.mappedHoldings, prices])
 
   // Aggregate yield/income for the target (post-rebalance) portfolio, at
   // this client's actual dollar value where known. Uses clientAdjustedModel
@@ -633,14 +684,71 @@ export default function ClientPortfolioUploadPanel() {
         </button>
         <button
           type="button"
-          onClick={loadExamplePortfolio}
+          onClick={startNewMoney}
+          style={isNewMoney ? modeButtonActive : modeButton}
+        >
+          New money — lump sum
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            if (isNewMoney) setMode('pdf')
+            loadExamplePortfolio()
+          }}
           style={exampleButton}
         >
           See it with an example portfolio
         </button>
       </div>
 
-      {mode === 'pdf' ? (
+      {isNewMoney ? (
+        <div style={subPanel}>
+          <p style={subHeading}>Invest a Lump Sum</p>
+          <p style={bodyText}>
+            For a client investing for the first time with no existing portfolio. Enter the amount
+            and the risk profile, and this builds the full buy list straight from the live model —
+            including any bespoke weights you set.
+          </p>
+          <div style={newMoneyInputs}>
+            <label style={selectLabel}>
+              Amount to invest
+              <input
+                type="number"
+                step="1000"
+                placeholder="e.g. 750000"
+                value={additionalCash}
+                onChange={(e) => setAdditionalCash(e.target.value)}
+                style={portfolioValueInput}
+                aria-label="Lump sum to invest"
+              />
+            </label>
+            <label style={selectLabel}>
+              Risk profile
+              <select
+                style={select}
+                value={riskOverride === 'auto' ? '' : riskOverride}
+                onChange={(e) => setRiskOverride(e.target.value as RiskProfile)}
+              >
+                <option value="" disabled>
+                  Choose…
+                </option>
+                {RISK_PROFILES.map((profile) => (
+                  <option key={profile} value={profile}>
+                    {profile}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {pricesLoading ? (
+              <span style={pricingStatusMuted}>Fetching live prices…</span>
+            ) : pricesConnected ? (
+              <span style={pricingStatusOk}>Live prices connected</span>
+            ) : (
+              <span style={pricingStatusWarn}>No live prices — sized in dollars only</span>
+            )}
+          </div>
+        </div>
+      ) : mode === 'pdf' ? (
         <div
           style={dropzone}
           onClick={() => fileInputRef.current?.click()}
@@ -695,7 +803,22 @@ export default function ClientPortfolioUploadPanel() {
         </StatusBox>
       ) : null}
 
-      {!hasHoldings && !parsing ? (
+      {isNewMoney && modelLoading ? (
+        <StatusBox variant="neutral">Loading the live model portfolio…</StatusBox>
+      ) : null}
+
+      {isNewMoney && !modelLoading && model && !cashDeployment ? (
+        <StatusBox variant="neutral">Enter an amount above to build the buy list.</StatusBox>
+      ) : null}
+
+      {isNewMoney && cashDeployment && effectiveRiskProfile ? (
+        <div style={subPanel}>
+          <p style={subHeading}>{effectiveRiskProfile} Buy List</p>
+          <CashDeploymentView result={cashDeployment} riskProfile={effectiveRiskProfile} />
+        </div>
+      ) : null}
+
+      {!isNewMoney && !hasHoldings && !parsing ? (
         <StatusBox variant="neutral">
           Nothing loaded yet — upload a statement, paste a CSV, or click
           &quot;See it with an example portfolio&quot; above. Once holdings are in,
@@ -714,8 +837,10 @@ export default function ClientPortfolioUploadPanel() {
         <StatusBox variant="neutral">Mapping holdings against the security universe…</StatusBox>
       ) : null}
 
-      {hasHoldings && model && comparison && riskClassification && effectiveRiskProfile ? (
+      {!isNewMoney && hasHoldings && model && comparison && riskClassification && effectiveRiskProfile ? (
         <>
+          <ApprovedSwapsBanner heldCodes={mappingResult.mappedHoldings.map((h) => h.code)} />
+
           {/* Summary bar */}
           <div style={summaryRow}>
             <SummaryCard
@@ -1067,6 +1192,24 @@ export default function ClientPortfolioUploadPanel() {
                 </span>
               </div>
             </div>
+
+            {additionalCashValue > 0 ? (
+              cashDeployment ? (
+                <div style={cashDeploymentBox}>
+                  <p style={cashDeploymentTitle}>Investing the new cash — no sells</p>
+                  <CashDeploymentView result={cashDeployment} riskProfile={effectiveRiskProfile} />
+                  <p style={cashDeploymentFootnote}>
+                    The adjustments below show the alternative: a full rebalance of the whole
+                    portfolio including the new cash, which may involve selling.
+                  </p>
+                </div>
+              ) : (
+                <p style={tdMutedInline}>
+                  Enter the current portfolio value above to see how the new cash would be invested
+                  without selling anything.
+                </p>
+              )
+            ) : null}
 
             <div style={resultingPortfolioGrid}>
               <div style={resultingColumn}>
@@ -1918,6 +2061,35 @@ const holdingCardRationale = {
   fontSize: '12px',
   color: '#94a3b8',
   lineHeight: 1.4,
+}
+
+const newMoneyInputs = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '16px',
+  flexWrap: 'wrap' as const,
+}
+
+const cashDeploymentBox = {
+  margin: '0 0 20px',
+  padding: '16px',
+  borderRadius: '10px',
+  background: '#0b1d33',
+  border: '1px solid #1e3a5f',
+}
+
+const cashDeploymentTitle = {
+  fontSize: '14px',
+  fontWeight: 700,
+  color: '#5eead4',
+  margin: '0 0 10px',
+}
+
+const cashDeploymentFootnote = {
+  fontSize: '12px',
+  color: '#94a3b8',
+  lineHeight: 1.5,
+  margin: '14px 0 0',
 }
 
 const cashBar = {
