@@ -1,4 +1,5 @@
-import { securityMasterData } from "../../domain/types/security-master-data";
+import { listApprovedSecurities } from "./approved-list";
+import { normaliseCode } from "./codes";
 import { fetchCoreSecurities, ASSET_CLASSES } from "./model-portfolio-core";
 
 export type SecurityUniverseEntry = {
@@ -52,20 +53,29 @@ export async function buildSecurityUniverse(): Promise<Map<string, SecurityUnive
     });
   }
 
-  for (const security of securityMasterData) {
+  // Approved List securities not held in the model (live, from Supabase).
+  // Removed securities are still mapped - a client may well hold one - but
+  // flagged as not approved. If the list can't be read, the model alone
+  // still gives a usable universe.
+  let approved: Awaited<ReturnType<typeof listApprovedSecurities>> = [];
+  try {
+    approved = await listApprovedSecurities();
+  } catch {
+    approved = [];
+  }
+  for (const security of approved) {
     const code = normaliseCode(security.code);
     const existing = universe.get(code);
+    const assetClass = existing?.assetClass ?? security.assetClass ?? "Australian Equities";
+    const assetClassMeta = ASSET_CLASSES.find((ac) => ac.name === assetClass);
 
     universe.set(code, {
       code,
-      name: security.name,
-      sector: security.sector,
-      // The security master doesn't track asset class directly (it's an
-      // equities-only approved list today), so fall back to whatever the
-      // model universe says, or a sensible equities default.
-      assetClass: existing?.assetClass ?? "Australian Equities",
-      assetClassType: existing?.assetClassType ?? "Growth",
-      inSecurityMaster: true,
+      name: existing?.name ?? security.name,
+      sector: existing?.sector ?? security.sector ?? assetClass,
+      assetClass,
+      assetClassType: existing?.assetClassType ?? assetClassMeta?.type ?? "Growth",
+      inSecurityMaster: security.status === "approved",
       inModelUniverse: existing?.inModelUniverse ?? false,
     });
   }
@@ -73,6 +83,4 @@ export async function buildSecurityUniverse(): Promise<Map<string, SecurityUnive
   return universe;
 }
 
-export function normaliseCode(code: string): string {
-  return code.trim().toUpperCase();
-}
+export { normaliseCode } from "./codes";

@@ -3,6 +3,7 @@ import { PortfolioConstitutionPanel } from '../../components/PortfolioConstituti
 import { ModelPortfolioSecuritiesPanel } from '../../components/ModelPortfolioSecuritiesPanel';
 import PortfolioWorkspace from '../../components/PortfolioWorkspace';
 import ClientPortfolioUploadPanel from '../../components/ClientPortfolioUploadPanel';
+import ModelVersionPanel from '../../components/ModelVersionPanel';
 import ClientAdvicePlaceholder from '../../components/ClientAdvicePlaceholder';
 import { ClientAdviceProvider } from '../../components/ClientAdviceContext';
 
@@ -16,8 +17,18 @@ export default function PortfoliosPage() {
     >
       <ClientAdviceProvider>
         <PortfolioWorkspace
-          modelPortfolio={<ModelPortfolioSecuritiesPanel />}
-          riskProfile={<PortfolioConstitutionPanel />}
+          modelPortfolio={
+            <>
+              <ModelVersionPanel />
+              <ModelPortfolioSecuritiesPanel />
+            </>
+          }
+          riskProfile={
+            <>
+              <ModelVersionPanel />
+              <PortfolioConstitutionPanel />
+            </>
+          }
           construction={<ClientPortfolioUploadPanel />}
           clientAdvice={<ClientAdvicePlaceholder />}
         />

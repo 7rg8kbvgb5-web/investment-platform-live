@@ -1,4 +1,6 @@
 import { supabase } from '../supabase';
+import { logModelChange } from './model-versioning';
+import { ensureApproved } from './approved-list';
 import type {
   RiskProfile,
   ModelPortfolio,
@@ -328,10 +330,37 @@ export async function addCoreSecurity(input: {
   if (error) {
     throw new Error(`Failed to add ${input.code}: ${error.message}`);
   }
-  return mapSecurityRow(data as CoreSecurityRow);
+  const added = mapSecurityRow(data as CoreSecurityRow);
+
+  // Anything in the model must be on the Approved List.
+  try {
+    await ensureApproved({
+      code: added.code,
+      name: added.name,
+      assetClass: added.assetClass,
+      sector: added.sector,
+      notes: 'Added to the model portfolio.',
+    });
+  } catch (err) {
+    console.error(err);
+  }
+  await logModelChange({
+    changeType: 'security_added',
+    assetClass: added.assetClass,
+    code: added.code,
+    after: { name: added.name, inClassWeight: added.inClassWeight },
+    description: `Added ${added.code} (${added.name}) to ${added.assetClass}`,
+  });
+  return added;
+}
+
+async function readSecurity(id: string): Promise<CoreSecurityRow | null> {
+  const { data } = await supabase.from(SECURITIES_TABLE).select('*').eq('id', id).maybeSingle();
+  return (data as CoreSecurityRow | null) ?? null;
 }
 
 export async function updateCoreSecurityYield(id: string, yieldPct: number | null): Promise<void> {
+  const before = await readSecurity(id);
   const { error } = await supabase
     .from(SECURITIES_TABLE)
     .update({ yield: yieldPct, updated_at: new Date().toISOString() })
@@ -339,9 +368,20 @@ export async function updateCoreSecurityYield(id: string, yieldPct: number | nul
   if (error) {
     throw new Error(`Failed to update security yield: ${error.message}`);
   }
+  if (before && Number(before.yield ?? NaN) !== Number(yieldPct ?? NaN)) {
+    await logModelChange({
+      changeType: 'yield',
+      assetClass: before.asset_class,
+      code: before.code,
+      before: before.yield,
+      after: yieldPct,
+      description: `${before.code} forward yield ${before.yield ?? '—'}% → ${yieldPct ?? '—'}%`,
+    });
+  }
 }
 
 export async function updateCoreSecurityHoldingType(id: string, holdingType: HoldingType): Promise<void> {
+  const before = await readSecurity(id);
   const { error } = await supabase
     .from(SECURITIES_TABLE)
     .update({ holding_type: holdingType, updated_at: new Date().toISOString() })
@@ -349,12 +389,32 @@ export async function updateCoreSecurityHoldingType(id: string, holdingType: Hol
   if (error) {
     throw new Error(`Failed to update holding type: ${error.message}`);
   }
+  if (before && before.holding_type !== holdingType) {
+    await logModelChange({
+      changeType: 'holding_type',
+      assetClass: before.asset_class,
+      code: before.code,
+      before: before.holding_type,
+      after: holdingType,
+      description: `${before.code} holding type ${before.holding_type ?? '—'} → ${holdingType}`,
+    });
+  }
 }
 
 export async function removeCoreSecurity(id: string): Promise<void> {
+  const before = await readSecurity(id);
   const { error } = await supabase.from(SECURITIES_TABLE).delete().eq('id', id);
   if (error) {
     throw new Error(`Failed to remove security: ${error.message}`);
+  }
+  if (before) {
+    await logModelChange({
+      changeType: 'security_removed',
+      assetClass: before.asset_class,
+      code: before.code,
+      before: { name: before.name, inClassWeight: Number(before.in_class_weight) },
+      description: `Removed ${before.code} (${before.name}) from ${before.asset_class}`,
+    });
   }
 }
 
@@ -362,12 +422,23 @@ export async function updateCoreSecurityInClassWeight(
   id: string,
   inClassWeight: number
 ): Promise<void> {
+  const before = await readSecurity(id);
   const { error } = await supabase
     .from(SECURITIES_TABLE)
     .update({ in_class_weight: inClassWeight, updated_at: new Date().toISOString() })
     .eq('id', id);
   if (error) {
     throw new Error(`Failed to update security weight: ${error.message}`);
+  }
+  if (before && Number(before.in_class_weight) !== inClassWeight) {
+    await logModelChange({
+      changeType: 'in_class_weight',
+      assetClass: before.asset_class,
+      code: before.code,
+      before: Number(before.in_class_weight),
+      after: inClassWeight,
+      description: `${before.code} weight within ${before.asset_class} ${Number(before.in_class_weight)}% → ${inClassWeight}%`,
+    });
   }
 }
 
@@ -376,6 +447,13 @@ export async function updateRiskProfileAssetClassWeight(
   assetClass: string,
   targetWeight: number
 ): Promise<void> {
+  const { data: beforeRow } = await supabase
+    .from(WEIGHTS_TABLE)
+    .select('target_weight')
+    .eq('risk_profile', riskProfile)
+    .eq('asset_class', assetClass)
+    .maybeSingle();
+  const beforeWeight = beforeRow ? Number((beforeRow as { target_weight: number }).target_weight) : null;
   const { error } = await supabase.from(WEIGHTS_TABLE).upsert(
     {
       risk_profile: riskProfile,
@@ -387,5 +465,15 @@ export async function updateRiskProfileAssetClassWeight(
   );
   if (error) {
     throw new Error(`Failed to update ${riskProfile} ${assetClass} weight: ${error.message}`);
+  }
+  if (beforeWeight !== targetWeight) {
+    await logModelChange({
+      changeType: 'asset_class_weight',
+      riskProfile,
+      assetClass,
+      before: beforeWeight,
+      after: targetWeight,
+      description: `${riskProfile}: ${assetClass} ${beforeWeight ?? 0}% → ${targetWeight}%`,
+    });
   }
 }

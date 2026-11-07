@@ -41,6 +41,7 @@ import StatusBox from './dashboard/StatusBox'
 import { deployCash } from '../lib/engines/cash-deployment'
 import CashDeploymentView from './CashDeploymentView'
 import ApprovedSwapsBanner from './ApprovedSwapsBanner'
+import { getLatestModelVersion } from '../lib/engines/model-versioning'
 
 type ExtractionMeta = {
   clientName: string | null
@@ -335,6 +336,16 @@ export default function ClientPortfolioUploadPanel() {
     { id: string; clientName: string; updatedAt: string }[]
   >([])
   const [loadingSavedReviews, setLoadingSavedReviews] = useState(false)
+  // Which published version of the house model this review was built on,
+  // versus the current one - a review saved against an older version is
+  // flagged as needing a refresh.
+  const [currentModelVersion, setCurrentModelVersion] = useState<number | null>(null)
+  const [reviewModelVersion, setReviewModelVersion] = useState<number | null>(null)
+  useEffect(() => {
+    getLatestModelVersion()
+      .then((v) => setCurrentModelVersion(v?.version ?? null))
+      .catch(() => setCurrentModelVersion(null))
+  }, [])
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isHydrating = useRef(false)
 
@@ -360,7 +371,9 @@ export default function ClientPortfolioUploadPanel() {
           assetClassOverrides,
           holdingOverrides,
           entryMode: isNewMoney ? 'new-money' : 'portfolio',
+          modelVersion: currentModelVersion,
         })
+        setReviewModelVersion(currentModelVersion)
         setReviewId((prev) => prev ?? savedId)
         setReviewStatus('saved')
       } catch (err) {
@@ -405,6 +418,7 @@ export default function ClientPortfolioUploadPanel() {
       setAssetClassOverrides(review.state.assetClassOverrides)
       setHoldingOverrides(review.state.holdingOverrides)
       setMode(review.state.entryMode === 'new-money' ? 'new-money' : 'pdf')
+      setReviewModelVersion(review.state.modelVersion ?? null)
       setReviewStatus('saved')
       setShowLoadPicker(false)
     } catch (err) {
@@ -442,6 +456,7 @@ export default function ClientPortfolioUploadPanel() {
     setAssetClassOverrides({})
     setHoldingOverrides({})
     setMode('pdf')
+    setReviewModelVersion(null)
   }
 
   // Switching into "new money" means there's no existing portfolio - clear
@@ -666,6 +681,15 @@ export default function ClientPortfolioUploadPanel() {
           )}
         </div>
       )}
+
+      {reviewId && reviewModelVersion !== null && currentModelVersion !== null && reviewModelVersion < currentModelVersion ? (
+        <StatusBox variant="warning">
+          This review was last saved against house model version {reviewModelVersion}. The model is now
+          on version {currentModelVersion} — the figures below already reflect the current model, so
+          check the recommended changes before relying on anything sent to the client earlier. Any edit
+          re-saves the review against version {currentModelVersion}.
+        </StatusBox>
+      ) : null}
 
       <div style={modeToggleRow}>
         <button

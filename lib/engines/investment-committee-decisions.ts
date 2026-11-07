@@ -1,6 +1,8 @@
 import { supabase } from '../supabase'
 import { fetchCoreSecurities } from './model-portfolio-core'
-import { normaliseCode } from './security-universe'
+import { normaliseCode } from './codes'
+import { ensureApproved } from './approved-list'
+import { logModelChange, publishModelVersion } from './model-versioning'
 
 // Investment Committee decision queue.
 //
@@ -339,6 +341,37 @@ export async function applySwapToModel(id: string): Promise<CommitteeDecision> {
       .eq('id', current.id)
     if (replaceError) throw new Error(`Failed to apply swap to the model: ${replaceError.message}`)
   }
+
+  // The replacement joins the Approved List, the change is logged, and the
+  // model is published as a new version tied to this decision - so every
+  // client review built on the old version shows as needing a refresh.
+  await ensureApproved({
+    code: decision.proposedCode,
+    name: decision.proposedName ?? decision.proposedCode,
+    assetClass: current.assetClass,
+    notes: `Approved by the Investment Committee as a replacement for ${current.code}.`,
+    addedBy: decision.decidedBy,
+    icDecisionId: decision.id,
+  })
+  await logModelChange({
+    changeType: 'security_swapped',
+    assetClass: current.assetClass,
+    code: decision.proposedCode.trim().toUpperCase(),
+    before: { code: current.code, name: current.name, inClassWeight: current.inClassWeight },
+    after: {
+      code: decision.proposedCode.trim().toUpperCase(),
+      name: decision.proposedName ?? decision.proposedCode,
+      inClassWeight: existingProposed ? round2(existingProposed.inClassWeight + current.inClassWeight) : current.inClassWeight,
+    },
+    description: `IC-approved swap: ${current.code} → ${decision.proposedCode.trim().toUpperCase()} in ${current.assetClass}`,
+    changedBy: decision.decidedBy,
+    icDecisionId: decision.id,
+  })
+  await publishModelVersion({
+    summary: `Investment Committee approved replacing ${current.code} with ${decision.proposedCode.trim().toUpperCase()} in ${current.assetClass}.`,
+    publishedBy: decision.decidedBy,
+    icDecisionId: decision.id,
+  })
 
   const { data: updated, error: markError } = await supabase
     .from(TABLE)
