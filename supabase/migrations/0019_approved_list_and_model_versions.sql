@@ -34,7 +34,7 @@ alter table approved_securities enable row level security;
 create policy "Signed-in advisers only" on approved_securities for all to authenticated using (true) with check (true);
 
 -- Seed: the old static list, then everything the model holds today.
-insert into approved_securities (code, name, sector, status, notes)
+insert into approved_securities (code, name, sector, status)
 values
   ('BHP', 'BHP Group', 'Materials', 'approved'),
   ('NST', 'Northern Star Resources', 'Materials', 'approved'),
