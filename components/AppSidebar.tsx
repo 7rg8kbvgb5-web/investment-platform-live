@@ -16,7 +16,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     href: '/',
     label: 'Dashboard',
-    description: 'Overview and lifecycle',
+    description: 'What needs attention today',
     icon: (
       <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
         <rect x="2" y="2" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
@@ -29,7 +29,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     href: '/portfolios',
     label: 'Portfolios',
-    description: 'Models, overlays and scenarios',
+    description: 'Model, risk profiles, construction, advice',
     icon: (
       <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
         <path d="M3 14V6l7-3 7 3v8" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
@@ -40,7 +40,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     href: '/monitoring',
     label: 'Monitoring',
-    description: 'Alerts, rules and fund watch',
+    description: 'Daily scan of model holdings',
     icon: (
       <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
         <circle cx="10" cy="10" r="7" stroke="currentColor" strokeWidth="1.5" />
@@ -51,7 +51,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     href: '/research',
     label: 'Research',
-    description: 'Inbox and research requests',
+    description: 'House views, Top Ideas, Approved List',
     icon: (
       <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
         <path d="M4 4h12v12H4z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
@@ -62,7 +62,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     href: '/fund-reviews',
     label: 'Fund Reviews',
-    description: 'Decisions and audit trail',
+    description: 'Fund manager and structure checks',
     icon: (
       <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
         <path d="M5 4h10v12H5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
@@ -73,7 +73,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     href: '/investment-committee',
     label: 'Investment Committee',
-    description: 'Executive priorities and health',
+    description: 'Deep dives and decisions',
     icon: (
       <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
         <circle cx="7" cy="7" r="2.5" stroke="currentColor" strokeWidth="1.5" />
