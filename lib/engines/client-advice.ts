@@ -160,9 +160,9 @@ export async function buildClientAdvice(
   let cashDeployment: CashDeploymentResult | null = null
   if (approach === 'new-cash' && newCash > 0) {
     if (isNewMoney) {
-      cashDeployment = deployCash({ model, cashAmount: newCash, mappedHoldings: [], existingPortfolioValue: 0, prices: context.prices })
+      cashDeployment = deployCash({ model, cashAmount: newCash, mappedHoldings: [], existingPortfolioValue: 0, prices: context.prices, tradeOverrides: state.tradeOverrides ?? {} })
     } else if (existingValue !== null) {
-      cashDeployment = deployCash({ model, cashAmount: newCash, mappedHoldings: mapped, existingPortfolioValue: existingValue, prices: context.prices })
+      cashDeployment = deployCash({ model, cashAmount: newCash, mappedHoldings: mapped, existingPortfolioValue: existingValue, prices: context.prices, tradeOverrides: state.tradeOverrides ?? {} })
     } else {
       warnings.push('Enter the current portfolio value on the Construction tab to size the new-cash investment.')
     }

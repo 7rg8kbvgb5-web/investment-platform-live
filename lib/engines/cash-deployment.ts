@@ -1,6 +1,7 @@
 import type { ModelPortfolio } from './model-portfolios'
 import type { MappedHolding } from './client-holdings-mapping'
 import { normaliseCode } from './security-universe'
+import type { TradeOverrides } from './portfolio-review-comparison'
 
 // Cash deployment: how a sum of new money gets invested.
 //
@@ -43,6 +44,8 @@ export type CashDeploymentLine = {
   units: number | null
   resultingValue: number
   resultingWeight: number
+  /** True when the adviser has set this line's units / dollars. */
+  adjusted: boolean
 }
 
 export type CashDeploymentAssetClassRow = {
@@ -79,6 +82,8 @@ export type CashDeploymentInput = {
   /** Value of the existing portfolio before the cash goes in. Used to turn weight-only holdings into dollars. */
   existingPortfolioValue: number
   prices?: Record<string, number | null>
+  /** Adviser-set units (or $ where unpriced) for specific lines; the rest keep their calculated size. */
+  tradeOverrides?: TradeOverrides
 }
 
 export function deployCash(input: CashDeploymentInput): CashDeploymentResult {
@@ -97,7 +102,7 @@ export function deployCash(input: CashDeploymentInput): CashDeploymentResult {
     currentByCode.set(code, (currentByCode.get(code) ?? 0) + value)
   }
 
-  type Draft = Omit<CashDeploymentLine, 'investValue' | 'units' | 'resultingValue' | 'resultingWeight'> & {
+  type Draft = Omit<CashDeploymentLine, 'investValue' | 'units' | 'resultingValue' | 'resultingWeight' | 'adjusted'> & {
     rawInvest: number
   }
 
@@ -136,10 +141,22 @@ export function deployCash(input: CashDeploymentInput): CashDeploymentResult {
     for (const d of drafts) d.rawInvest = d.shortfall + surplus * (d.targetWeight / 100)
   }
 
+  const overrides = input.tradeOverrides ?? {}
   const lines: CashDeploymentLine[] = drafts.map((d) => {
     let investValue = d.rawInvest
     let units: number | null = null
-    if (d.price && d.price > 0) {
+    const o = overrides[normaliseCode(d.code)]
+    let adjusted = false
+    if (o && typeof o.units === 'number' && d.price && d.price > 0) {
+      // New cash only buys - a negative entry is treated as zero.
+      units = Math.max(0, Math.round(o.units))
+      investValue = units * d.price
+      adjusted = true
+    } else if (o && typeof o.value === 'number') {
+      investValue = Math.max(0, o.value)
+      units = d.price && d.price > 0 ? Math.floor(investValue / d.price) : null
+      adjusted = true
+    } else if (d.price && d.price > 0) {
       units = Math.floor(d.rawInvest / d.price)
       investValue = units * d.price
     }
@@ -158,6 +175,7 @@ export function deployCash(input: CashDeploymentInput): CashDeploymentResult {
       units,
       resultingValue: round2(resultingValue),
       resultingWeight: totalAfter > 0 ? round2((resultingValue / totalAfter) * 100) : 0,
+      adjusted,
     }
   })
 

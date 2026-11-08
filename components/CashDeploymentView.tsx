@@ -2,6 +2,7 @@
 
 import type { CashDeploymentResult } from '../lib/engines/cash-deployment'
 import { HoldingMetricGrid, HoldingMetricCell } from './ui/HoldingMetricGrid'
+import DraftNumberInput from './ui/DraftNumberInput'
 
 // Presentational view of a cash deployment - shared by the "New money"
 // lump-sum flow and the "add cash to an existing portfolio" flow on the
@@ -10,11 +11,20 @@ import { HoldingMetricGrid, HoldingMetricCell } from './ui/HoldingMetricGrid'
 export default function CashDeploymentView({
   result,
   riskProfile,
+  onUnitsChange,
+  onValueChange,
+  onReset,
 }: {
   result: CashDeploymentResult
   riskProfile: string
+  /** When provided, units (or $ where there's no price) can be adjusted per line. */
+  onUnitsChange?: (code: string, units: number) => void
+  onValueChange?: (code: string, value: number) => void
+  onReset?: (code: string) => void
 }) {
-  const buys = result.lines.filter((l) => l.investValue > 0)
+  const editable = !!onUnitsChange
+  // Adjusted lines stay listed even at zero, so they can be put back.
+  const buys = result.lines.filter((l) => l.investValue > 0 || l.adjusted)
   const isTopUp = result.mode === 'top-up'
 
   return (
@@ -92,6 +102,18 @@ export default function CashDeploymentView({
       </div>
 
       <p style={listTitle}>Buy list ({buys.length})</p>
+      {editable ? (
+        <p style={footnote}>
+          Change any line&apos;s units (or the dollar amount where there&apos;s no live price) to depart from the
+          model. Residual cash updates to match; ↺ returns a line to its calculated size.
+        </p>
+      ) : null}
+      {result.residualCash < -1 ? (
+        <p style={{ ...footnote, color: '#fca5a5' }}>
+          The adjusted buy list needs {formatCurrency(-result.residualCash)} more than the cash available — reduce a
+          line or add more cash.
+        </p>
+      ) : null}
       {buys.length === 0 ? (
         <p style={emptyText}>Nothing to buy at this amount.</p>
       ) : (
@@ -108,10 +130,33 @@ export default function CashDeploymentView({
                   <HoldingMetricCell label="Held now">{formatCurrency(line.currentValue)}</HoldingMetricCell>
                 ) : null}
                 <HoldingMetricCell label="Invest" tone="accent">
-                  {formatCurrency(line.investValue)}
+                  {editable && !line.price && onValueChange ? (
+                    <>
+                      <DraftNumberInput
+                        value={Math.round(line.investValue)}
+                        step={1000}
+                        onCommit={(v) => onValueChange(line.code, v)}
+                        ariaLabel={`${line.name} amount to invest`}
+                      />
+                      {line.adjusted && onReset ? <ResetButton onClick={() => onReset(line.code)} /> : null}
+                    </>
+                  ) : (
+                    formatCurrency(line.investValue)
+                  )}
                 </HoldingMetricCell>
-                <HoldingMetricCell label="Units">
-                  {line.units !== null ? (
+                <HoldingMetricCell label="Units" tone={line.adjusted ? 'accent' : 'default'}>
+                  {editable && line.price && line.units !== null ? (
+                    <>
+                      <DraftNumberInput
+                        value={line.units}
+                        step={1}
+                        integer
+                        onCommit={(v) => onUnitsChange!(line.code, v)}
+                        ariaLabel={`${line.name} units to buy`}
+                      />
+                      {line.adjusted && onReset ? <ResetButton onClick={() => onReset(line.code)} /> : null}
+                    </>
+                  ) : line.units !== null ? (
                     line.units.toLocaleString()
                   ) : (
                     <span style={muted}>by $ amount</span>
@@ -132,6 +177,19 @@ export default function CashDeploymentView({
         </p>
       ) : null}
     </div>
+  )
+}
+
+function ResetButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="Reset to the calculated amount"
+      style={{ background: 'none', border: 'none', color: '#38bdf8', cursor: 'pointer', fontSize: '14px', marginLeft: '6px' }}
+    >
+      ↺
+    </button>
   )
 }
 

@@ -28,6 +28,7 @@ import {
 } from '../lib/engines/client-weight-overrides'
 import { normaliseCode } from '../lib/engines/security-universe'
 import { HoldingMetricGrid, HoldingMetricCell, holdingMetricInput } from './ui/HoldingMetricGrid'
+import DraftNumberInput from './ui/DraftNumberInput'
 import {
   saveClientReview,
   listClientReviews,
@@ -608,6 +609,7 @@ export default function ClientPortfolioUploadPanel() {
         mappedHoldings: [],
         existingPortfolioValue: 0,
         prices,
+        tradeOverrides,
       })
     }
     if (baseTotalPortfolioValue === undefined || mappingResult.mappedHoldings.length === 0) return null
@@ -617,8 +619,9 @@ export default function ClientPortfolioUploadPanel() {
       mappedHoldings: mappingResult.mappedHoldings,
       existingPortfolioValue: baseTotalPortfolioValue,
       prices,
+      tradeOverrides,
     })
-  }, [clientAdjustedModel, additionalCashValue, isNewMoney, baseTotalPortfolioValue, mappingResult.mappedHoldings, prices])
+  }, [clientAdjustedModel, additionalCashValue, isNewMoney, baseTotalPortfolioValue, mappingResult.mappedHoldings, prices, tradeOverrides])
 
   // Aggregate yield/income for the target (post-rebalance) portfolio, at
   // this client's actual dollar value where known. Uses clientAdjustedModel
@@ -892,7 +895,13 @@ export default function ClientPortfolioUploadPanel() {
       {isNewMoney && cashDeployment && effectiveRiskProfile ? (
         <div style={subPanel}>
           <p style={subHeading}>{effectiveRiskProfile} Buy List</p>
-          <CashDeploymentView result={cashDeployment} riskProfile={effectiveRiskProfile} />
+          <CashDeploymentView
+                    result={cashDeployment}
+                    riskProfile={effectiveRiskProfile}
+                    onUnitsChange={setTradeUnits}
+                    onValueChange={setTradeValue}
+                    onReset={clearTradeOverride}
+                  />
         </div>
       ) : null}
 
@@ -1314,7 +1323,13 @@ export default function ClientPortfolioUploadPanel() {
               cashDeployment ? (
                 <div style={cashDeploymentBox}>
                   <p style={cashDeploymentTitle}>Investing the new cash — no sells</p>
-                  <CashDeploymentView result={cashDeployment} riskProfile={effectiveRiskProfile} />
+                  <CashDeploymentView
+                    result={cashDeployment}
+                    riskProfile={effectiveRiskProfile}
+                    onUnitsChange={setTradeUnits}
+                    onValueChange={setTradeValue}
+                    onReset={clearTradeOverride}
+                  />
                   <p style={cashDeploymentFootnote}>
                     The adjustments below show the alternative: a full rebalance of the whole
                     portfolio including the new cash, which may involve selling.
@@ -1554,57 +1569,6 @@ export default function ClientPortfolioUploadPanel() {
         </>
       ) : null}
     </section>
-  )
-}
-
-/**
- * Number input that lets the adviser type freely (clear the field, type a
- * minus sign) and only applies the value on Enter or when leaving the field.
- */
-function DraftNumberInput({
-  value,
-  step,
-  integer,
-  onCommit,
-  ariaLabel,
-}: {
-  value: number
-  step: number
-  integer?: boolean
-  onCommit: (value: number) => void
-  ariaLabel: string
-}) {
-  const [draft, setDraft] = useState<string>(String(value))
-  const [editing, setEditing] = useState(false)
-  useEffect(() => {
-    if (!editing) setDraft(String(value))
-  }, [value, editing])
-
-  function commit() {
-    setEditing(false)
-    const parsed = integer ? parseInt(draft, 10) : parseFloat(draft)
-    if (Number.isNaN(parsed)) {
-      setDraft(String(value))
-      return
-    }
-    if (parsed !== value) onCommit(parsed)
-  }
-
-  return (
-    <input
-      type="number"
-      step={step}
-      style={holdingMetricInput}
-      value={draft}
-      onFocus={() => setEditing(true)}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-      }}
-      aria-label={ariaLabel}
-      title="Positive to buy, negative to sell. Applies when you press Enter or leave the field."
-    />
   )
 }
 
