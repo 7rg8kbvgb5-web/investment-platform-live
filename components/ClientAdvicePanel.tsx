@@ -5,14 +5,15 @@ import Panel from './ui/Panel'
 import StatusBox from './dashboard/StatusBox'
 import {
   listClientReviews,
-  fetchClientReview,
   updateClientAdvice,
   type ClientPortfolioReview,
   type ClientStatus,
 } from '../lib/engines/client-portfolio-reviews'
-import { buildClientAdvice, type AdviceApproach, type ClientAdvice } from '../lib/engines/client-advice'
-import { getLatestModelVersion } from '../lib/engines/model-versioning'
-import type { CommitteeDecision } from '../lib/engines/investment-committee-decisions'
+import type { AdviceApproach, ClientAdvice } from '../lib/engines/client-advice'
+import { loadAdviceForReview } from '../lib/engines/client-advice-loader'
+import { cgtForReview } from '../lib/tax/cgt-for-review'
+import { getTaxReference } from '../lib/tax/tax-reference'
+import type { CgtResult } from '../lib/tax/cgt'
 
 // Client Advice: the end of the chain. Takes a client's saved review from
 // the Construction tab and turns it into the proposal - recommended trades
@@ -48,6 +49,7 @@ export default function ClientAdvicePanel() {
   const [savedNote, setSavedNote] = useState<string | null>(null)
   // Printed on the PDF only - sent with the download, never saved.
   const [pdfClientName, setPdfClientName] = useState('')
+  const [cgt, setCgt] = useState<CgtResult | null>(null)
 
   useEffect(() => {
     listClientReviews()
@@ -64,47 +66,16 @@ export default function ClientAdvicePanel() {
     setLoading(true)
     setError(null)
     try {
-      const r = await fetchClientReview(id)
-      const [version, approvedRes] = await Promise.all([
-        getLatestModelVersion().catch(() => null),
-        fetch('/api/investment-committee/approved-swaps').then((res) => res.json()).catch(() => ({ swaps: [] })),
-      ])
-      const approved = (approvedRes?.swaps ?? []) as CommitteeDecision[]
-
-      // First pass without prices to learn which codes need pricing.
-      const preliminary = await buildClientAdvice(
-        r,
-        { approvedDecisions: approved, currentModelVersion: version?.version ?? null },
-        approachChoice ?? r.adviceApproach ?? undefined,
-      )
-      const codes = new Set<string>()
-      for (const ac of preliminary.model.assetClasses) for (const h of ac.holdings) codes.add(h.code)
-      for (const h of r.state.holdings) codes.add(h.code)
-      let prices: Record<string, number | null> = {}
-      if (codes.size > 0) {
-        try {
-          const res = await fetch('/api/market-data/quote-batch', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ codes: Array.from(codes) }),
-          })
-          const data = await res.json()
-          if (data.ok) {
-            prices = Object.fromEntries(
-              Object.entries(data.quotes as Record<string, { price: number | null }>).map(([k, v]) => [k, v.price]),
-            )
-          }
-        } catch {
-          prices = {}
-        }
-      }
-      const full = await buildClientAdvice(
-        r,
-        { approvedDecisions: approved, currentModelVersion: version?.version ?? null, prices },
-        approachChoice ?? r.adviceApproach ?? undefined,
-      )
+      const { review: r, advice: full } = await loadAdviceForReview(id, approachChoice)
       setReview(r)
       setAdvice(full)
+      if (full.approach === 'rebalance') {
+        const reference = await getTaxReference()
+        const { result } = cgtForReview(r, full, reference)
+        setCgt(result.lines.length > 0 ? result : null)
+      } else {
+        setCgt(null)
+      }
       setApproach(full.approach)
       setNotes(r.adviserNotes)
     } catch (err) {
@@ -291,6 +262,24 @@ export default function ClientAdvicePanel() {
             </div>
           ) : null}
 
+          {cgt ? (
+            <div style={cgtLine}>
+              <span>
+                <strong>Capital gains estimate:</strong>{' '}
+                {cgt.notCalculated
+                  ? 'not calculated (foreign resident)'
+                  : `${fmt(cgt.estimatedTax)} estimated tax on ${fmt(cgt.netCapitalGain)} net capital gain`}
+                {cgt.missingCostBase.length > 0 ? ` · ${cgt.missingCostBase.length} sale(s) missing a cost base` : ''}
+              </span>
+              <span style={muted}>
+                {review?.cgtSettings?.includeInProposal ? 'Included in the proposal' : 'Not included in the proposal'} ·{' '}
+                <a href={`/portfolios?tab=capitalGains&review=${review?.id}`} style={{ color: '#38bdf8' }}>
+                  Capital Gains / Losses tab
+                </a>
+              </span>
+            </div>
+          ) : null}
+
           {advice.relevantDecisions.length > 0 ? (
             <div style={icBox}>
               <p style={icTitle}>Investment Committee decisions affecting this client</p>
@@ -440,6 +429,7 @@ const statValue = { fontSize: '17px', fontWeight: 700, color: '#ffffff' }
 const approachRow = { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' as const, marginBottom: '16px' }
 const toggle = { ...buttonBase, background: '#0d1f38', color: '#94a3b8', border: '1px solid #2d4a6b' }
 const toggleActive = { ...buttonBase, background: '#0b2447', color: '#ffffff', border: '1px solid #38bdf8' }
+const cgtLine = { display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' as const, padding: '10px 14px', borderRadius: '10px', background: '#0d1f38', border: '1px solid #1e3a5f', marginBottom: '16px', fontSize: '13px', color: '#e2e8f0' }
 const icBox = { padding: '12px 16px', borderRadius: '10px', background: '#0f3d2e', border: '1px solid #22c55e', marginBottom: '16px' }
 const icTitle = { margin: '0 0 6px', fontSize: '11px', fontWeight: 700, color: '#4ade80', textTransform: 'uppercase' as const, letterSpacing: '0.04em' }
 const icItem = { fontSize: '13px', color: '#dcfce7', lineHeight: 1.6 }

@@ -20,6 +20,9 @@ For each holding, extract:
 - weight: the holding's percentage of the total portfolio, if the document states it directly.
 - value: the dollar market value of the holding, if stated.
 - quantity: number of units/shares held, if stated.
+- costBase: the holding's total cost base / purchase cost, if stated (dollars, whole holding).
+- acquiredDate: the purchase / acquisition date as YYYY-MM-DD, if stated. Where a holding has several
+  parcels, use the earliest date and add a warning that it has multiple parcels.
 
 Do NOT extract names, addresses, account numbers, HINs, TFNs or any other personal details - return
 "clientName": null always. Also extract, if present anywhere in the document:
@@ -31,7 +34,7 @@ Respond ONLY with a JSON object (no markdown fences, no preamble) matching this 
   "clientName": string | null,
   "asAtDate": string | null,
   "totalPortfolioValue": number | null,
-  "holdings": [{ "code": string, "name": string, "weight": number | null, "value": number | null, "quantity": number | null }],
+  "holdings": [{ "code": string, "name": string, "weight": number | null, "value": number | null, "quantity": number | null, "costBase": number | null, "acquiredDate": string | null }],
   "warnings": string[]
 }
 Use the "warnings" array to flag anything you're unsure about — illegible sections, holdings
@@ -43,6 +46,8 @@ type ExtractedHolding = {
   weight?: number | null;
   value?: number | null;
   quantity?: number | null;
+  costBase?: number | null;
+  acquiredDate?: string | null;
 };
 
 type ExtractionResult = {
@@ -123,6 +128,9 @@ export async function POST(request: Request) {
         weight: holding.weight ?? 0,
         value: holding.value ?? undefined,
         quantity: holding.quantity ?? undefined,
+        costBase: typeof holding.costBase === "number" ? holding.costBase : undefined,
+        acquiredDate:
+          holding.acquiredDate && /^\d{4}-\d{2}-\d{2}$/.test(holding.acquiredDate) ? holding.acquiredDate : undefined,
         sourceRow: index + 1,
       };
     })

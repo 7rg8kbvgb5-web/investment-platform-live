@@ -8,7 +8,7 @@ import {
   useClientAdvice,
 } from './ClientAdviceContext'
 
-type PortfolioWorkspaceKey = 'modelPortfolio' | 'riskProfile' | 'construction' | 'clientAdvice'
+type PortfolioWorkspaceKey = 'modelPortfolio' | 'riskProfile' | 'construction' | 'capitalGains' | 'clientAdvice'
 
 interface Props {
   // The static model portfolio itself - which securities exist, per
@@ -21,6 +21,8 @@ interface Props {
   // A specific client's uploaded portfolio compared against, and adjusted
   // towards, the risk profile selected above.
   construction: React.ReactNode
+  // Estimated capital gains tax on the sales in a review's trades.
+  capitalGains: React.ReactNode
   // Reasoning, sourced context, and manual additions that turn the
   // construction output into a client-ready proposal.
   clientAdvice: React.ReactNode
@@ -34,10 +36,11 @@ function WorkspaceBody({
   modelPortfolio,
   riskProfile,
   construction,
+  capitalGains,
   clientAdvice,
 }: Props) {
   const searchParams = useSearchParams()
-  const validTabs: PortfolioWorkspaceKey[] = ['modelPortfolio', 'riskProfile', 'construction', 'clientAdvice']
+  const validTabs: PortfolioWorkspaceKey[] = ['modelPortfolio', 'riskProfile', 'construction', 'capitalGains', 'clientAdvice']
   const tabFromUrl = searchParams.get('tab') as PortfolioWorkspaceKey | null
   const [activeTab, setActiveTab] = useState<PortfolioWorkspaceKey>(
     tabFromUrl && validTabs.includes(tabFromUrl) ? tabFromUrl : 'modelPortfolio',
@@ -66,6 +69,10 @@ function WorkspaceBody({
 
       {activeTab === 'construction' && (
         <div className="section">{construction}</div>
+      )}
+
+      {activeTab === 'capitalGains' && (
+        <div className="section">{capitalGains}</div>
       )}
 
       {activeTab === 'clientAdvice' && (

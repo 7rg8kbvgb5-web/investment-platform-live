@@ -3,6 +3,7 @@ import type { UploadedHolding } from './client-portfolio-upload'
 import type { RiskProfile } from './model-portfolios'
 import type { AssetClassWeightOverrides, HoldingWeightOverrides } from './client-weight-overrides'
 import type { TradeOverrides } from './portfolio-review-comparison'
+import type { CgtSettings } from '../tax/cgt'
 
 const TABLE = 'client_portfolio_reviews'
 
@@ -30,6 +31,18 @@ export type ClientPortfolioReviewState = {
 
 export type ClientStatus = 'in_progress' | 'proposed' | 'implemented'
 
+/** Capital gains settings for a review (migration 0025). */
+export async function saveCgtSettings(id: string, settings: CgtSettings): Promise<void> {
+  const { error } = await supabase.from(TABLE).update({ cgt_settings: settings }).eq('id', id)
+  if (error) {
+    throw new Error(
+      error.message.includes('cgt_settings')
+        ? 'Run migration 0025 in Supabase to save capital gains settings.'
+        : `Failed to save capital gains settings: ${error.message}`,
+    )
+  }
+}
+
 export type ClientPortfolioReview = {
   id: string
   clientName: string
@@ -41,6 +54,7 @@ export type ClientPortfolioReview = {
   adviserNotes: string
   proposedAt: string | null
   implementedAt: string | null
+  cgtSettings: CgtSettings | null
 }
 
 type ReviewRow = {
@@ -61,6 +75,7 @@ type ReviewRow = {
   adviser_notes?: string | null
   proposed_at?: string | null
   implemented_at?: string | null
+  cgt_settings?: CgtSettings | null
   updated_at: string
 }
 
@@ -86,6 +101,7 @@ function mapRow(row: ReviewRow): ClientPortfolioReview {
     adviserNotes: row.adviser_notes ?? '',
     proposedAt: row.proposed_at ?? null,
     implementedAt: row.implemented_at ?? null,
+    cgtSettings: row.cgt_settings ?? null,
   }
 }
 

@@ -31,6 +31,8 @@ export type AdviceApproach = 'rebalance' | 'new-cash'
 export type DriftStatus = 'in-tolerance' | 'watch' | 'outside-tolerance' | 'no-holdings'
 
 export type ProposedTrade = {
+  /** Value of the whole holding before the trade (0 if not held). */
+  currentValue: number | null
   code: string
   name: string
   assetClass: string
@@ -176,6 +178,7 @@ export async function buildClientAdvice(
         code: l.code,
         name: l.name,
         assetClass: l.assetClass,
+        currentValue: l.currentValue,
         action: l.currentValue > 0 ? 'increase' : 'buy',
         value: l.investValue,
         units: l.units,
@@ -190,6 +193,7 @@ export async function buildClientAdvice(
         code: r.code,
         name: r.name,
         assetClass: r.assetClass,
+        currentValue: r.currentValue,
         action: r.action,
         value: r.changeValue,
         units: r.units,

@@ -6,6 +6,8 @@ import { listApprovedSwaps } from '../../../../lib/engines/investment-committee-
 import { getLatestModelVersion } from '../../../../lib/engines/model-versioning'
 import { getQuotesForCodes } from '../../../../lib/engines/market-data'
 import { ClientProposalDocument } from '../../../../lib/pdf/ClientProposalDocument'
+import { cgtForReview } from '../../../../lib/tax/cgt-for-review'
+import { getTaxReference } from '../../../../lib/tax/tax-reference'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -57,6 +59,14 @@ async function buildPdf(reviewId: string | null, approachParam: string | null, c
     const advice = await buildClientAdvice(review, { ...context, prices }, approach ?? review.adviceApproach ?? undefined)
 
     const preparedOn = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Australia/Sydney' })
+    // Capital gains page only when the adviser has chosen to include it.
+    let capitalGains = null
+    if (review.cgtSettings?.includeInProposal && advice.approach === 'rebalance') {
+      const reference = await getTaxReference()
+      const { result } = cgtForReview(review, advice, reference)
+      if (result.lines.length > 0) capitalGains = { result, reference }
+    }
+
     const clientName = clientNameInput?.trim().slice(0, 120) || null
     const displayName = clientName ?? review.clientName
     const buffer = await renderToBuffer(
@@ -64,6 +74,7 @@ async function buildPdf(reviewId: string | null, approachParam: string | null, c
         advice={{ ...advice, clientName: displayName }}
         adviserNotes={review.adviserNotes}
         preparedOn={preparedOn}
+        capitalGains={capitalGains}
       />,
     )
     const filename = `Investment Proposal - ${displayName.replace(/[^\w\s-]/g, '')}.pdf`

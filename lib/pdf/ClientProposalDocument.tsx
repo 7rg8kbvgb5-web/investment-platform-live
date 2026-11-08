@@ -1,5 +1,7 @@
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 import type { ClientAdvice } from '../engines/client-advice'
+import { CGT_DISCLAIMERS, ENTITY_LABELS, type CgtResult } from '../tax/cgt'
+import type { TaxReference } from '../tax/tax-reference'
 
 // Client-facing proposal, built from exactly the same calculation as the
 // Client Advice tab (lib/engines/client-advice.ts). Ord Minnett palette.
@@ -58,10 +60,12 @@ export function ClientProposalDocument({
   advice,
   adviserNotes,
   preparedOn,
+  capitalGains,
 }: {
   advice: ClientAdvice
   adviserNotes: string
   preparedOn: string
+  capitalGains?: { result: CgtResult; reference: TaxReference } | null
 }) {
   const buys = advice.trades.filter((t) => t.action === 'buy' || t.action === 'increase')
   const sells = advice.trades.filter((t) => t.action === 'sell' || t.action === 'reduce')
@@ -229,6 +233,90 @@ export function ClientProposalDocument({
         </Text>
         <Footer client={advice.clientName} />
       </Page>
+
+      {capitalGains ? (
+        <Page size="A4" style={s.page}>
+          <Text style={s.h1}>Capital gains and losses (estimate)</Text>
+          <View style={s.h1Rule} />
+          <Text style={s.p}>
+            Estimated capital gains tax on the sales above, for investments held in a{' '}
+            {ENTITY_LABELS[capitalGains.result.entityType].toLowerCase()}, using rates published by the Australian
+            Taxation Office for {capitalGains.reference.financialYear}.
+          </Text>
+          <View style={s.table}>
+            <View style={s.tr}>
+              <Text style={[s.th, { width: '12%' }]}>CODE</Text>
+              <Text style={[s.th, { width: '30%' }]}>SECURITY</Text>
+              <Text style={[s.th, { width: '16%', textAlign: 'right' }]}>PROCEEDS</Text>
+              <Text style={[s.th, { width: '16%', textAlign: 'right' }]}>COST BASE</Text>
+              <Text style={[s.th, { width: '10%', textAlign: 'center' }]}>12M+</Text>
+              <Text style={[s.th, { width: '16%', textAlign: 'right' }]}>GAIN / (LOSS)</Text>
+            </View>
+            {capitalGains.result.lines.map((l) => (
+              <View style={s.tr} key={l.code} wrap={false}>
+                <Text style={[s.td, { width: '12%', fontFamily: 'Helvetica-Bold' }]}>{l.code}</Text>
+                <Text style={[s.td, { width: '30%' }]}>{l.name}</Text>
+                <Text style={[s.td, { width: '16%', textAlign: 'right' }]}>{fmt(l.proceeds)}</Text>
+                <Text style={[s.td, { width: '16%', textAlign: 'right' }]}>
+                  {l.costBaseApplied !== null ? fmt(l.costBaseApplied) : 'not provided'}
+                </Text>
+                <Text style={[s.td, { width: '10%', textAlign: 'center' }]}>{l.over12Months ? 'Yes' : 'No'}</Text>
+                <Text style={[s.td, { width: '16%', textAlign: 'right' }]}>
+                  {l.gain === null ? '-' : l.gain >= 0 ? fmt(l.gain) : `(${fmt(-l.gain)})`}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          {capitalGains.result.notCalculated ? (
+            <View style={s.callout}>
+              <Text style={s.p}>
+                Not calculated for a foreign resident: Australian CGT generally applies only to taxable Australian
+                property, and portfolio holdings in listed shares usually are not. Gains may be taxed in your country
+                of residence at its own rates.
+              </Text>
+            </View>
+          ) : (
+            <View style={[s.statRow, { marginTop: 12 }]}>
+              <View style={s.stat}>
+                <Text style={s.statLabel}>NET CAPITAL GAIN</Text>
+                <Text style={s.statValue}>{fmt(capitalGains.result.netCapitalGain)}</Text>
+              </View>
+              <View style={s.stat}>
+                <Text style={s.statLabel}>ESTIMATED TAX</Text>
+                <Text style={s.statValue}>{fmt(capitalGains.result.estimatedTax)}</Text>
+              </View>
+              {capitalGains.result.lossesCarriedForward > 0 ? (
+                <View style={s.stat}>
+                  <Text style={s.statLabel}>LOSSES CARRIED FORWARD</Text>
+                  <Text style={s.statValue}>{fmt(capitalGains.result.lossesCarriedForward)}</Text>
+                </View>
+              ) : null}
+            </View>
+          )}
+          {!capitalGains.result.notCalculated ? (
+            <Text style={[s.p, s.muted]}>
+              Capital gains {fmt(capitalGains.result.grossGains)}, less capital losses this year{' '}
+              {fmt(capitalGains.result.currentYearLosses)} and carried-forward losses used{' '}
+              {fmt(capitalGains.result.carryForwardUsed)}, less the CGT discount {fmt(capitalGains.result.discountApplied)}.
+              Tax rate: {capitalGains.result.rateDescription}.
+            </Text>
+          ) : null}
+          {capitalGains.result.missingCostBase.length > 0 ? (
+            <Text style={[s.p, s.muted]}>
+              Excluded (no cost base provided): {capitalGains.result.missingCostBase.join(', ')}.
+            </Text>
+          ) : null}
+
+          <Text style={s.h2}>Important</Text>
+          {[capitalGains.reference.reformNote, ...CGT_DISCLAIMERS].map((d) => (
+            <Text style={[s.p, s.muted]} key={d}>
+              • {d}
+            </Text>
+          ))}
+          <Footer client={advice.clientName} />
+        </Page>
+      ) : null}
     </Document>
   )
 }

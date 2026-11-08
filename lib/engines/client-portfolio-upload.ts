@@ -4,6 +4,10 @@ export type UploadedHolding = {
     weight: number
     value?: number
     quantity?: number
+    /** Total cost base of the holding, if the statement shows it. */
+    costBase?: number
+    /** Acquisition date (YYYY-MM-DD), if the statement shows it - used for the 12-month CGT test. */
+    acquiredDate?: string
     sourceRow: number
   }
   

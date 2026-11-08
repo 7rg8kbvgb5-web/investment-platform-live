@@ -1,6 +1,6 @@
 'use client'
 
-type PortfolioWorkspace = 'modelPortfolio' | 'riskProfile' | 'construction' | 'clientAdvice'
+type PortfolioWorkspace = 'modelPortfolio' | 'riskProfile' | 'construction' | 'capitalGains' | 'clientAdvice'
 
 interface Props {
   activeTab: PortfolioWorkspace
@@ -17,6 +17,7 @@ const tabs = [
   { id: 'modelPortfolio', label: 'Model Portfolio' },
   { id: 'riskProfile', label: 'Risk Profile' },
   { id: 'construction', label: 'Construction' },
+  { id: 'capitalGains', label: 'Capital Gains / Losses' },
   { id: 'clientAdvice', label: 'Client Advice' },
 ] as const
 
