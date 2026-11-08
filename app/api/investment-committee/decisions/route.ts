@@ -1,3 +1,4 @@
+import { describeAiError } from '../../../../lib/ai-errors'
 import {
   listCommitteeDecisions,
   syncProposals,
@@ -24,7 +25,7 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error('Failed to load Investment Committee queue:', error)
     return Response.json(
-      { ok: false, error: error instanceof Error ? error.message : 'Unknown error' },
+      { ok: false, error: describeAiError(error, 'Unknown error') },
       { status: 500 },
     )
   }
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Failed to add manual proposal:', error)
     return Response.json(
-      { ok: false, error: error instanceof Error ? error.message : 'Unknown error' },
+      { ok: false, error: describeAiError(error, 'Unknown error') },
       { status: 500 },
     )
   }

@@ -1,3 +1,4 @@
+import { describeAiError } from '../../../../lib/ai-errors'
 import { lookupSecurity } from '../../../../lib/engines/security-lookup'
 
 export const runtime = 'nodejs'
@@ -16,7 +17,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Security lookup failed:', error)
     return Response.json(
-      { ok: false, error: error instanceof Error ? error.message : 'Unknown error' },
+      { ok: false, error: describeAiError(error, 'Unknown error') },
       { status: 500 },
     )
   }

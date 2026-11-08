@@ -1,4 +1,5 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { describeAiError } from '../../../../lib/ai-errors'
+import { downloadStoredPdf, extractJsonFromPdf, removeStoredFile } from "../../../../lib/ai/read-pdf";
 import type { UploadedHolding } from "../../../../lib/engines/client-portfolio-upload";
 
 export const runtime = "nodejs";
@@ -53,87 +54,56 @@ type ExtractionResult = {
 };
 
 export async function POST(request: Request) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return Response.json(
-      { ok: false, error: "ANTHROPIC_API_KEY is not configured." },
-      { status: 500 }
-    );
-  }
-
-  const formData = await request.formData();
-  const file = formData.get("file");
-
-  if (!file || !(file instanceof File)) {
-    return Response.json(
-      { ok: false, error: "No PDF file was provided." },
-      { status: 400 }
-    );
-  }
-
-  if (file.type !== "application/pdf") {
-    return Response.json(
-      { ok: false, error: "Only PDF files are supported." },
-      { status: 400 }
-    );
-  }
-
-  const arrayBuffer = await file.arrayBuffer();
-  const base64 = Buffer.from(arrayBuffer).toString("base64");
-
-  const client = new Anthropic({ apiKey });
-
-  let response;
+  // Preferred: the browser uploads the statement to private storage and
+  // sends its path (avoids Vercel's ~4.5MB request limit); the file is
+  // deleted again as soon as it's been read. A direct multipart upload is
+  // still accepted for small files.
+  let base64: string;
+  let storagePath: string | null = null;
   try {
-    response = await client.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 8000,
+    const contentType = request.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      const body = await request.json();
+      storagePath = typeof body?.storagePath === "string" ? body.storagePath : null;
+      if (!storagePath) {
+        return Response.json({ ok: false, error: "No PDF file was provided." }, { status: 400 });
+      }
+      base64 = await downloadStoredPdf(storagePath);
+    } else {
+      const formData = await request.formData();
+      const file = formData.get("file");
+      if (!file || !(file instanceof File)) {
+        return Response.json({ ok: false, error: "No PDF file was provided." }, { status: 400 });
+      }
+      if (file.type !== "application/pdf") {
+        return Response.json({ ok: false, error: "Only PDF files are supported." }, { status: 400 });
+      }
+      base64 = Buffer.from(await file.arrayBuffer()).toString("base64");
+    }
+  } catch (error) {
+    return Response.json({ ok: false, error: describeAiError(error, "Couldn't read the uploaded file.") }, { status: 400 });
+  }
+
+  let parsed: ExtractionResult;
+  try {
+    parsed = await extractJsonFromPdf<ExtractionResult>({
+      base64,
       system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "document",
-              source: {
-                type: "base64",
-                media_type: "application/pdf",
-                data: base64,
-              },
-            },
-            {
-              type: "text",
-              text: "Extract all holdings from this portfolio statement.",
-            },
-          ],
-        },
-      ],
+      instruction: "Extract all holdings from this portfolio statement.",
     });
   } catch (error) {
     return Response.json(
       {
         ok: false,
-        error: error instanceof Error ? error.message : "PDF extraction request failed.",
+        error: describeAiError(
+          error,
+          "Could not read the holdings from this PDF. Try a clearer copy, or paste the holdings as CSV instead.",
+        ),
       },
-      { status: 502 }
+      { status: 502 },
     );
-  }
-
-  const textBlock = response.content.find((block) => block.type === "text");
-  const rawText = textBlock && "text" in textBlock ? textBlock.text : "{}";
-  const cleaned = rawText.replace(/```json|```/g, "").trim();
-
-  let parsed: ExtractionResult;
-  try {
-    parsed = JSON.parse(cleaned);
-  } catch {
-    return Response.json(
-      {
-        ok: false,
-        error: "Could not parse a structured result from the PDF. Try a clearer scan, or paste the holdings as CSV instead.",
-      },
-      { status: 422 }
-    );
+  } finally {
+    if (storagePath) await removeStoredFile(storagePath).catch(() => {});
   }
 
   const warnings = [...(parsed.warnings ?? [])];
@@ -158,20 +128,25 @@ export async function POST(request: Request) {
     })
     .filter((h): h is UploadedHolding => h !== null);
 
-  const hasWeights = holdings.some((h) => h.weight > 0);
-  const hasValues = holdings.some((h) => (h.value ?? 0) > 0);
+  // Weights: use stated weights where given; where any are missing but
+  // dollar values exist, derive every weight from values so they're
+  // consistent. Total value falls back to the sum of holding values.
+  const valuesTotal = holdings.reduce((sum, h) => sum + (h.value ?? 0), 0);
+  const missingWeights = holdings.some((h) => !(h.weight > 0));
+  const allHaveValues = holdings.length > 0 && holdings.every((h) => (h.value ?? 0) > 0);
 
   let finalHoldings = holdings;
-  if (!hasWeights && hasValues) {
-    const totalValue = holdings.reduce((sum, h) => sum + (h.value ?? 0), 0);
+  if (missingWeights && valuesTotal > 0) {
+    const base = allHaveValues ? valuesTotal : parsed.totalPortfolioValue ?? valuesTotal;
     finalHoldings = holdings.map((h) => ({
       ...h,
-      weight:
-        totalValue > 0 ? Math.round(((h.value ?? 0) / totalValue) * 10000) / 100 : 0,
+      weight: h.value ? Math.round((h.value / base) * 10000) / 100 : h.weight,
     }));
-    warnings.push(
-      "The document didn't state percentage weights directly — weights were calculated from market values."
-    );
+    warnings.push("Some percentage weights weren't stated — they were calculated from market values.");
+  }
+  if (!parsed.totalPortfolioValue && valuesTotal > 0 && allHaveValues) {
+    parsed.totalPortfolioValue = Math.round(valuesTotal * 100) / 100;
+    warnings.push("Total portfolio value wasn't stated — it was taken as the sum of the holding values.");
   }
 
   if (finalHoldings.length === 0) {

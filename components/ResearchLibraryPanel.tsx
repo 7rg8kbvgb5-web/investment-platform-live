@@ -11,6 +11,9 @@ import {
   listResearchDocuments,
   normaliseTags,
   uploadResearchDocument,
+  stageResearchFile,
+  discardStagedFile,
+  type ExtractedSecurity,
 } from '../lib/engines/research-library';
 import { formatIsoTimestampDisplay } from '../lib/format-timestamp';
 import StatusBox from './dashboard/StatusBox';
@@ -42,6 +45,70 @@ export default function ResearchLibraryPanel() {
   const [summary, setSummary] = useState('');
   const [houseViewRating, setHouseViewRating] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [publishedAt, setPublishedAt] = useState<string | null>(null);
+
+  // Automatic reading: a PDF is staged in storage and read as soon as it's
+  // chosen, pre-filling the form and the securities it covers. Nothing is
+  // saved until the adviser checks it and clicks Save.
+  const [stagedPath, setStagedPath] = useState<string | null>(null);
+  const [reading, setReading] = useState(false);
+  const [readError, setReadError] = useState<string | null>(null);
+  const [readWarnings, setReadWarnings] = useState<string[]>([]);
+  const [securities, setSecurities] = useState<ExtractedSecurity[]>([]);
+
+  async function chooseFile(next: File | null) {
+    if (stagedPath) {
+      discardStagedFile(stagedPath).catch(() => {});
+      setStagedPath(null);
+    }
+    setFile(next);
+    setSecurities([]);
+    setReadError(null);
+    setReadWarnings([]);
+    setSubmitSuccess(false);
+    if (!next) return;
+    if (next.type !== 'application/pdf') {
+      setReadError('Only PDFs are read automatically — fill in the details below by hand for this file.');
+      return;
+    }
+
+    setReading(true);
+    try {
+      const path = await stageResearchFile(next, 'staging');
+      setStagedPath(path);
+      const res = await fetch('/api/research/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storagePath: path }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error ?? 'Failed to read the document.');
+      const x = data.extracted;
+      if (x.title) setTitle(x.title);
+      if (x.source) setSource(x.source);
+      if (x.documentType) setDocumentType(x.documentType);
+      if (x.summary) setSummary(x.summary);
+      setPublishedAt(x.publishedAt ?? null);
+      setSectorsInput((x.sectors ?? []).join(', '));
+      setSecurities(x.securities ?? []);
+      setTickersInput((x.securities ?? []).map((sec: ExtractedSecurity) => sec.code).join(', '));
+      setReadWarnings(data.warnings ?? []);
+    } catch (error) {
+      setReadError(
+        `${error instanceof Error ? error.message : 'Failed to read the document.'} You can still fill in the details by hand and save.`,
+      );
+    } finally {
+      setReading(false);
+    }
+  }
+
+  function updateSecurity(index: number, patch: Partial<ExtractedSecurity>) {
+    setSecurities((prev) => prev.map((sec, i) => (i === index ? { ...sec, ...patch } : sec)));
+  }
+
+  function removeSecurity(index: number) {
+    setSecurities((prev) => prev.filter((_, i) => i !== index));
+  }
 
   async function refresh() {
     setLoading(true);
@@ -75,11 +142,17 @@ export default function ResearchLibraryPanel() {
     setSubmitSuccess(false);
 
     try {
+      const tickers = securities.length > 0
+        ? securities.map((sec) => sec.code.toUpperCase())
+        : normaliseTags(tickersInput, 'ticker');
       await uploadResearchDocument({
+        stagedPath: stagedPath ?? undefined,
+        securities,
+        publishedAt: publishedAt ?? undefined,
         title: title.trim(),
         source,
         documentType,
-        tickers: normaliseTags(tickersInput, 'ticker'),
+        tickers,
         sectors: normaliseTags(sectorsInput, 'sector'),
         summary: summary.trim() || undefined,
         houseViewRating:
@@ -95,6 +168,10 @@ export default function ResearchLibraryPanel() {
       setSummary('');
       setHouseViewRating('');
       setFile(null);
+      setStagedPath(null);
+      setSecurities([]);
+      setPublishedAt(null);
+      setReadWarnings([]);
       setSubmitSuccess(true);
       await refresh();
     } catch (error) {
@@ -122,12 +199,29 @@ export default function ResearchLibraryPanel() {
       <p style={eyebrow}>Research Library</p>
       <h2 style={heading}>Ord Minnett &amp; Barrenjoey Research</h2>
       <p style={description}>
-        Upload research documents and tag them by ticker and sector. Tagged
-        documents are cross-referenced automatically by the weekly research
-        brief engine.
+        Choose a research PDF and it&apos;s read automatically: source, document type, and every security
+        it covers with its rating, price target, and whether it&apos;s a Top Idea. Check the details, then
+        save. Ratings feed conviction scores, and Top Ideas are compared against the model.
       </p>
 
       <form onSubmit={handleSubmit} style={form}>
+        <label style={label}>
+          Document
+          <input
+            style={fileInput}
+            type="file"
+            accept=".pdf,.doc,.docx"
+            onChange={(event) => chooseFile(event.target.files?.[0] ?? null)}
+          />
+        </label>
+        {reading ? <StatusBox variant="neutral">Reading the document…</StatusBox> : null}
+        {readError ? <StatusBox variant="warning">{readError}</StatusBox> : null}
+        {readWarnings.length > 0 ? (
+          <StatusBox variant="warning">
+            <strong>Check before saving:</strong> {readWarnings.join(' ')}
+          </StatusBox>
+        ) : null}
+
         <div style={formRow}>
           <label style={label}>
             Title
@@ -196,7 +290,71 @@ export default function ResearchLibraryPanel() {
           </label>
         </div>
 
-        {(source === 'Ord Minnett' || source === 'Barrenjoey') && (
+        {securities.length > 0 ? (
+          <div style={tableWrap}>
+            <p style={subheading}>
+              Securities read from the document ({securities.length}) — edit anything that&apos;s wrong
+            </p>
+            <table style={table}>
+              <thead>
+                <tr>
+                  <th style={th}>Code</th>
+                  <th style={th}>Name</th>
+                  <th style={th}>Rating</th>
+                  <th style={th}>Price target</th>
+                  <th style={th}>Top Idea</th>
+                  <th style={th}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {securities.map((sec, i) => (
+                  <tr key={`${sec.code}-${i}`}>
+                    <td style={td}>
+                      <input
+                        style={{ ...input, width: '80px' }}
+                        value={sec.code}
+                        onChange={(e) => updateSecurity(i, { code: e.target.value.toUpperCase() })}
+                      />
+                    </td>
+                    <td style={td}>{sec.name ?? '—'}</td>
+                    <td style={td}>
+                      <input
+                        style={{ ...input, width: '120px' }}
+                        value={sec.rating ?? ''}
+                        onChange={(e) => updateSecurity(i, { rating: e.target.value || null })}
+                      />
+                    </td>
+                    <td style={td}>
+                      <input
+                        style={{ ...input, width: '90px' }}
+                        type="number"
+                        step="0.01"
+                        value={sec.priceTarget ?? ''}
+                        onChange={(e) =>
+                          updateSecurity(i, { priceTarget: e.target.value === '' ? null : parseFloat(e.target.value) })
+                        }
+                      />
+                    </td>
+                    <td style={td}>
+                      <input
+                        type="checkbox"
+                        checked={sec.isTopIdea}
+                        onChange={(e) => updateSecurity(i, { isTopIdea: e.target.checked })}
+                      />
+                    </td>
+                    <td style={td}>
+                      <button type="button" style={linkButton} onClick={() => removeSecurity(i)}>
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+
+        {securities.length === 0 && (source === 'Ord Minnett' || source === 'Barrenjoey') && (
           <label style={label}>
             {source}&apos;s rating (optional — feeds the conviction rating on Security Master)
             <input
@@ -218,15 +376,6 @@ export default function ResearchLibraryPanel() {
           />
         </label>
 
-        <label style={label}>
-          File
-          <input
-            style={fileInput}
-            type="file"
-            accept=".pdf,.doc,.docx"
-            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-          />
-        </label>
 
         {submitError ? (
           <StatusBox variant="error">{submitError}</StatusBox>
@@ -236,8 +385,8 @@ export default function ResearchLibraryPanel() {
           <StatusBox variant="success">Document uploaded to the research library.</StatusBox>
         ) : null}
 
-        <button type="submit" disabled={submitting} style={submitButton}>
-          {submitting ? 'Uploading…' : 'Upload Document'}
+        <button type="submit" disabled={submitting || reading} style={submitButton}>
+          {submitting ? 'Saving…' : reading ? 'Reading…' : 'Save to Research Library'}
         </button>
       </form>
 

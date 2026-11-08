@@ -5,6 +5,7 @@ import type {
 } from "../../domain/types/research-document";
 
 const BUCKET = "research-documents";
+const SECURITIES_TABLE = "research_document_securities";
 const TABLE = "research_documents";
 
 type ResearchDocumentRow = {
@@ -71,21 +72,35 @@ export async function listResearchDocuments(): Promise<ResearchDocument[]> {
   return (data ?? []).map(mapRow);
 }
 
+export type ExtractedSecurity = {
+  code: string;
+  name: string | null;
+  rating: string | null;
+  recommendation: string | null;
+  priceTarget: number | null;
+  isTopIdea: boolean;
+  note: string | null;
+};
+
+/** Puts a file in research storage ahead of reading it; returns its path. */
+export async function stageResearchFile(file: File, source: string): Promise<string> {
+  const storagePath = `${source.replace(/\s+/g, "-").toLowerCase()}/${Date.now()}-${file.name.replace(/[^\w.\-]/g, "_")}`;
+  const { error } = await supabase.storage.from(BUCKET).upload(storagePath, file, {
+    cacheControl: "3600",
+    upsert: false,
+  });
+  if (error) throw new Error(`Failed to upload document: ${error.message}`);
+  return storagePath;
+}
+
+export async function discardStagedFile(storagePath: string): Promise<void> {
+  await supabase.storage.from(BUCKET).remove([storagePath]);
+}
+
 export async function uploadResearchDocument(
-  input: ResearchDocumentUploadInput
+  input: ResearchDocumentUploadInput & { stagedPath?: string; securities?: ExtractedSecurity[] }
 ): Promise<ResearchDocument> {
-  const storagePath = `${input.source.replace(/\s+/g, "-").toLowerCase()}/${Date.now()}-${input.file.name}`;
-
-  const { error: uploadError } = await supabase.storage
-    .from(BUCKET)
-    .upload(storagePath, input.file, {
-      cacheControl: "3600",
-      upsert: false,
-    });
-
-  if (uploadError) {
-    throw new Error(`Failed to upload document: ${uploadError.message}`);
-  }
+  const storagePath = input.stagedPath ?? (await stageResearchFile(input.file, input.source));
 
   const { data, error: insertError } = await supabase
     .from(TABLE)
@@ -111,6 +126,25 @@ export async function uploadResearchDocument(
     // half-uploaded document never sits in the bucket without a record.
     await supabase.storage.from(BUCKET).remove([storagePath]);
     throw new Error(`Failed to save document metadata: ${insertError.message}`);
+  }
+
+  // Every security the document gives a view on, with that view.
+  if (input.securities && input.securities.length > 0) {
+    const { error: securitiesError } = await supabase.from(SECURITIES_TABLE).insert(
+      input.securities.map((s) => ({
+        document_id: data.id,
+        code: s.code.toUpperCase(),
+        name: s.name,
+        rating: s.rating,
+        recommendation: s.recommendation,
+        price_target: s.priceTarget,
+        is_top_idea: s.isTopIdea,
+        note: s.note,
+      }))
+    );
+    if (securitiesError) {
+      console.error("Failed to save the document's securities:", securitiesError.message);
+    }
   }
 
   // A new Top Ideas / preferred-holdings list supersedes whatever the
@@ -196,19 +230,115 @@ export async function fetchLatestHouseViewRating(
   code: string,
   source: ResearchDocument["source"]
 ): Promise<string | null> {
+  const ticker = code.toUpperCase();
+
+  // Newest per-security rating read from an uploaded document (0022)...
+  let extracted: { rating: string; at: string } | null = null;
+  const { data: secRows, error: secError } = await supabase
+    .from(SECURITIES_TABLE)
+    .select("rating, created_at, research_documents!inner(source, published_at, created_at)")
+    .eq("code", ticker)
+    .eq("research_documents.source", source)
+    .not("rating", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (!secError && secRows && secRows.length > 0) {
+    const row = secRows[0] as unknown as { rating: string; created_at: string };
+    extracted = { rating: row.rating, at: row.created_at };
+  }
+
+  // ...versus a rating typed in by hand on an older upload. Newest wins.
   const { data, error } = await supabase
     .from(TABLE)
-    .select("house_view_rating")
+    .select("house_view_rating, created_at")
     .eq("source", source)
-    .contains("tickers", [code.toUpperCase()])
+    .contains("tickers", [ticker])
     .not("house_view_rating", "is", null)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  if (error) {
+  if (error && !extracted) {
     throw new Error(`Failed to load ${source} house view rating: ${error.message}`);
   }
 
-  return data?.house_view_rating ?? null;
+  const manual = data?.house_view_rating ? { rating: data.house_view_rating as string, at: data.created_at as string } : null;
+  if (extracted && manual) return extracted.at >= manual.at ? extracted.rating : manual.rating;
+  return extracted?.rating ?? manual?.rating ?? null;
+}
+
+export type TopIdea = {
+  code: string;
+  name: string | null;
+  rating: string | null;
+  priceTarget: number | null;
+  note: string | null;
+};
+
+export type SourceTopIdeas = {
+  source: ResearchDocument["source"];
+  documentId: string;
+  title: string;
+  publishedAt: string | null;
+  createdAt: string;
+  ideas: TopIdea[];
+};
+
+/**
+ * Each source's current Top Ideas list, from the securities read out of its
+ * most recent Top Ideas upload. Falls back to the document's tagged tickers
+ * for uploads made before documents were read automatically.
+ */
+export async function listCurrentTopIdeas(): Promise<SourceTopIdeas[]> {
+  const { data: docs, error } = await supabase
+    .from(TABLE)
+    .select("*")
+    .eq("document_type", "Top Ideas")
+    .eq("is_current", true)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(`Failed to load Top Ideas: ${error.message}`);
+
+  const latestBySource = new Map<string, ResearchDocument>();
+  for (const row of docs ?? []) {
+    const doc = mapRow(row as ResearchDocumentRow);
+    if (!latestBySource.has(doc.source)) latestBySource.set(doc.source, doc);
+  }
+
+  const results: SourceTopIdeas[] = [];
+  for (const doc of Array.from(latestBySource.values())) {
+    const { data: secs } = await supabase
+      .from(SECURITIES_TABLE)
+      .select("code, name, rating, price_target, is_top_idea, note")
+      .eq("document_id", doc.id);
+    const rows = (secs ?? []) as {
+      code: string;
+      name: string | null;
+      rating: string | null;
+      price_target: number | null;
+      is_top_idea: boolean;
+      note: string | null;
+    }[];
+    // On a Top Ideas document, flagged ideas if any are flagged, else everything listed.
+    const flagged = rows.filter((r) => r.is_top_idea);
+    const chosen = flagged.length > 0 ? flagged : rows;
+    const ideas: TopIdea[] =
+      chosen.length > 0
+        ? chosen.map((r) => ({
+            code: r.code.toUpperCase(),
+            name: r.name,
+            rating: r.rating,
+            priceTarget: r.price_target === null ? null : Number(r.price_target),
+            note: r.note,
+          }))
+        : doc.tickers.map((t) => ({ code: t.toUpperCase(), name: null, rating: doc.houseViewRating, priceTarget: null, note: null }));
+    results.push({
+      source: doc.source,
+      documentId: doc.id,
+      title: doc.title,
+      publishedAt: doc.publishedAt,
+      createdAt: doc.createdAt,
+      ideas,
+    });
+  }
+  return results;
 }

@@ -1,3 +1,4 @@
+import { describeAiError } from '../../../../lib/ai-errors'
 import { NextRequest } from "next/server";
 import { generateWeeklyBrief } from "../../../../lib/engines/weekly-brief";
 
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Weekly brief generation failed:", error);
     return Response.json(
-      { ok: false, error: error instanceof Error ? error.message : "Unknown error" },
+      { ok: false, error: describeAiError(error, "Unknown error") },
       { status: 500 }
     );
   }

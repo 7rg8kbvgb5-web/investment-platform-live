@@ -37,6 +37,7 @@ const SOURCE_LABELS: Record<CommitteeDecision['source'], string> = {
   tactical: 'Tactical View',
   conviction: 'Conviction rating',
   sector_health: 'Sector Health',
+  house_view: 'House Top Ideas',
 }
 
 const TYPE_LABELS: Record<ProposalType, string> = {

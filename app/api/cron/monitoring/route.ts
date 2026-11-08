@@ -1,3 +1,4 @@
+import { describeAiError } from '../../../../lib/ai-errors'
 import { NextRequest } from 'next/server'
 import { runInvestmentMonitoringScan } from '../../../../lib/engines/investment-monitoring'
 import { runFundReviewScan } from '../../../../lib/engines/fund-review'
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
       results[name] = 'ok'
     } catch (error) {
       console.error(`Daily job step ${name} failed:`, error)
-      results[name] = error instanceof Error ? error.message : 'failed'
+      results[name] = describeAiError(error, 'failed')
     }
   }
 

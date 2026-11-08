@@ -1,3 +1,4 @@
+import { describeAiError } from '../../../../lib/ai-errors'
 import { listApprovedSwaps } from '../../../../lib/engines/investment-committee-decisions'
 
 export const runtime = 'nodejs'
@@ -10,6 +11,6 @@ export async function GET() {
   } catch (error) {
     // The table may not exist until migration 0016 is run - fail quietly
     // so the Construction tab isn't affected.
-    return Response.json({ ok: false, swaps: [], error: error instanceof Error ? error.message : 'Unknown error' })
+    return Response.json({ ok: false, swaps: [], error: describeAiError(error, 'Unknown error') })
   }
 }

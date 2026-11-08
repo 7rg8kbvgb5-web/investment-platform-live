@@ -1,6 +1,7 @@
 import PageContent from "../../components/PageContent";
 import { ConsensusViewPanel } from "../../components/ConsensusViewPanel";
 import { HouseViewsPanel } from "../../components/HouseViewsPanel";
+import TopIdeasVsModelPanel from "../../components/TopIdeasVsModelPanel";
 import { SecurityMasterPanel } from "../../components/SecurityMasterPanel";
 import ResearchLibraryPanel from "../../components/ResearchLibraryPanel";
 import WeeklyBriefPanel from "../../components/WeeklyBriefPanel";
@@ -14,6 +15,8 @@ export default function ResearchPage() {
       <ConsensusViewPanel />
 
       <HouseViewsPanel />
+
+      <TopIdeasVsModelPanel />
 
       <WeeklyBriefPanel />
 

@@ -42,6 +42,7 @@ import { deployCash } from '../lib/engines/cash-deployment'
 import CashDeploymentView from './CashDeploymentView'
 import ApprovedSwapsBanner from './ApprovedSwapsBanner'
 import { getLatestModelVersion } from '../lib/engines/model-versioning'
+import { supabase } from '../lib/supabase'
 
 type ExtractionMeta = {
   clientName: string | null
@@ -144,12 +145,19 @@ export default function ClientPortfolioUploadPanel() {
     setParseError(null)
 
     try {
-      const formData = new FormData()
-      formData.append('file', file)
+      // Upload to private storage first, then have the server read it by
+      // path (it's deleted again once read). Avoids Vercel's ~4.5MB
+      // request-size limit on larger or scanned statements.
+      const storagePath = `client-statements/${Date.now()}-${file.name.replace(/[^\w.\-]/g, '_')}`
+      const { error: uploadError } = await supabase.storage
+        .from('research-documents')
+        .upload(storagePath, file, { contentType: 'application/pdf', upsert: false })
+      if (uploadError) throw new Error(`Couldn't upload the statement: ${uploadError.message}`)
 
       const response = await fetch('/api/portfolios/parse-pdf', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storagePath }),
       })
 
       const data = await response.json()

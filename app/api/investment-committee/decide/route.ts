@@ -1,3 +1,4 @@
+import { describeAiError } from '../../../../lib/ai-errors'
 import { recordDecision } from '../../../../lib/engines/investment-committee-decisions'
 
 export const runtime = 'nodejs'
@@ -22,7 +23,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Failed to record decision:', error)
     return Response.json(
-      { ok: false, error: error instanceof Error ? error.message : 'Unknown error' },
+      { ok: false, error: describeAiError(error, 'Unknown error') },
       { status: 500 },
     )
   }

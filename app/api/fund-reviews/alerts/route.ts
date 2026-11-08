@@ -1,3 +1,4 @@
+import { describeAiError } from '../../../../lib/ai-errors'
 import { updateFundReviewAlertStatus, type FundReviewStatus } from '../../../../lib/engines/fund-review'
 
 export const runtime = 'nodejs'
@@ -15,7 +16,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Failed to update fund review alert:', error)
     return Response.json(
-      { ok: false, error: error instanceof Error ? error.message : 'Unknown error' },
+      { ok: false, error: describeAiError(error, 'Unknown error') },
       { status: 500 },
     )
   }

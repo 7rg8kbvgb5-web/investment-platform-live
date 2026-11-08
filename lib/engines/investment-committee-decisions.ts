@@ -6,6 +6,7 @@ import { logModelChange, publishModelVersion } from './model-versioning'
 import { getLatestTacticalAssetClassView } from './tactical-asset-view'
 import { getLatestSectorHealthScores } from './sector-health-live'
 import { computeConvictionRating } from './conviction-rating'
+import { listCurrentTopIdeas } from './research-library'
 
 // Investment Committee decision queue - where every input that could change
 // the house model gets a formal decision.
@@ -28,7 +29,7 @@ const SECURITIES_TABLE = 'model_portfolio_securities'
 const WEIGHTS_TABLE = 'risk_profile_asset_class_weights'
 
 export type ProposalType = 'swap' | 'allocation' | 'review'
-export type DecisionSource = 'monitoring' | 'fund_review' | 'manual' | 'tactical' | 'conviction' | 'sector_health'
+export type DecisionSource = 'monitoring' | 'fund_review' | 'manual' | 'tactical' | 'conviction' | 'sector_health' | 'house_view'
 export type DecisionStatus = 'pending' | 'approved' | 'rejected' | 'deferred'
 export type DecisionSeverity = 'critical' | 'high' | 'medium' | 'low'
 
@@ -313,7 +314,30 @@ export async function syncProposals(options: { includeConviction?: boolean } = {
     warnings.push(`Sector Health unavailable: ${err instanceof Error ? err.message : String(err)}`)
   }
 
-  // 5. Conviction -> review of any model holding whose combined view has turned negative.
+  // 5. House Top Ideas the model doesn't hold -> review: should it be in the model?
+  try {
+    const topIdeas = await listCurrentTopIdeas()
+    for (const list of topIdeas) {
+      if (list.source === 'Other') continue
+      for (const idea of list.ideas) {
+        if (securityByCode.has(normaliseCode(idea.code))) continue
+        consider({
+          proposal_type: 'review',
+          source: 'house_view',
+          source_key: `house_view:${list.documentId}:${normaliseCode(idea.code)}`,
+          current_code: idea.code,
+          current_name: idea.name,
+          title: `${list.source} Top Idea not held in the model: ${idea.code}${idea.name ? ` (${idea.name})` : ''}`,
+          reasoning: `${idea.code} is on ${list.source}'s current Top Ideas list ("${list.title}")${idea.rating ? `, rated ${idea.rating}` : ''}${idea.priceTarget !== null ? ` with a price target of ${idea.priceTarget}` : ''}. ${idea.note ?? ''} The model doesn't hold it - the committee should decide whether it belongs, and if so what it would replace.`.trim(),
+          severity: 'medium',
+        })
+      }
+    }
+  } catch (err) {
+    warnings.push(`Top Ideas unavailable: ${err instanceof Error ? err.message : String(err)}`)
+  }
+
+  // 6. Conviction -> review of any model holding whose combined view has turned negative.
   if (includeConviction) {
     const results = await Promise.all(
       securities.map(async (s) => {

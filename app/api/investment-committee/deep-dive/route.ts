@@ -1,3 +1,4 @@
+import { describeAiError } from '../../../../lib/ai-errors'
 import { runInvestmentDeepDive, type SubjectType } from '../../../../lib/engines/investment-deep-dive'
 
 export const runtime = 'nodejs'
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Investment deep dive failed:', error)
     return Response.json(
-      { ok: false, error: error instanceof Error ? error.message : 'Unknown error' },
+      { ok: false, error: describeAiError(error, 'Unknown error') },
       { status: 500 },
     )
   }

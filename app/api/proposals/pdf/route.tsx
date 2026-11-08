@@ -1,3 +1,4 @@
+import { describeAiError } from '../../../../lib/ai-errors'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { fetchClientReview } from '../../../../lib/engines/client-portfolio-reviews'
 import { buildClientAdvice, type AdviceApproach } from '../../../../lib/engines/client-advice'
@@ -55,7 +56,7 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error('Failed to generate proposal PDF:', error)
     return Response.json(
-      { ok: false, error: error instanceof Error ? error.message : 'Unknown error' },
+      { ok: false, error: describeAiError(error, 'Unknown error') },
       { status: 500 },
     )
   }

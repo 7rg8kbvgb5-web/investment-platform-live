@@ -1,3 +1,4 @@
+import { describeAiError } from '../../../../lib/ai-errors'
 import { getLatestMonitoringAlerts } from '../../../../lib/engines/investment-monitoring'
 
 export const runtime = 'nodejs'
@@ -9,7 +10,7 @@ export async function GET() {
   } catch (error) {
     console.error('Failed to load monitoring alerts:', error)
     return Response.json(
-      { ok: false, error: error instanceof Error ? error.message : 'Unknown error' },
+      { ok: false, error: describeAiError(error, 'Unknown error') },
       { status: 500 },
     )
   }

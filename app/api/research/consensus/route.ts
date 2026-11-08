@@ -1,3 +1,4 @@
+import { describeAiError } from '../../../../lib/ai-errors'
 import { fetchAndCacheConsensusView } from '../../../../lib/engines/consensus-view'
 
 export const runtime = 'nodejs'
@@ -15,7 +16,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Consensus view lookup failed:', error)
     return Response.json(
-      { ok: false, error: error instanceof Error ? error.message : 'Unknown error' },
+      { ok: false, error: describeAiError(error, 'Unknown error') },
       { status: 500 },
     )
   }

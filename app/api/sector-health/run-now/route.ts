@@ -1,3 +1,4 @@
+import { describeAiError } from '../../../../lib/ai-errors'
 import { runSectorHealthScan } from '../../../../lib/engines/sector-health-live'
 
 export const runtime = 'nodejs'
@@ -10,7 +11,7 @@ export async function POST() {
   } catch (error) {
     console.error('Sector health scan failed:', error)
     return Response.json(
-      { ok: false, error: error instanceof Error ? error.message : 'Unknown error' },
+      { ok: false, error: describeAiError(error, 'Unknown error') },
       { status: 500 },
     )
   }

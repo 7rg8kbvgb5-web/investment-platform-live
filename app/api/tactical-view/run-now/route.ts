@@ -1,3 +1,4 @@
+import { describeAiError } from '../../../../lib/ai-errors'
 import { runTacticalAssetClassScan } from '../../../../lib/engines/tactical-asset-view'
 
 export const runtime = 'nodejs'
@@ -10,7 +11,7 @@ export async function POST() {
   } catch (error) {
     console.error('Tactical asset class scan failed:', error)
     return Response.json(
-      { ok: false, error: error instanceof Error ? error.message : 'Unknown error' },
+      { ok: false, error: describeAiError(error, 'Unknown error') },
       { status: 500 },
     )
   }

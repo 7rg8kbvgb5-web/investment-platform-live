@@ -1,3 +1,4 @@
+import { describeAiError } from '../../../../lib/ai-errors'
 import { getClientImpact } from '../../../../lib/engines/client-impact'
 
 export const runtime = 'nodejs'
@@ -12,7 +13,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Failed to compute client impact:', error)
     return Response.json(
-      { ok: false, error: error instanceof Error ? error.message : 'Unknown error' },
+      { ok: false, error: describeAiError(error, 'Unknown error') },
       { status: 500 },
     )
   }
