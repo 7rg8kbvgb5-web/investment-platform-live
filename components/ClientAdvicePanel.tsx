@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Panel from './ui/Panel'
 import StatusBox from './dashboard/StatusBox'
 import {
@@ -46,6 +46,8 @@ export default function ClientAdvicePanel() {
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [savedNote, setSavedNote] = useState<string | null>(null)
+  // Printed on the PDF only - sent with the download, never saved.
+  const [pdfClientName, setPdfClientName] = useState('')
 
   useEffect(() => {
     listClientReviews()
@@ -115,6 +117,7 @@ export default function ClientAdvicePanel() {
   useEffect(() => {
     if (selectedId) {
       setSavedNote(null)
+      setPdfClientName('')
       compute(selectedId, null)
     }
   }, [selectedId, compute])
@@ -167,10 +170,6 @@ export default function ClientAdvicePanel() {
     }
   }
 
-  const pdfHref = useMemo(
-    () => (review ? `/api/proposals/pdf?review=${review.id}${approach ? `&approach=${approach}` : ''}` : '#'),
-    [review, approach],
-  )
 
   const buys = advice?.trades.filter((t) => t.action === 'buy' || t.action === 'increase') ?? []
   const sells = advice?.trades.filter((t) => t.action === 'sell' || t.action === 'reduce') ?? []
@@ -194,9 +193,22 @@ export default function ClientAdvicePanel() {
         {review ? <span style={statusPill}>{STATUS_LABEL[review.status]}</span> : null}
         {advice ? (
           <div style={actions}>
-            <a href={pdfHref} target="_blank" rel="noreferrer" style={primaryButton}>
-              Download proposal (PDF)
-            </a>
+            <form method="POST" action="/api/proposals/pdf" target="_blank" style={pdfForm}>
+              <input type="hidden" name="review" value={review?.id ?? ''} />
+              <input type="hidden" name="approach" value={approach ?? ''} />
+              <input
+                name="clientName"
+                value={pdfClientName}
+                onChange={(e) => setPdfClientName(e.target.value)}
+                placeholder="Client name for the PDF (not saved)"
+                autoComplete="off"
+                style={nameInput}
+                title="Printed on this proposal only. Never stored on the platform."
+              />
+              <button type="submit" style={primaryButton}>
+                Download proposal (PDF)
+              </button>
+            </form>
             {review?.status === 'in_progress' ? (
               <button type="button" style={secondaryButton} onClick={() => setStatus('proposed')} disabled={saving}>
                 Mark as proposed
@@ -417,6 +429,8 @@ const select = { padding: '8px 10px', borderRadius: '8px', fontSize: '13px', bac
 const statusPill = { padding: '4px 10px', borderRadius: '999px', fontSize: '11px', fontWeight: 700, background: '#0d2542', color: '#60a5fa' }
 const actions = { display: 'flex', gap: '8px', marginLeft: 'auto', flexWrap: 'wrap' as const }
 const buttonBase = { padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', textDecoration: 'none' }
+const pdfForm = { display: 'flex', gap: '8px', alignItems: 'center', margin: 0 }
+const nameInput = { padding: '8px 10px', borderRadius: '8px', fontSize: '12px', background: '#04142b', border: '1px solid #2d4a6b', color: '#e2e8f0', width: '230px' }
 const primaryButton = { ...buttonBase, background: '#0e7490', color: '#ffffff', border: '1px solid #0891b2' }
 const secondaryButton = { ...buttonBase, background: '#0d1f38', color: '#e2e8f0', border: '1px solid #2d4a6b' }
 const statRow = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px', margin: '12px 0 16px' }

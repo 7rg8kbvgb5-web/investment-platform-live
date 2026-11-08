@@ -13,12 +13,26 @@ export const maxDuration = 60
 
 // The client proposal PDF - computed by the same engine as the Client
 // Advice tab, from the client's saved review and the live house model.
+// GET builds the proposal under the review reference. POST (from the Client
+// Advice form) can also carry a client name to print on the document - it's
+// used for this one PDF only and never stored or logged.
 export async function GET(request: Request) {
+  const url = new URL(request.url)
+  return buildPdf(url.searchParams.get('review'), url.searchParams.get('approach'), null)
+}
+
+export async function POST(request: Request) {
+  const form = await request.formData()
+  const str = (k: string) => {
+    const v = form.get(k)
+    return typeof v === 'string' ? v : null
+  }
+  return buildPdf(str('review'), str('approach'), str('clientName'))
+}
+
+async function buildPdf(reviewId: string | null, approachParam: string | null, clientNameInput: string | null) {
   try {
-    const url = new URL(request.url)
-    const reviewId = url.searchParams.get('review')
     if (!reviewId) return Response.json({ ok: false, error: 'Choose a client first.' }, { status: 400 })
-    const approachParam = url.searchParams.get('approach')
     const approach: AdviceApproach | undefined =
       approachParam === 'rebalance' || approachParam === 'new-cash' ? approachParam : undefined
 
@@ -43,14 +57,21 @@ export async function GET(request: Request) {
     const advice = await buildClientAdvice(review, { ...context, prices }, approach ?? review.adviceApproach ?? undefined)
 
     const preparedOn = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Australia/Sydney' })
+    const clientName = clientNameInput?.trim().slice(0, 120) || null
+    const displayName = clientName ?? review.clientName
     const buffer = await renderToBuffer(
-      <ClientProposalDocument advice={advice} adviserNotes={review.adviserNotes} preparedOn={preparedOn} />,
+      <ClientProposalDocument
+        advice={{ ...advice, clientName: displayName }}
+        adviserNotes={review.adviserNotes}
+        preparedOn={preparedOn}
+      />,
     )
-    const filename = `Investment Proposal - ${review.clientName.replace(/[^\w\s-]/g, '')}.pdf`
+    const filename = `Investment Proposal - ${displayName.replace(/[^\w\s-]/g, '')}.pdf`
     return new Response(new Uint8Array(buffer), {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `inline; filename="${filename}"`,
+        'Cache-Control': 'no-store',
       },
     })
   } catch (error) {
