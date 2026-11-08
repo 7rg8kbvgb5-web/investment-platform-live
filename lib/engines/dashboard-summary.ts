@@ -7,7 +7,6 @@ import { getLatestWeeklyBrief } from './weekly-brief'
 import { listResearchDocuments } from './research-library'
 import { listDeepDiveReviews } from './investment-deep-dive'
 import { listCommitteeDecisions } from './investment-committee-decisions'
-import { getClientRegister } from './client-register'
 import { getLatestSectorHealthScores } from './sector-health-live'
 import { getPortfolioAnalytics } from './portfolio-analytics'
 import { averagePairwiseCorrelation } from './portfolio-statistics'
@@ -31,11 +30,6 @@ export type ModelPortfolioSummary = {
 export type ConstructionSummary = {
   reviewsInProgress: number
   mostRecentClientName: string | null
-  /** From the client register - null if it couldn't be computed. */
-  outsideTolerance: number | null
-  watch: number | null
-  staleModel: number | null
-  affectedBySwaps: number | null
 }
 
 export type AlertHeadline = {
@@ -127,7 +121,6 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     analyticsResult,
     balancedModelResult,
     decisionsResult,
-    registerResult,
   ] = await Promise.allSettled([
     fetchCoreSecurities(),
     getLatestTacticalAssetClassView(),
@@ -142,7 +135,6 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     getPortfolioAnalytics(),
     fetchModelPortfolio('Balanced'),
     listCommitteeDecisions(),
-    getClientRegister(),
   ])
 
   // --- Model Portfolio ---
@@ -177,15 +169,10 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
 
   // --- Construction ---
   const reviews = settled(reviewsResult)
-  const register = settled(registerResult)
   const construction: ConstructionSummary | null = reviews
     ? {
         reviewsInProgress: reviews.length,
         mostRecentClientName: reviews.length > 0 ? reviews[0].clientName : null,
-        outsideTolerance: register?.totals.outsideTolerance ?? null,
-        watch: register?.totals.watch ?? null,
-        staleModel: register?.totals.staleModel ?? null,
-        affectedBySwaps: register?.totals.affectedBySwaps ?? null,
       }
     : null
 

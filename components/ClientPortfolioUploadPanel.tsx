@@ -629,7 +629,7 @@ export default function ClientPortfolioUploadPanel() {
         <div style={reviewNameField}>
           <input
             type="text"
-            placeholder="Client name (e.g. J Smith) — saves this review as you work"
+            placeholder="Review reference (e.g. a code or initials, no personal details) — saves as you work"
             value={clientReviewName}
             onChange={(e) => setClientReviewName(e.target.value)}
             style={reviewNameInput}
@@ -1101,7 +1101,7 @@ export default function ClientPortfolioUploadPanel() {
               bespoke weight overrides above. */}
           {yieldSummary ? (
             <div style={subPanel}>
-              <p style={subHeading}>Target Portfolio Forward Yield &amp; Income (FY26/27)</p>
+              <p style={subHeading}>Target Portfolio Forward Yield, Income &amp; Franking (FY26/27)</p>
               <p style={bodyText}>
                 Estimated forward yield (FY26/27) and annual income if this client&apos;s
                 portfolio is brought fully in line with the {effectiveRiskProfile}{' '}
@@ -1127,6 +1127,26 @@ export default function ClientPortfolioUploadPanel() {
                   </span>
                 </div>
                 <div style={yieldOverviewStat}>
+                  <span style={yieldOverviewLabel}>Franking credits</span>
+                  <span style={yieldOverviewValue}>
+                    {yieldSummary.totalFrankingCreditValue !== null
+                      ? formatCurrency(yieldSummary.totalFrankingCreditValue)
+                      : '—'}
+                  </span>
+                  {yieldSummary.averageFrankingPct !== null ? (
+                    <span style={tdMutedInline}>{yieldSummary.averageFrankingPct}% of income franked</span>
+                  ) : null}
+                </div>
+                <div style={yieldOverviewStat}>
+                  <span style={yieldOverviewLabel}>Grossed-up yield &amp; income</span>
+                  <span style={yieldOverviewValue}>
+                    {yieldSummary.totalGrossedUpYieldPct !== null ? `${yieldSummary.totalGrossedUpYieldPct}%` : '—'}
+                  </span>
+                  {yieldSummary.totalGrossedUpIncomeValue !== null ? (
+                    <span style={tdMutedInline}>{formatCurrency(yieldSummary.totalGrossedUpIncomeValue)} incl. credits</span>
+                  ) : null}
+                </div>
+                <div style={yieldOverviewStat}>
                   <span style={yieldOverviewLabel}>Yield data coverage</span>
                   <span style={yieldOverviewValue}>{yieldSummary.totalYieldCoveragePct}%</span>
                 </div>
@@ -1139,6 +1159,8 @@ export default function ClientPortfolioUploadPanel() {
                       <th style={th}>Weight</th>
                       <th style={th}>Fwd. Yield</th>
                       <th style={th}>Est. Annual Income</th>
+                      <th style={th}>Franking Credits</th>
+                      <th style={th}>Grossed-up Yield</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1158,11 +1180,28 @@ export default function ClientPortfolioUploadPanel() {
                               <span style={tdMutedInline}>—</span>
                             )}
                           </td>
+                          <td style={td}>
+                            {ac.frankingCreditValue !== null && ac.frankingCreditValue > 0 ? (
+                              formatCurrency(ac.frankingCreditValue)
+                            ) : (
+                              <span style={tdMutedInline}>—</span>
+                            )}
+                          </td>
+                          <td style={td}>
+                            {ac.blendedGrossedUpYieldPct !== null ? `${ac.blendedGrossedUpYieldPct}%` : '—'}
+                          </td>
                         </tr>
                       ))}
                   </tbody>
                 </table>
               </div>
+              <p style={tdMutedInline}>
+                Franking credits are calculated at the 30% company tax rate
+                {yieldSummary.frankingCoveragePct < 100
+                  ? `; ${Math.round(100 - yieldSummary.frankingCoveragePct)}% of the yield-bearing portfolio has no franking level set yet (treated as unfranked) — add it on the Model Portfolio tab`
+                  : ''}
+                . Whether the client can use the credits depends on their tax position.
+              </p>
               {yieldSummary.totalYieldCoveragePct < 100 ? (
                 <p style={tdMutedInline}>
                   {100 - yieldSummary.totalYieldCoveragePct}% of the target portfolio (by

@@ -124,6 +124,12 @@ export function ClientProposalDocument({
               <Text style={s.statValue}>{fmt(advice.projectedIncome)}</Text>
             </View>
           ) : null}
+          {advice.projectedFrankingCredits !== null && advice.projectedFrankingCredits > 0 ? (
+            <View style={s.stat}>
+              <Text style={s.statLabel}>FRANKING CREDITS</Text>
+              <Text style={s.statValue}>{fmt(advice.projectedFrankingCredits)}</Text>
+            </View>
+          ) : null}
         </View>
 
         {adviserNotes.trim() ? (
@@ -218,7 +224,8 @@ export function ClientProposalDocument({
           {advice.asAtDate ? `, your holdings as at ${advice.asAtDate}` : ''}, and market prices at the time of
           preparation, which will move before transactions are placed. Unit quantities are rounded down to whole
           units; securities without a listed price are transacted by value. Projected income uses forward yield
-          estimates for holdings where one is available and is not guaranteed.
+          estimates for holdings where one is available and is not guaranteed. Franking credits are estimated at
+          the 30% company tax rate; the benefit to you depends on your tax position.
         </Text>
         <Footer client={advice.clientName} />
       </Page>

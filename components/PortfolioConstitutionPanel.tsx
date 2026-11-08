@@ -161,6 +161,7 @@ export function PortfolioConstitutionPanel() {
         weight: round1((ac.targetWeight * h.inClassWeight) / 100),
         rationale: h.rationale,
         yield: h.yield ?? undefined,
+        frankingPct: h.frankingPct ?? undefined,
       })),
     })),
   });
@@ -210,6 +211,13 @@ export function PortfolioConstitutionPanel() {
           {yieldSummary.totalBlendedYieldPct !== null
             ? `${yieldSummary.totalBlendedYieldPct}% blended`
             : 'No yield data yet'}
+          {yieldSummary.totalGrossedUpYieldPct !== null &&
+          yieldSummary.totalGrossedUpYieldPct !== yieldSummary.totalBlendedYieldPct ? (
+            <span style={{ fontSize: '13px', fontWeight: 500, color: '#94a3b8', marginLeft: '10px' }}>
+              {yieldSummary.totalGrossedUpYieldPct}% grossed up for franking
+              {yieldSummary.averageFrankingPct !== null ? ` · ${yieldSummary.averageFrankingPct}% of income franked` : ''}
+            </span>
+          ) : null}
         </div>
         <div style={yieldClassGrid}>
           {yieldSummary.assetClasses

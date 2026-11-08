@@ -38,18 +38,6 @@ const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
-    href: '/clients',
-    label: 'Clients',
-    description: 'Register, drift and advice status',
-    icon: (
-      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-        <circle cx="7" cy="7" r="2.5" stroke="currentColor" strokeWidth="1.5" />
-        <circle cx="14" cy="8" r="2" stroke="currentColor" strokeWidth="1.5" />
-        <path d="M2.5 16c.6-2.6 2.4-4 4.5-4s3.9 1.4 4.5 4M11.5 15c.4-1.9 1.5-3 2.5-3s2.1 1.1 2.5 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-  {
     href: '/monitoring',
     label: 'Monitoring',
     description: 'Alerts, rules and fund watch',

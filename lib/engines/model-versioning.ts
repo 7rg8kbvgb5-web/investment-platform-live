@@ -16,6 +16,7 @@ export type ModelChangeType =
   | 'asset_class_weight'
   | 'yield'
   | 'holding_type'
+  | 'franking'
 
 export type ModelChange = {
   id: string

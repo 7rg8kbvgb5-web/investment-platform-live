@@ -12,6 +12,7 @@ import { deployCash, type CashDeploymentResult } from './cash-deployment'
 import type { ClientPortfolioReview } from './client-portfolio-reviews'
 import type { CommitteeDecision } from './investment-committee-decisions'
 import { normaliseCode } from './codes'
+import { frankingCredit } from './yield-aggregation'
 
 // One engine that turns a saved client review into advice. Used by the
 // Client Advice tab, the client register (drift), and the proposal PDF,
@@ -65,6 +66,10 @@ export type ClientAdvice = {
   projectedIncome: number | null
   projectedYieldPct: number | null
   yieldCoveragePct: number
+  /** Annual franking credits on the projected income (30% company tax rate). */
+  projectedFrankingCredits: number | null
+  /** Projected yield including franking credits. */
+  projectedGrossedUpYieldPct: number | null
   relevantDecisions: CommitteeDecision[]
   reviewModelVersion: number | null
   currentModelVersion: number | null
@@ -193,8 +198,14 @@ export async function buildClientAdvice(
 
   // Projected income on the model holdings once the trades are done.
   const yieldByCode = new Map<string, number>()
-  for (const ac of model.assetClasses) for (const h of ac.holdings) if (typeof h.yield === 'number') yieldByCode.set(normaliseCode(h.code), h.yield)
+  const frankingByCode = new Map<string, number>()
+  for (const ac of model.assetClasses)
+    for (const h of ac.holdings) {
+      if (typeof h.yield === 'number') yieldByCode.set(normaliseCode(h.code), h.yield)
+      if (typeof h.frankingPct === 'number') frankingByCode.set(normaliseCode(h.code), h.frankingPct)
+    }
   let projectedIncome: number | null = null
+  let credits = 0
   let coveredWeight = 0
   let modelWeight = 0
   if (cashDeployment) {
@@ -203,7 +214,9 @@ export async function buildClientAdvice(
       modelWeight += l.resultingValue
       const y = yieldByCode.get(normaliseCode(l.code))
       if (y !== undefined) {
-        projectedIncome += (l.resultingValue * y) / 100
+        const income = (l.resultingValue * y) / 100
+        projectedIncome += income
+        credits += frankingCredit(income, frankingByCode.get(normaliseCode(l.code)) ?? 0)
         coveredWeight += l.resultingValue
       }
     }
@@ -214,13 +227,18 @@ export async function buildClientAdvice(
         const value = (h.weight / 100) * totalAfter
         modelWeight += value
         if (typeof h.yield === 'number') {
-          projectedIncome += (value * h.yield) / 100
+          const income = (value * h.yield) / 100
+          projectedIncome += income
+          credits += frankingCredit(income, h.frankingPct ?? 0)
           coveredWeight += value
         }
       }
   }
   const yieldCoveragePct = modelWeight > 0 ? Math.round((coveredWeight / modelWeight) * 100) : 0
   const projectedYieldPct = projectedIncome !== null && coveredWeight > 0 ? round2((projectedIncome / coveredWeight) * 100) : null
+  const projectedFrankingCredits = projectedIncome !== null && coveredWeight > 0 ? Math.round(credits) : null
+  const projectedGrossedUpYieldPct =
+    projectedIncome !== null && coveredWeight > 0 ? round2(((projectedIncome + credits) / coveredWeight) * 100) : null
   if (projectedIncome !== null) projectedIncome = Math.round(projectedIncome)
   if (projectedIncome === 0 && coveredWeight === 0) projectedIncome = null
 
@@ -264,6 +282,8 @@ export async function buildClientAdvice(
     projectedIncome,
     projectedYieldPct,
     yieldCoveragePct,
+    projectedFrankingCredits,
+    projectedGrossedUpYieldPct,
     relevantDecisions,
     reviewModelVersion,
     currentModelVersion,

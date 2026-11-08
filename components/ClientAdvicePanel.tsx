@@ -245,6 +245,15 @@ export default function ClientAdvicePanel() {
               value={advice.projectedIncome !== null ? `${fmt(advice.projectedIncome)} p.a.` : '—'}
               sub={advice.projectedYieldPct !== null ? `${advice.projectedYieldPct}% on ${advice.yieldCoveragePct}% with stated yields` : undefined}
             />
+            <Stat
+              label="Franking credits"
+              value={advice.projectedFrankingCredits !== null ? `${fmt(advice.projectedFrankingCredits)} p.a.` : '—'}
+              sub={
+                advice.projectedGrossedUpYieldPct !== null
+                  ? `${advice.projectedGrossedUpYieldPct}% grossed-up yield`
+                  : undefined
+              }
+            />
             {!advice.isNewMoney ? (
               <Stat label="Drift vs model" value={`${advice.maxDriftPp}pp`} sub={advice.driftStatus.replace('-', ' ')} />
             ) : null}

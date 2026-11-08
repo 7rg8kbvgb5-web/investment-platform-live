@@ -23,6 +23,8 @@ export type SecurityLookupResult = {
   yield: number | null
   /** Short note on where the yield figure came from / how current it is, for adviser judgement - not stored, display only. */
   yieldNote: string | null
+  /** Expected franking level of distributions, 0-100. Null if not found. */
+  frankingPct: number | null
 }
 
 const SYSTEM_PROMPT = `You are a market data lookup assistant for Ord Minnett private wealth advisers.
@@ -30,6 +32,10 @@ Given a single ticker code (bare ASX codes have no suffix - e.g. "FMG" not "FMG.
 1. The company/fund's full legal or common trading name.
 2. Its primary GICS-style sector (e.g. "Financials", "Materials", "Consumer Staples").
 3. Its FORWARD (prospective/estimated) distribution or dividend yield for the current Australian financial year (FY2026/27, i.e. 1 July 2026 - 30 June 2027), as a percent. This must be forward-looking, not trailing/historical - advisers need what the investor is expected to earn over the year ahead, not what was paid last year. Prefer, in this order: (a) analyst consensus forward yield estimates for FY27 if available, (b) the company's own guidance on upcoming distributions/dividends for FY27, (c) if neither is available, the most recent trailing yield clearly flagged as such via yieldNote rather than presented as forward. Grossed-up/franked figures not required - use the plain (unfranked) forward yield most commonly quoted.
+4. The expected FRANKING level of those distributions, as a percent from 0 to 100 (e.g. 100 for fully franked
+   Australian bank dividends, 0 for unfranked REIT/infrastructure distributions or international securities,
+   a partial figure where that's the stated or typical level). Base it on the company's or fund's most recent
+   declared distributions. Return null if it genuinely can't be established.
 
 This is a data lookup only - never provide investment advice or commentary beyond the requested facts.
 
@@ -38,7 +44,8 @@ After searching, respond with ONLY a JSON object and nothing else - no markdown 
   "name": string | null,
   "sector": string | null,
   "yield": number | null,
-  "yieldNote": string | null
+  "yieldNote": string | null,
+  "frankingPct": number | null
 }
 If you cannot find a field confidently, return null for it rather than guessing. yieldNote must always state whether the yield figure is forward (FY27 estimate) or trailing, and its source/timing - e.g. "FY27 consensus forward yield, as at Aug 2026" or "Trailing yield only - no FY27 estimate found" - or null if yield itself is null.`
 
@@ -82,7 +89,13 @@ export async function lookupSecurity(code: string): Promise<SecurityLookupResult
   const rawText = textBlocks.length > 0 ? textBlocks[textBlocks.length - 1].text : '{}'
   const cleaned = extractJsonObject(rawText)
 
-  let parsed: { name?: string | null; sector?: string | null; yield?: number | null; yieldNote?: string | null }
+  let parsed: {
+    name?: string | null
+    sector?: string | null
+    yield?: number | null
+    yieldNote?: string | null
+    frankingPct?: number | null
+  }
   try {
     parsed = JSON.parse(cleaned)
   } catch {
@@ -95,5 +108,9 @@ export async function lookupSecurity(code: string): Promise<SecurityLookupResult
     sector: parsed.sector ?? null,
     yield: typeof parsed.yield === 'number' ? parsed.yield : null,
     yieldNote: parsed.yieldNote ?? null,
+    frankingPct:
+      typeof parsed.frankingPct === 'number' && parsed.frankingPct >= 0 && parsed.frankingPct <= 100
+        ? parsed.frankingPct
+        : null,
   }
 }

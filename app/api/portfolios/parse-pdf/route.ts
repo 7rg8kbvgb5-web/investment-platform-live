@@ -21,8 +21,8 @@ For each holding, extract:
 - value: the dollar market value of the holding, if stated.
 - quantity: number of units/shares held, if stated.
 
-Also extract, if present anywhere in the document:
-- clientName: the account holder or client name.
+Do NOT extract names, addresses, account numbers, HINs, TFNs or any other personal details - return
+"clientName": null always. Also extract, if present anywhere in the document:
 - asAtDate: the statement date or "as at" date.
 - totalPortfolioValue: the total portfolio value.
 
@@ -155,7 +155,8 @@ export async function POST(request: Request) {
 
   return Response.json({
     ok: true,
-    clientName: parsed.clientName ?? null,
+    // Never carried through: personal details aren't stored on the platform.
+    clientName: null,
     asAtDate: parsed.asAtDate ?? null,
     totalPortfolioValue: parsed.totalPortfolioValue ?? null,
     holdings: finalHoldings,

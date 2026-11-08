@@ -116,6 +116,8 @@ export type CoreSecurity = {
   /** Forward (estimated, current FY) distribution yield, percent. Null if not stated. */
   yield: number | null;
   holdingType: HoldingType;
+  /** Expected franking of distributions, 0-100%. Null if not stated. */
+  frankingPct: number | null;
 };
 
 type CoreSecurityRow = {
@@ -130,6 +132,7 @@ type CoreSecurityRow = {
   display_order: number;
   yield: number | null;
   holding_type: HoldingType;
+  franking_pct?: number | null;
 };
 
 function mapSecurityRow(row: CoreSecurityRow): CoreSecurity {
@@ -145,6 +148,8 @@ function mapSecurityRow(row: CoreSecurityRow): CoreSecurity {
     displayOrder: row.display_order,
     yield: row.yield === null || row.yield === undefined ? null : Number(row.yield),
     holdingType: row.holding_type ?? 'direct_equity',
+    frankingPct:
+      row.franking_pct === null || row.franking_pct === undefined ? null : Number(row.franking_pct),
   };
 }
 
@@ -270,6 +275,7 @@ export async function fetchModelPortfolio(riskProfile: RiskProfile): Promise<Mod
       weight: round2((targetWeight * s.inClassWeight) / 100),
       rationale: s.rationale,
       yield: s.yield ?? undefined,
+      frankingPct: s.frankingPct ?? undefined,
     }));
 
     return {
@@ -309,6 +315,7 @@ export async function addCoreSecurity(input: {
   inSecurityMaster?: boolean;
   yield?: number | null;
   holdingType?: HoldingType;
+  frankingPct?: number | null;
 }): Promise<CoreSecurity> {
   const { data, error } = await supabase
     .from(SECURITIES_TABLE)
@@ -323,6 +330,7 @@ export async function addCoreSecurity(input: {
       display_order: 999,
       yield: input.yield ?? null,
       holding_type: input.holdingType ?? 'direct_equity',
+      ...(typeof input.frankingPct === 'number' ? { franking_pct: input.frankingPct } : {}),
     })
     .select()
     .single();
@@ -376,6 +384,32 @@ export async function updateCoreSecurityYield(id: string, yieldPct: number | nul
       before: before.yield,
       after: yieldPct,
       description: `${before.code} forward yield ${before.yield ?? '—'}% → ${yieldPct ?? '—'}%`,
+    });
+  }
+}
+
+export async function updateCoreSecurityFranking(id: string, frankingPct: number | null): Promise<void> {
+  const before = await readSecurity(id);
+  const value = frankingPct === null ? null : Math.max(0, Math.min(100, frankingPct));
+  const { error } = await supabase
+    .from(SECURITIES_TABLE)
+    .update({ franking_pct: value, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) {
+    throw new Error(
+      error.message.includes('franking_pct')
+        ? 'Run migration 0023 in Supabase to store franking levels.'
+        : `Failed to update franking: ${error.message}`
+    );
+  }
+  if (before && Number(before.franking_pct ?? NaN) !== Number(value ?? NaN)) {
+    await logModelChange({
+      changeType: 'franking',
+      assetClass: before.asset_class,
+      code: before.code,
+      before: before.franking_pct ?? null,
+      after: value,
+      description: `${before.code} franking ${before.franking_pct ?? '—'}% → ${value ?? '—'}%`,
     });
   }
 }

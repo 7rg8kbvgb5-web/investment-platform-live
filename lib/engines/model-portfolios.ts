@@ -15,6 +15,8 @@ export type ModelHolding = {
   rationale: string;
   /** Forward (estimated, current FY) distribution yield, percent. Undefined if not stated. */
   yield?: number;
+  /** Expected franking level of distributions, 0-100%. Undefined if not stated. */
+  frankingPct?: number;
 };
 
 export type ModelAssetClass = {

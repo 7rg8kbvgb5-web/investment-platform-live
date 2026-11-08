@@ -9,6 +9,7 @@ import {
   updateCoreSecurityInClassWeight,
   updateCoreSecurityYield,
   updateCoreSecurityHoldingType,
+  updateCoreSecurityFranking,
   HOLDING_TYPE_LABELS,
   type CoreSecurity,
   type HoldingType,
@@ -165,6 +166,16 @@ export function ModelPortfolioSecuritiesPanel() {
     await withSaving(() => updateCoreSecurityYield(id, sec.yield));
   }
 
+  function setHoldingFrankingLocal(id: string, value: number | null) {
+    setSecurities((prev) => prev.map((s) => (s.id === id ? { ...s, frankingPct: value } : s)));
+  }
+
+  async function saveHoldingFranking(id: string) {
+    const sec = securities.find((s) => s.id === id);
+    if (!sec) return;
+    await withSaving(() => updateCoreSecurityFranking(id, sec.frankingPct));
+  }
+
   async function changeHoldingType(id: string, holdingType: HoldingType) {
     setSecurities((prev) => prev.map((s) => (s.id === id ? { ...s, holdingType } : s)));
     await withSaving(() => updateCoreSecurityHoldingType(id, holdingType));
@@ -214,16 +225,16 @@ export function ModelPortfolioSecuritiesPanel() {
   }
 
   const [manualEntry, setManualEntry] = useState<
-    Record<string, { code: string; name: string; yield: string }>
+    Record<string, { code: string; name: string; yield: string; franking: string }>
   >({});
   const [lookupState, setLookupState] = useState<
     Record<string, { loading: boolean; error: string | null; note: string | null }>
   >({});
 
-  function updateManualEntry(assetClassName: string, field: 'code' | 'name' | 'yield', value: string) {
+  function updateManualEntry(assetClassName: string, field: 'code' | 'name' | 'yield' | 'franking', value: string) {
     setManualEntry((prev) => ({
       ...prev,
-      [assetClassName]: { code: '', name: '', yield: '', ...prev[assetClassName], [field]: value },
+      [assetClassName]: { code: '', name: '', yield: '', franking: '', ...prev[assetClassName], [field]: value },
     }));
   }
 
@@ -251,6 +262,10 @@ export function ModelPortfolioSecuritiesPanel() {
             typeof data.result.yield === 'number'
               ? String(data.result.yield)
               : prev[assetClassName]?.yield ?? '',
+          franking:
+            typeof data.result.frankingPct === 'number'
+              ? String(data.result.frankingPct)
+              : prev[assetClassName]?.franking ?? '',
         },
       }));
 
@@ -282,6 +297,7 @@ export function ModelPortfolioSecuritiesPanel() {
     const code = entry?.code ? stripExchangeSuffix(entry.code) : '';
     const name = entry?.name.trim();
     const yieldValue = entry?.yield?.trim();
+    const frankingValue = entry?.franking?.trim();
     if (!code || !name) return;
 
     const added = await withSaving(() =>
@@ -292,11 +308,12 @@ export function ModelPortfolioSecuritiesPanel() {
         rationale: 'Added manually - not yet on the Approved List.',
         inSecurityMaster: false,
         yield: yieldValue ? parseFloat(yieldValue) : null,
+        frankingPct: frankingValue ? parseFloat(frankingValue) : null,
       })
     );
     if (added) {
       setSecurities((prev) => [...prev, added]);
-      setManualEntry((prev) => ({ ...prev, [assetClassName]: { code: '', name: '', yield: '' } }));
+      setManualEntry((prev) => ({ ...prev, [assetClassName]: { code: '', name: '', yield: '', franking: '' } }));
       setLookupState((prev) => ({ ...prev, [assetClassName]: { loading: false, error: null, note: null } }));
     }
   }
@@ -619,6 +636,26 @@ export function ModelPortfolioSecuritiesPanel() {
                         />
                         <span>%</span>
                       </HoldingMetricCell>
+                      <HoldingMetricCell label="Franked">
+                        <input
+                          type="number"
+                          step="5"
+                          min={0}
+                          max={100}
+                          value={holding.frankingPct ?? ''}
+                          placeholder="—"
+                          onChange={(e) =>
+                            setHoldingFrankingLocal(
+                              holding.id,
+                              e.target.value === '' ? null : parseFloat(e.target.value)
+                            )
+                          }
+                          onBlur={() => saveHoldingFranking(holding.id)}
+                          style={holdingMetricInput}
+                          aria-label={`${holding.name} franking level`}
+                        />
+                        <span>%</span>
+                      </HoldingMetricCell>
                       <HoldingMetricCell
                         label="Conviction"
                       >
@@ -708,6 +745,16 @@ export function ModelPortfolioSecuritiesPanel() {
                   placeholder="Fwd yield %"
                   value={manualEntry[assetClass.name]?.yield ?? ''}
                   onChange={(e) => updateManualEntry(assetClass.name, 'yield', e.target.value)}
+                  style={manualYieldInput}
+                />
+                <input
+                  type="number"
+                  step="5"
+                  min={0}
+                  max={100}
+                  placeholder="Franked %"
+                  value={manualEntry[assetClass.name]?.franking ?? ''}
+                  onChange={(e) => updateManualEntry(assetClass.name, 'franking', e.target.value)}
                   style={manualYieldInput}
                 />
                 <button

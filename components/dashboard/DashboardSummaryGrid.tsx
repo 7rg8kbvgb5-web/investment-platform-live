@@ -106,35 +106,24 @@ export default async function DashboardSummaryGrid() {
           </div>
         </Link>
 
-        {/* Clients */}
-        <Link href="/clients" style={cardLink}>
-          <div
-            style={card(
-              summary.construction && (summary.construction.outsideTolerance ?? 0) > 0 ? 'warning' : 'default',
-            )}
-          >
+        {/* Construction */}
+        <Link href="/portfolios?tab=construction" style={cardLink}>
+          <div style={card('default')}>
             <div style={cardIcon}>{ICONS.construction}</div>
-            <p style={cardEyebrow}>Clients</p>
-            <h3 style={cardTitle}>Drift &amp; advice status</h3>
+            <p style={cardEyebrow}>Portfolios · Construction</p>
+            <h3 style={cardTitle}>Portfolio reviews</h3>
             {summary.construction && summary.construction.reviewsInProgress > 0 ? (
               <>
-                <p style={(summary.construction.outsideTolerance ?? 0) > 0 ? cardStatHighlight : cardStatMuted}>
-                  {summary.construction.outsideTolerance !== null
-                    ? `${summary.construction.outsideTolerance} of ${summary.construction.reviewsInProgress} client${summary.construction.reviewsInProgress === 1 ? '' : 's'} outside tolerance`
-                    : `${summary.construction.reviewsInProgress} client${summary.construction.reviewsInProgress === 1 ? '' : 's'} on file`}
+                <p style={cardStatHighlight}>
+                  {summary.construction.reviewsInProgress} portfolio review
+                  {summary.construction.reviewsInProgress === 1 ? '' : 's'} saved
                 </p>
-                {(summary.construction.watch ?? 0) > 0 ? (
-                  <p style={cardStatMuted}>{summary.construction.watch} to watch</p>
-                ) : null}
-                {(summary.construction.staleModel ?? 0) > 0 ? (
-                  <p style={cardStatMuted}>{summary.construction.staleModel} built on an older model version</p>
-                ) : null}
-                {(summary.construction.affectedBySwaps ?? 0) > 0 ? (
-                  <p style={cardStatMuted}>{summary.construction.affectedBySwaps} hold an IC-approved swap</p>
-                ) : null}
+                {summary.construction.mostRecentClientName && (
+                  <p style={cardStatMuted}>Most recent: {summary.construction.mostRecentClientName}</p>
+                )}
               </>
             ) : (
-              <p style={cardStatMuted}>No clients saved yet.</p>
+              <p style={cardStatMuted}>No portfolio reviews saved yet.</p>
             )}
           </div>
         </Link>
