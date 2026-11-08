@@ -25,11 +25,18 @@ export function settingsWithStatementDefaults(review: ClientPortfolioReview, sal
   const oneYearAgo = new Date()
   oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
   for (const sale of sales) {
-    if (holdings[sale.code]) continue
+    const saved = holdings[sale.code]
+    // Anything the adviser has entered stands; gaps are filled from the statement.
+    if (saved && saved.costBase !== null) continue
     const fromStatement = review.state.holdings.find((h) => normaliseCode(h.code) === sale.code)
+    const statementCost = typeof fromStatement?.costBase === 'number' ? fromStatement.costBase : null
     holdings[sale.code] = {
-      costBase: typeof fromStatement?.costBase === 'number' ? fromStatement.costBase : null,
-      over12Months: fromStatement?.acquiredDate ? new Date(fromStatement.acquiredDate) <= oneYearAgo : true,
+      costBase: statementCost,
+      over12Months: saved
+        ? saved.over12Months
+        : fromStatement?.acquiredDate
+          ? new Date(fromStatement.acquiredDate) <= oneYearAgo
+          : true,
     }
   }
   return { ...DEFAULT_CGT_SETTINGS, ...saved, holdings }

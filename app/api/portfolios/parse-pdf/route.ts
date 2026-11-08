@@ -20,7 +20,10 @@ For each holding, extract:
 - weight: the holding's percentage of the total portfolio, if the document states it directly.
 - value: the dollar market value of the holding, if stated.
 - quantity: number of units/shares held, if stated.
-- costBase: the holding's total cost base / purchase cost, if stated (dollars, whole holding).
+- costBase: the holding's TOTAL cost base for the whole holding, if stated. It may be labelled Cost Base,
+  Book Cost, Purchase Cost, Total Cost, Cost or Cost Value. If only an average cost per unit is shown, multiply it
+  by the quantity held. Many statements put this in an "unrealised gains" or "cost base" section - check the whole
+  document, not just the valuation table.
 - acquiredDate: the purchase / acquisition date as YYYY-MM-DD, if stated. Where a holding has several
   parcels, use the earliest date and add a warning that it has multiple parcels.
 

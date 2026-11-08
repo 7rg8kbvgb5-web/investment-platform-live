@@ -653,6 +653,19 @@ export default function ClientPortfolioUploadPanel() {
     return { residualPct, residualValue }
   }, [comparison, effectiveTotalPortfolioValue])
 
+  // Cost bases read from the statement / CSV, shown against current holdings
+  // and carried into the Capital Gains / Losses tab automatically.
+  const costBaseByCode = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const h of holdings) {
+      if (typeof h.costBase === 'number') {
+        const code = normaliseCode(h.code)
+        map.set(code, (map.get(code) ?? 0) + h.costBase)
+      }
+    }
+    return map
+  }, [holdings])
+
   const pricesConnected = Object.values(prices).some((p) => p !== null && p !== undefined)
 
   const hasHoldings = holdings.length > 0
@@ -864,7 +877,7 @@ export default function ClientPortfolioUploadPanel() {
         <textarea
           value={csvText}
           onChange={(e) => handleCsvChange(e.target.value)}
-          placeholder={'Code,Weight\nCBA,12\nBHP,10\nMQG,8\nNST,5'}
+          placeholder={'Code,Value,Cost Base,Acquired\nCBA,120000,65000,15/03/2019\nBHP,80000,92000,02/11/2025\n(Cost Base and Acquired are optional - they feed the Capital Gains / Losses tab)'}
           style={textarea}
         />
       )}
@@ -942,6 +955,10 @@ export default function ClientPortfolioUploadPanel() {
             <SummaryCard
               title="Mapped"
               value={`${mappingResult.mappedCount} / ${holdings.length}`}
+            />
+            <SummaryCard
+              title="Cost bases"
+              value={`${holdings.filter((h) => typeof h.costBase === 'number').length} / ${holdings.length}`}
             />
             <SummaryCard
               title="Growth / Defensive"
@@ -1368,6 +1385,13 @@ export default function ClientPortfolioUploadPanel() {
                               </div>
                               <HoldingMetricGrid>
                                 <HoldingMetricCell label="Weight">{rec.currentWeight}%</HoldingMetricCell>
+                                <HoldingMetricCell label="Cost base">
+                                  {costBaseByCode.get(normaliseCode(rec.code)) !== undefined ? (
+                                    formatCurrency(costBaseByCode.get(normaliseCode(rec.code)) as number)
+                                  ) : (
+                                    <span style={tdMutedInline}>—</span>
+                                  )}
+                                </HoldingMetricCell>
                                 <HoldingMetricCell label="Value">
                                   {rec.currentValue !== null ? (
                                     formatCurrency(rec.currentValue)

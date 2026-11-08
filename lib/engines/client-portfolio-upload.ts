@@ -23,6 +23,8 @@ export type UploadedHolding = {
   const WEIGHT_HEADERS = ['weight', 'portfolio weight', 'allocation', '%', 'weight %']
   const VALUE_HEADERS = ['value', 'market value', 'holding value', 'current value']
   const QUANTITY_HEADERS = ['quantity', 'units', 'shares']
+  const COST_BASE_HEADERS = ['cost base', 'costbase', 'cost', 'book cost', 'purchase cost', 'total cost', 'cost value']
+  const ACQUIRED_HEADERS = ['acquired', 'acquired date', 'date acquired', 'acquisition date', 'purchase date', 'date purchased', 'buy date']
   
   export function parseClientPortfolioCsv(csvText: string): ParsedPortfolioUpload {
     const rows = csvText
@@ -46,6 +48,8 @@ export type UploadedHolding = {
     const weightIndex = findHeaderIndex(headers, WEIGHT_HEADERS)
     const valueIndex = findHeaderIndex(headers, VALUE_HEADERS)
     const quantityIndex = findHeaderIndex(headers, QUANTITY_HEADERS)
+    const costBaseIndex = findHeaderIndex(headers, COST_BASE_HEADERS)
+    const acquiredIndex = findHeaderIndex(headers, ACQUIRED_HEADERS)
   
     const warnings: string[] = []
     const unmappedRows: string[] = []
@@ -66,6 +70,8 @@ export type UploadedHolding = {
       const weight = weightIndex >= 0 ? parseNumber(columns[weightIndex]) : 0
       const value = valueIndex >= 0 ? parseNumber(columns[valueIndex]) : undefined
       const quantity = quantityIndex >= 0 ? parseNumber(columns[quantityIndex]) : undefined
+      const costBase = costBaseIndex >= 0 && columns[costBaseIndex] ? parseNumber(columns[costBaseIndex]) : undefined
+      const acquiredDate = acquiredIndex >= 0 ? parseDate(columns[acquiredIndex]) : undefined
   
       if (!code && !name) {
         unmappedRows.push(`Row ${index + 2}: missing code/name`)
@@ -77,6 +83,8 @@ export type UploadedHolding = {
         weight,
         value,
         quantity,
+        costBase: costBase && costBase > 0 ? costBase : undefined,
+        acquiredDate,
         sourceRow: index + 2,
       }
     })
@@ -180,6 +188,15 @@ export type UploadedHolding = {
     return Number.isFinite(parsed) ? parsed : 0
   }
   
+  /** Accepts YYYY-MM-DD or Australian DD/MM/YYYY; returns YYYY-MM-DD. */
+  function parseDate(value?: string): string | undefined {
+    const v = cleanText(value)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v
+    const m = v.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/)
+    if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`
+    return undefined
+  }
+
   function round2(value: number): number {
     return Math.round(value * 100) / 100
   }
