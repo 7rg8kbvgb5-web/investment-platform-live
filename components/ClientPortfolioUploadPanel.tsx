@@ -19,7 +19,7 @@ import {
   fetchAllRiskProfileWeights,
   computeGrowthDefensiveByProfile,
 } from '../lib/engines/model-portfolio-core'
-import { compareClientPortfolioToModel } from '../lib/engines/portfolio-review-comparison'
+import { compareClientPortfolioToModel, type TradeOverrides } from '../lib/engines/portfolio-review-comparison'
 import { computePortfolioYield } from '../lib/engines/yield-aggregation'
 import {
   applyClientWeightOverrides,
@@ -285,14 +285,23 @@ export default function ClientPortfolioUploadPanel() {
   const [assetClassOverrides, setAssetClassOverrides] =
     useState<AssetClassWeightOverrides>({})
   const [holdingOverrides, setHoldingOverrides] = useState<HoldingWeightOverrides>({})
+  // Adviser-adjusted trade sizes (units, or $ where there's no price) -
+  // lets a client's portfolio deliberately differ from an exact replica of
+  // the model. Saved with the review and carried into Client Advice.
+  const [tradeOverrides, setTradeOverrides] = useState<TradeOverrides>({})
+  const tradeOverridesTouched = useRef(false)
 
   useEffect(() => {
+    if (isHydrating.current) return
     setAssetClassOverrides({})
     setHoldingOverrides({})
+    setTradeOverrides({})
   }, [effectiveRiskProfile])
 
   const hasClientOverrides =
-    Object.keys(assetClassOverrides).length > 0 || Object.keys(holdingOverrides).length > 0
+    Object.keys(assetClassOverrides).length > 0 ||
+    Object.keys(holdingOverrides).length > 0 ||
+    Object.keys(tradeOverrides).length > 0
 
   const clientAdjustedModel = useMemo(
     () => (model ? applyClientWeightOverrides(model, assetClassOverrides, holdingOverrides) : null),
@@ -313,6 +322,28 @@ export default function ClientPortfolioUploadPanel() {
 
   function setHoldingWeight(code: string, value: number) {
     setHoldingOverrides((prev) => ({ ...prev, [normaliseCode(code)]: value }))
+    // A weight edit replaces any unit-level adjustment on the same holding.
+    clearTradeOverride(code)
+  }
+
+  function setTradeUnits(code: string, units: number) {
+    tradeOverridesTouched.current = true
+    setTradeOverrides((prev) => ({ ...prev, [normaliseCode(code)]: { units } }))
+  }
+
+  function setTradeValue(code: string, value: number) {
+    tradeOverridesTouched.current = true
+    setTradeOverrides((prev) => ({ ...prev, [normaliseCode(code)]: { value } }))
+  }
+
+  function clearTradeOverride(code: string) {
+    setTradeOverrides((prev) => {
+      if (!(normaliseCode(code) in prev)) return prev
+      tradeOverridesTouched.current = true
+      const next = { ...prev }
+      delete next[normaliseCode(code)]
+      return next
+    })
   }
 
   function resetHoldingWeight(code: string) {
@@ -326,6 +357,8 @@ export default function ClientPortfolioUploadPanel() {
   function resetAllClientOverrides() {
     setAssetClassOverrides({})
     setHoldingOverrides({})
+    if (Object.keys(tradeOverrides).length > 0) tradeOverridesTouched.current = true
+    setTradeOverrides({})
   }
 
   // --- Save/resume a client's in-progress review ---
@@ -380,6 +413,7 @@ export default function ClientPortfolioUploadPanel() {
           holdingOverrides,
           entryMode: isNewMoney ? 'new-money' : 'portfolio',
           modelVersion: currentModelVersion,
+          ...(tradeOverridesTouched.current ? { tradeOverrides } : {}),
         })
         setReviewModelVersion(currentModelVersion)
         setReviewId((prev) => prev ?? savedId)
@@ -397,7 +431,7 @@ export default function ClientPortfolioUploadPanel() {
     // change - editing it retriggers via the other dependencies changing
     // too, and including it directly would refire on every keystroke.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [holdings, meta, riskOverride, manualPortfolioValue, additionalCash, assetClassOverrides, holdingOverrides, clientReviewName, isNewMoney])
+  }, [holdings, meta, riskOverride, manualPortfolioValue, additionalCash, assetClassOverrides, holdingOverrides, clientReviewName, isNewMoney, tradeOverrides])
 
   async function openLoadPicker() {
     setShowLoadPicker(true)
@@ -425,6 +459,8 @@ export default function ClientPortfolioUploadPanel() {
       setAdditionalCash(review.state.additionalCash)
       setAssetClassOverrides(review.state.assetClassOverrides)
       setHoldingOverrides(review.state.holdingOverrides)
+      setTradeOverrides(review.state.tradeOverrides ?? {})
+      tradeOverridesTouched.current = Object.keys(review.state.tradeOverrides ?? {}).length > 0
       setMode(review.state.entryMode === 'new-money' ? 'new-money' : 'pdf')
       setReviewModelVersion(review.state.modelVersion ?? null)
       setReviewStatus('saved')
@@ -470,6 +506,8 @@ export default function ClientPortfolioUploadPanel() {
     setAdditionalCash('')
     setAssetClassOverrides({})
     setHoldingOverrides({})
+    setTradeOverrides({})
+    tradeOverridesTouched.current = false
     setMode('pdf')
     setReviewModelVersion(null)
   }
@@ -551,9 +589,10 @@ export default function ClientPortfolioUploadPanel() {
             totalPortfolioValue: effectiveTotalPortfolioValue,
             currentPortfolioValue: baseTotalPortfolioValue,
             prices,
+            tradeOverrides,
           })
         : null,
-    [mappingResult.mappedHoldings, clientAdjustedModel, effectiveTotalPortfolioValue, baseTotalPortfolioValue, prices],
+    [mappingResult.mappedHoldings, clientAdjustedModel, effectiveTotalPortfolioValue, baseTotalPortfolioValue, prices, tradeOverrides],
   )
 
   // New cash, invested without selling anything: either a lump sum into
@@ -1336,6 +1375,11 @@ export default function ClientPortfolioUploadPanel() {
 
               <div style={resultingColumn}>
                 <p style={resultingColumnTitle}>Recommended Adjustments</p>
+                <p style={tdMutedInline}>
+                  Adjust any trade by changing its units (positive to buy, negative to sell), or its dollar
+                  value where there&apos;s no live price. Target weight, residual cash and the proposal update
+                  to match. ↺ returns a trade to the model-derived size.
+                </p>
                 <div style={assetClassList}>
                   {clientAdjustedModel.assetClasses.map((assetClass) => {
                     const classRecs = comparison.holdingRecommendations.filter(
@@ -1397,25 +1441,65 @@ export default function ClientPortfolioUploadPanel() {
                                   {rec.changeWeight > 0 ? '+' : ''}
                                   {rec.changeWeight}pp
                                 </HoldingMetricCell>
-                                <HoldingMetricCell label="Trade value">
-                                  {rec.changeValue !== null ? (
+                                <HoldingMetricCell
+                                  label={rec.price ? 'Trade value' : 'Trade value (edit)'}
+                                  tone={rec.adjusted && !rec.price ? 'accent' : 'default'}
+                                >
+                                  {rec.changeValue === null ? (
+                                    <span style={tdMutedInline}>—</span>
+                                  ) : rec.price ? (
                                     <>
                                       {rec.changeValue > 0 ? '+' : ''}
                                       {formatCurrency(rec.changeValue)}
                                     </>
                                   ) : (
-                                    <span style={tdMutedInline}>—</span>
+                                    <>
+                                      <DraftNumberInput
+                                        value={Math.round(rec.changeValue)}
+                                        step={1000}
+                                        onCommit={(value) => setTradeValue(rec.code, value)}
+                                        ariaLabel={`${rec.name} trade value`}
+                                      />
+                                      {rec.adjusted ? (
+                                        <button
+                                          style={resetWeightButton}
+                                          title="Reset to the model-derived trade"
+                                          onClick={() => clearTradeOverride(rec.code)}
+                                        >
+                                          ↺
+                                        </button>
+                                      ) : null}
+                                    </>
                                   )}
                                 </HoldingMetricCell>
-                                <HoldingMetricCell label="Units">
-                                  {rec.units !== null ? (
+                                <HoldingMetricCell label="Units" tone={rec.adjusted && rec.price ? 'accent' : 'default'}>
+                                  {rec.units !== null && rec.price ? (
+                                    <>
+                                      <DraftNumberInput
+                                        value={rec.units}
+                                        step={1}
+                                        integer
+                                        onCommit={(value) => setTradeUnits(rec.code, value)}
+                                        ariaLabel={`${rec.name} units to trade (negative to sell)`}
+                                      />
+                                      {rec.adjusted ? (
+                                        <button
+                                          style={resetWeightButton}
+                                          title="Reset to the model-derived trade"
+                                          onClick={() => clearTradeOverride(rec.code)}
+                                        >
+                                          ↺
+                                        </button>
+                                      ) : null}
+                                    </>
+                                  ) : rec.units !== null ? (
                                     <>
                                       {rec.units > 0 ? '+' : ''}
                                       {rec.units.toLocaleString()}
                                     </>
                                   ) : (
                                     <span style={tdMutedInline}>
-                                      {rec.changeValue !== null ? 'no price' : '—'}
+                                      {rec.changeValue !== null ? 'by $ value' : '—'}
                                     </span>
                                   )}
                                 </HoldingMetricCell>
@@ -1470,6 +1554,57 @@ export default function ClientPortfolioUploadPanel() {
         </>
       ) : null}
     </section>
+  )
+}
+
+/**
+ * Number input that lets the adviser type freely (clear the field, type a
+ * minus sign) and only applies the value on Enter or when leaving the field.
+ */
+function DraftNumberInput({
+  value,
+  step,
+  integer,
+  onCommit,
+  ariaLabel,
+}: {
+  value: number
+  step: number
+  integer?: boolean
+  onCommit: (value: number) => void
+  ariaLabel: string
+}) {
+  const [draft, setDraft] = useState<string>(String(value))
+  const [editing, setEditing] = useState(false)
+  useEffect(() => {
+    if (!editing) setDraft(String(value))
+  }, [value, editing])
+
+  function commit() {
+    setEditing(false)
+    const parsed = integer ? parseInt(draft, 10) : parseFloat(draft)
+    if (Number.isNaN(parsed)) {
+      setDraft(String(value))
+      return
+    }
+    if (parsed !== value) onCommit(parsed)
+  }
+
+  return (
+    <input
+      type="number"
+      step={step}
+      style={holdingMetricInput}
+      value={draft}
+      onFocus={() => setEditing(true)}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+      }}
+      aria-label={ariaLabel}
+      title="Positive to buy, negative to sell. Applies when you press Enter or leave the field."
+    />
   )
 }
 

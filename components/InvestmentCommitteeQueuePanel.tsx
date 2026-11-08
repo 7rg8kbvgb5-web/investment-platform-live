@@ -78,9 +78,6 @@ export function InvestmentCommitteeQueuePanel() {
   const [impact, setImpact] = useState<Record<string, SecurityImpact>>({})
 
   const [showManual, setShowManual] = useState(false)
-  const [lookupCode, setLookupCode] = useState('')
-  const [lookupResult, setLookupResult] = useState<SecurityImpact | null>(null)
-  const [lookupLoading, setLookupLoading] = useState(false)
 
   useEffect(() => {
     load(true)
@@ -126,23 +123,6 @@ export function InvestmentCommitteeQueuePanel() {
       if (data.ok) setImpact(data.impact)
     } catch {
       // Impact is supplementary - the queue still works without it.
-    }
-  }
-
-  async function runLookup() {
-    const code = lookupCode.trim()
-    if (!code) return
-    setLookupLoading(true)
-    try {
-      const res = await fetch('/api/investment-committee/client-impact', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ codes: [code] }),
-      })
-      const data = await res.json()
-      if (data.ok) setLookupResult(data.impact[code.toUpperCase()] ?? null)
-    } finally {
-      setLookupLoading(false)
     }
   }
 
@@ -237,28 +217,6 @@ export function InvestmentCommitteeQueuePanel() {
         </div>
       )}
 
-      <div style={lookupBox}>
-        <p style={sectionTitle}>Who holds…?</p>
-        <p style={smallText}>
-          Look up any security to see which clients hold it, based on their saved Construction reviews.
-        </p>
-        <div style={lookupRow}>
-          <input
-            type="text"
-            placeholder="Ticker, e.g. CBA"
-            value={lookupCode}
-            onChange={(e) => setLookupCode(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') runLookup()
-            }}
-            style={textInput}
-          />
-          <button type="button" style={primaryButton} onClick={runLookup} disabled={lookupLoading}>
-            {lookupLoading ? 'Looking…' : 'Look up'}
-          </button>
-        </div>
-        {lookupResult ? <ImpactList impact={lookupResult} /> : null}
-      </div>
     </Panel>
   )
 }
@@ -760,8 +718,6 @@ const recordBox = {
 const recordLine = { margin: 0, fontSize: '13px', color: '#e2e8f0' }
 const recordRationale = { margin: 0, fontSize: '13px', color: '#cbd5e1', lineHeight: 1.6 }
 const appliedNote = { margin: 0, fontSize: '12px', color: '#4ade80' }
-const lookupBox = { marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #1e3a5f' }
-const lookupRow = { display: 'flex', gap: '8px', maxWidth: '420px', margin: '8px 0 12px' }
 const sectionTitle = { margin: '0 0 4px', fontSize: '14px', fontWeight: 700, color: '#e2e8f0' }
 const smallText = { margin: 0, fontSize: '12px', color: '#94a3b8', lineHeight: 1.5 }
 const emptyText = { margin: 0, fontSize: '13px', color: '#94a3b8', fontStyle: 'italic' as const }

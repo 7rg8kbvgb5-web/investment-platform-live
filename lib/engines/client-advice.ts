@@ -127,13 +127,16 @@ export async function buildClientAdvice(
   const baseModel = await modelPromise
   const model = applyClientWeightOverrides(baseModel, state.assetClassOverrides ?? {}, state.holdingOverrides ?? {})
   const hasBespokeWeights =
-    Object.keys(state.assetClassOverrides ?? {}).length > 0 || Object.keys(state.holdingOverrides ?? {}).length > 0
+    Object.keys(state.assetClassOverrides ?? {}).length > 0 ||
+    Object.keys(state.holdingOverrides ?? {}).length > 0 ||
+    Object.keys(state.tradeOverrides ?? {}).length > 0
 
   const totalAfter = existingValue !== null ? existingValue + newCash : newCash > 0 ? newCash : null
   const comparison = compareClientPortfolioToModel(mapped, model, {
     totalPortfolioValue: totalAfter ?? undefined,
     currentPortfolioValue: existingValue ?? undefined,
     prices: context.prices,
+    tradeOverrides: state.tradeOverrides ?? {},
   })
 
   const maxDriftPp = mapped.length
