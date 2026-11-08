@@ -8,10 +8,10 @@ export default function InvestmentCommitteePage() {
   return (
     <PageContent
       title="Investment Committee"
-      description="Formal decisions on proposed swaps, the clients each one affects, and deep-dive due diligence on new investments under consideration."
+      description="Deep-dive due diligence on new investments under consideration, and formal decisions on every proposed change to the house model."
     >
-      <InvestmentCommitteeQueuePanel />
       <InvestmentDeepDivePanel />
+      <InvestmentCommitteeQueuePanel />
     </PageContent>
   );
 }
