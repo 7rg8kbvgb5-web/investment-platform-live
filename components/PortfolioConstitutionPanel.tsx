@@ -1,4 +1,5 @@
 'use client';
+import { compareSecurityCodes } from '../lib/engines/security-order';
 
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -133,7 +134,7 @@ export function PortfolioConstitutionPanel() {
     targetWeight: weights[meta.name] ?? 0,
     holdings: securities
       .filter((s) => s.assetClass === meta.name)
-      .sort((a, b) => a.displayOrder - b.displayOrder),
+      .sort(compareSecurityCodes),
   }));
 
   const portfolioTotal = round1(

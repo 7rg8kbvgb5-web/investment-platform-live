@@ -25,7 +25,58 @@ export type SecurityLookupResult = {
   yieldNote: string | null
   /** Expected franking level of distributions, 0-100. Null if not found. */
   frankingPct: number | null
+  /** What kind of security this resolved to - drives the holding type it's added with. */
+  holdingType: 'direct_equity' | 'listed_fund' | 'unlisted_fund' | 'direct_bond' | null
+  /** Bonds only: the 12-character ISIN, e.g. "AU3CB0326452". */
+  isin: string | null
 }
+
+/**
+ * Wholesale (OTC) bonds aren't ASX tickers - they're identified by ISIN
+ * ("AU3CB0326452") or a dealer short name ("AGL 5.77% Sep-35",
+ * "ANZHNZ +2.95% Oct-30/Perp"). Anything that looks like either goes to the
+ * bond lookup rather than the ASX one.
+ */
+export function looksLikeBond(input: string): boolean {
+  const v = input.trim().toUpperCase()
+  if (/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(v) && /\d/.test(v.slice(2, 11))) return true // ISIN
+  if (/%/.test(v) || /BBSW/.test(v)) return true
+  if (/\s/.test(v) && /(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)-?\d{2}/.test(v)) return true
+  return false
+}
+
+const BOND_SYSTEM_PROMPT = `You are a fixed income data lookup assistant for Ord Minnett private wealth advisers.
+You will be given an identifier for an Australian dollar wholesale (OTC) corporate bond, floating rate note or
+subordinated note - either an ISIN (e.g. "AU3CB0326452") or a dealer short name (e.g. "AGL 5.77% Sep-35",
+"ANZHNZ +2.95% Oct-30/Perp", "APAAU 6.772% Jul-33/56" - where a second date is the final maturity and the first the
+first call date). Use web search (issuer announcements, ASX/Yieldbroker/FIIG/Bloomberg/dealer term sheets, rating
+agency releases) to find:
+1. shortName: the standard dealer short name in the form "<TICKER> <coupon>% <Mon-YY>" for fixed, or
+   "<TICKER> +<margin>% <Mon-YY>" for floating, adding "/<Mon-YY or Perp>" for the final maturity where callable.
+2. isin: the 12-character ISIN.
+3. name: the full description, e.g. "AGL Energy Limited 5.770% 30-SEP-2035" or
+   "Ampol Limited BBSW + 2.500% 11-DEC-2054".
+4. sector: the issuer's GICS-style sector (e.g. "Utilities", "Financials", "Industrials", "Energy").
+5. yield: the expected RUNNING INCOME yield over the next 12 months, as a percent - used to project client income.
+   Fixed rate: the coupon rate. Floating rate: current 3-month BBSW plus the margin. Do not return yield to maturity here.
+6. yieldNote: one short line an adviser can rely on - coupon type (fixed/floating), the call date and final maturity,
+   the issue rating if found (e.g. "BBB"), any indicative yield to maturity found and its date, and the BBSW level assumed
+   for floaters. E.g. "Fixed 5.77%; matures 30 Sep 2035; rated BBB; indicative YTM ~5.4% (Nov 2026)".
+7. frankingPct: 0 for bonds and notes (interest is never franked) unless the security is in fact a franked hybrid.
+
+This is a data lookup only - never provide investment advice or commentary beyond the requested facts.
+
+Respond with ONLY a JSON object and nothing else - no markdown fences, no preamble:
+{
+  "shortName": string | null,
+  "isin": string | null,
+  "name": string | null,
+  "sector": string | null,
+  "yield": number | null,
+  "yieldNote": string | null,
+  "frankingPct": number | null
+}
+If you cannot find a field confidently, return null for it rather than guessing.`
 
 const SYSTEM_PROMPT = `You are a market data lookup assistant for Ord Minnett private wealth advisers.
 Given a single ticker code (bare ASX codes have no suffix - e.g. "FMG" not "FMG.ASX" or "FMG.AX" - if a suffix is present it has already been stripped before reaching you), use web search to find:
@@ -57,6 +108,63 @@ function extractJsonObject(text: string): string {
   return withoutFences.slice(firstBrace, lastBrace + 1)
 }
 
+async function lookupBond(client: Anthropic, input: string): Promise<SecurityLookupResult> {
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 2000,
+    system: BOND_SYSTEM_PROMPT,
+    messages: [
+      {
+        role: 'user',
+        content: `Bond identifier: ${input.trim()}. Look it up and return the JSON.`,
+      },
+    ],
+    tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+  })
+
+  const textBlocks = response.content.filter(
+    (block): block is Extract<typeof block, { type: 'text' }> => block.type === 'text',
+  )
+  const rawText = textBlocks.length > 0 ? textBlocks[textBlocks.length - 1].text : '{}'
+
+  let parsed: {
+    shortName?: string | null
+    isin?: string | null
+    name?: string | null
+    sector?: string | null
+    yield?: number | null
+    yieldNote?: string | null
+    frankingPct?: number | null
+  }
+  try {
+    parsed = JSON.parse(extractJsonObject(rawText))
+  } catch {
+    parsed = {}
+  }
+
+  const isin = typeof parsed.isin === 'string' && /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(parsed.isin.trim().toUpperCase())
+    ? parsed.isin.trim().toUpperCase()
+    : null
+  const shortName = typeof parsed.shortName === 'string' && parsed.shortName.trim() ? parsed.shortName.trim() : null
+  // The short name is what advisers read in lists; fall back to what was typed.
+  const code = (shortName ?? input.trim()).toUpperCase()
+  const noteParts = [parsed.yieldNote ?? null, isin ? `ISIN ${isin}` : null].filter(Boolean)
+
+  return {
+    code,
+    name: parsed.name ?? null,
+    sector: parsed.sector ?? null,
+    yield: typeof parsed.yield === 'number' ? parsed.yield : null,
+    yieldNote: noteParts.length > 0 ? noteParts.join(' · ') : null,
+    frankingPct:
+      typeof parsed.frankingPct === 'number' && parsed.frankingPct >= 0 && parsed.frankingPct <= 100
+        ? parsed.frankingPct
+        : 0,
+    holdingType: 'direct_bond',
+    isin,
+  }
+}
+
 export async function lookupSecurity(code: string): Promise<SecurityLookupResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
@@ -69,6 +177,10 @@ export async function lookupSecurity(code: string): Promise<SecurityLookupResult
   }
 
   const client = new Anthropic({ apiKey })
+
+  if (looksLikeBond(code)) {
+    return lookupBond(client, code)
+  }
 
   const response = await client.messages.create({
     model: 'claude-sonnet-4-6',
@@ -112,5 +224,7 @@ export async function lookupSecurity(code: string): Promise<SecurityLookupResult
       typeof parsed.frankingPct === 'number' && parsed.frankingPct >= 0 && parsed.frankingPct <= 100
         ? parsed.frankingPct
         : null,
+    holdingType: null,
+    isin: null,
   }
 }

@@ -1,4 +1,5 @@
 'use client';
+import { compareSecurityCodes } from '../lib/engines/security-order';
 
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -15,7 +16,7 @@ import {
   type HoldingType,
 } from '../lib/engines/model-portfolio-core';
 import { buildSecurityUniverse, type SecurityUniverseEntry } from '../lib/engines/security-universe';
-import { stripExchangeSuffix } from '../lib/engines/security-lookup';
+import { looksLikeBond, stripExchangeSuffix } from '../lib/engines/security-lookup';
 import { computeConvictionRating, type ConvictionRating } from '../lib/engines/conviction-rating';
 import type { TacticalAssetClassView } from '../lib/engines/tactical-asset-view';
 import { averagePairwiseCorrelation } from '../lib/engines/portfolio-statistics';
@@ -225,7 +226,10 @@ export function ModelPortfolioSecuritiesPanel() {
   }
 
   const [manualEntry, setManualEntry] = useState<
-    Record<string, { code: string; name: string; yield: string; franking: string }>
+    Record<
+      string,
+      { code: string; name: string; yield: string; franking: string; holdingType?: HoldingType | null; isin?: string | null }
+    >
   >({});
   const [lookupState, setLookupState] = useState<
     Record<string, { loading: boolean; error: string | null; note: string | null }>
@@ -234,14 +238,24 @@ export function ModelPortfolioSecuritiesPanel() {
   function updateManualEntry(assetClassName: string, field: 'code' | 'name' | 'yield' | 'franking', value: string) {
     setManualEntry((prev) => ({
       ...prev,
-      [assetClassName]: { code: '', name: '', yield: '', franking: '', ...prev[assetClassName], [field]: value },
+      [assetClassName]: {
+        code: '',
+        name: '',
+        yield: '',
+        franking: '',
+        ...prev[assetClassName],
+        [field]: value,
+        // Retyping the code means the previous lookup no longer applies.
+        ...(field === 'code' ? { holdingType: null, isin: null } : {}),
+      },
     }));
   }
 
   async function handleLookup(assetClassName: string) {
     const rawCode = manualEntry[assetClassName]?.code?.trim();
     if (!rawCode) return;
-    const code = stripExchangeSuffix(rawCode);
+    // Bonds keep their identifier as typed (ISIN or dealer short name); tickers lose any exchange suffix.
+    const code = looksLikeBond(rawCode) ? rawCode : stripExchangeSuffix(rawCode);
 
     setLookupState((prev) => ({ ...prev, [assetClassName]: { loading: true, error: null, note: null } }));
     try {
@@ -256,7 +270,9 @@ export function ModelPortfolioSecuritiesPanel() {
       setManualEntry((prev) => ({
         ...prev,
         [assetClassName]: {
-          code,
+          code: data.result.code ?? code,
+          holdingType: data.result.holdingType ?? null,
+          isin: data.result.isin ?? null,
           name: data.result.name ?? prev[assetClassName]?.name ?? '',
           yield:
             typeof data.result.yield === 'number'
@@ -275,7 +291,7 @@ export function ModelPortfolioSecuritiesPanel() {
         [assetClassName]: {
           loading: false,
           error: foundNothing
-            ? `Couldn't find "${code}" — check the ticker, or fill in name and yield manually.`
+            ? `Couldn't find "${code}" — check the ticker, ISIN or bond short name, or fill in name and yield manually.`
             : null,
           note: data.result.yieldNote ?? null,
         },
@@ -294,7 +310,8 @@ export function ModelPortfolioSecuritiesPanel() {
 
   async function handleManualAdd(assetClassName: string) {
     const entry = manualEntry[assetClassName];
-    const code = entry?.code ? stripExchangeSuffix(entry.code) : '';
+    const isBond = entry?.holdingType === 'direct_bond' || (entry?.code ? looksLikeBond(entry.code) : false);
+    const code = entry?.code ? (isBond ? entry.code.trim().toUpperCase() : stripExchangeSuffix(entry.code)) : '';
     const name = entry?.name.trim();
     const yieldValue = entry?.yield?.trim();
     const frankingValue = entry?.franking?.trim();
@@ -305,8 +322,11 @@ export function ModelPortfolioSecuritiesPanel() {
         assetClass: assetClassName,
         code,
         name,
-        rationale: 'Added manually - not yet on the Approved List.',
+        rationale: entry?.isin
+          ? `Wholesale bond, ISIN ${entry.isin}. Added manually - not yet on the Approved List.`
+          : 'Added manually - not yet on the Approved List.',
         inSecurityMaster: false,
+        holdingType: isBond ? 'direct_bond' : entry?.holdingType ?? undefined,
         yield: yieldValue ? parseFloat(yieldValue) : null,
         frankingPct: frankingValue ? parseFloat(frankingValue) : null,
       })
@@ -322,7 +342,7 @@ export function ModelPortfolioSecuritiesPanel() {
     ...meta,
     holdings: securities
       .filter((s) => s.assetClass === meta.name)
-      .sort((a, b) => a.displayOrder - b.displayOrder),
+      .sort(compareSecurityCodes),
   }));
 
   // --- Top-of-page visuals: security counts and yield coverage, since
@@ -719,7 +739,8 @@ export function ModelPortfolioSecuritiesPanel() {
               <div style={manualAddRow}>
                 <input
                   type="text"
-                  placeholder="Code"
+                  placeholder="Code, ISIN or bond"
+                  title="ASX code (e.g. CBA), or for wholesale bonds the ISIN (AU3CB0326452) or short name (AGL 5.77% Sep-35)"
                   value={manualEntry[assetClass.name]?.code ?? ''}
                   onChange={(e) => updateManualEntry(assetClass.name, 'code', e.target.value)}
                   style={manualCodeInput}
@@ -1244,7 +1265,7 @@ const manualAddRow = {
 };
 
 const manualCodeInput = {
-  width: '90px',
+  width: '190px',
   padding: '8px 10px',
   borderRadius: '8px',
   fontSize: '13px',

@@ -1,3 +1,4 @@
+import { sortSecurities } from './security-order'
 import type { ModelPortfolio } from './model-portfolios'
 import type { MappedHolding } from './client-holdings-mapping'
 import { normaliseCode } from './security-universe'
@@ -320,9 +321,7 @@ export function compareClientPortfolioToModel(
 
   return {
     assetClassComparison,
-    holdingRecommendations: holdingRecommendations.sort(
-      (a, b) => Math.abs(b.changeWeight) - Math.abs(a.changeWeight),
-    ),
+    holdingRecommendations: sortSecurities(holdingRecommendations),
     unclassifiedHoldings,
   }
 }

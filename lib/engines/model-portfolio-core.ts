@@ -1,4 +1,5 @@
 import { supabase } from '../supabase';
+import { compareSecurityCodes, sortSecurities } from './security-order';
 import { logModelChange } from './model-versioning';
 import { ensureApproved } from './approved-list';
 import type {
@@ -167,7 +168,7 @@ export async function fetchCoreSecurities(): Promise<CoreSecurity[]> {
   if (error) {
     throw new Error(`Failed to load the core model portfolio: ${error.message}`);
   }
-  return (data ?? []).map(mapSecurityRow);
+  return sortSecurities((data ?? []).map(mapSecurityRow));
 }
 
 /** One risk profile's asset-class-level target weights (% of the whole portfolio each class carries). */
@@ -266,7 +267,7 @@ export async function fetchModelPortfolio(riskProfile: RiskProfile): Promise<Mod
     const targetWeight = weights[meta.name] ?? 0;
     const classSecurities = securities
       .filter((s) => s.assetClass === meta.name)
-      .sort((a, b) => a.displayOrder - b.displayOrder);
+      .sort(compareSecurityCodes);
 
     const holdings: ModelHolding[] = classSecurities.map((s) => ({
       code: s.code,

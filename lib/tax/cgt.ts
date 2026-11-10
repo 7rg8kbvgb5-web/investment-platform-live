@@ -1,3 +1,4 @@
+import { sortSecurities } from '../engines/security-order'
 import type { TaxReference } from './tax-reference'
 
 // Capital gains/losses estimate for the sales in a proposed rebalance.
@@ -140,7 +141,7 @@ export function taxRateFor(settings: CgtSettings, ref: TaxReference): { rate: nu
 
 export function calculateCgt(sales: CgtSaleInput[], settings: CgtSettings, ref: TaxReference): CgtResult {
   const missingCostBase: string[] = []
-  const lines: CgtSaleLine[] = sales.map((sale) => {
+  const lines: CgtSaleLine[] = sortSecurities(sales).map((sale) => {
     const h = settings.holdings[sale.code.toUpperCase()]
     const totalCost = h?.costBase ?? null
     const over12Months = h?.over12Months ?? true
