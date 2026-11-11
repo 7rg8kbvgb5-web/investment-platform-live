@@ -16,6 +16,7 @@ export function salesFromAdvice(advice: ClientAdvice): CgtSaleInput[] {
       name: t.name,
       proceeds: Math.abs(t.value as number),
       holdingValue: t.currentValue && t.currentValue > 0 ? t.currentValue : Math.abs(t.value as number),
+      statementCode: t.statementCode ? normaliseCode(t.statementCode) : undefined,
     }))
 }
 
@@ -28,7 +29,9 @@ export function settingsWithStatementDefaults(review: ClientPortfolioReview, sal
     const saved = holdings[sale.code]
     // Anything the adviser has entered stands; gaps are filled from the statement.
     if (saved && saved.costBase !== null) continue
-    const fromStatement = review.state.holdings.find((h) => normaliseCode(h.code) === sale.code)
+    const fromStatement = review.state.holdings.find(
+      (h) => normaliseCode(h.code) === sale.code || (!!sale.statementCode && normaliseCode(h.code) === sale.statementCode),
+    )
     const statementCost = typeof fromStatement?.costBase === 'number' ? fromStatement.costBase : null
     holdings[sale.code] = {
       costBase: statementCost,

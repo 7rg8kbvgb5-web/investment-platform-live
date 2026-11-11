@@ -1,5 +1,7 @@
 import { UploadedHolding } from './client-portfolio-upload'
-import { buildSecurityUniverse, normaliseCode } from './security-universe'
+import { buildSecurityUniverse, normaliseCode, type SecurityUniverseEntry } from './security-universe'
+import { ASSET_CLASSES } from './model-portfolio-core'
+import { isCashLike, isIsin, normaliseBondName, type HoldingTreatment } from './holding-triage'
 
 export type MappedHolding = {
   code: string
@@ -14,6 +16,16 @@ export type MappedHolding = {
   assetClassType: 'Growth' | 'Defensive' | 'Unknown'
   mapped: boolean
   inSecurityMaster: boolean
+  /** How the holding was recognised: by its code, by ISIN, by bond short name, as cash, or classified by the adviser. */
+  matchedBy?: 'code' | 'isin' | 'bond-name' | 'cash' | 'adviser'
+  /** The code as printed on the client's statement, when matching resolved it to a different model code (e.g. an ISIN). */
+  statementCode?: string
+  /** From the statement - carried so CGT and Construction still find them when the code was re-matched. */
+  costBase?: number
+  acquiredDate?: string
+  /** Adviser's chosen treatment if this holding sits outside the model (unset = default for its type). */
+  treatment?: HoldingTreatment
+  treatmentReason?: string
 }
 
 export type HoldingsMappingResult = {
@@ -44,6 +56,19 @@ export async function mapClientHoldings(
   const universe = await buildSecurityUniverse()
   const mappedHoldings: MappedHolding[] = []
 
+  // Secondary indexes so a statement that prints a bond by ISIN, or puts the
+  // dealer short name in the name column, still lines up with the model.
+  const byIsin = new Map<string, SecurityUniverseEntry>()
+  const byBondName = new Map<string, SecurityUniverseEntry>()
+  let modelCashEntry: SecurityUniverseEntry | undefined
+  for (const entry of universe.values()) {
+    if (entry.isin) byIsin.set(entry.isin, entry)
+    if (/%/.test(entry.code)) byBondName.set(normaliseBondName(entry.code), entry)
+    if (entry.assetClass === 'Cash' && entry.inModelUniverse && (!modelCashEntry || entry.code < modelCashEntry.code)) {
+      modelCashEntry = entry
+    }
+  }
+
   const sectorExposure: Record<string, number> = {}
   const assetClassExposure: Record<string, number> = {}
 
@@ -53,34 +78,56 @@ export async function mapClientHoldings(
   let defensiveWeight = 0
   let unknownWeight = 0
 
+  function recognise(holding: UploadedHolding): { entry: SecurityUniverseEntry; matchedBy: MappedHolding['matchedBy'] } | null {
+    const code = normaliseCode(holding.code)
+    const direct = universe.get(code)
+    if (direct) return { entry: direct, matchedBy: 'code' }
+    if (isIsin(code) && byIsin.has(code)) return { entry: byIsin.get(code)!, matchedBy: 'isin' }
+    if (holding.name) {
+      const byName = byBondName.get(normaliseBondName(holding.name)) ?? universe.get(normaliseCode(holding.name))
+      if (byName) return { entry: byName, matchedBy: 'bond-name' }
+    }
+    if (modelCashEntry && isCashLike(holding.code, holding.name)) return { entry: modelCashEntry, matchedBy: 'cash' }
+    return null
+  }
+
   holdings.forEach((holding) => {
-    const entry = universe.get(normaliseCode(holding.code))
+    const recognised = recognise(holding)
+    const adviserClass = holding.assetClass ? ASSET_CLASSES.find((ac) => ac.name === holding.assetClass) : undefined
 
-    if (entry) {
+    if (recognised || adviserClass) {
       mappedCount += 1
+      const entry = recognised?.entry
+      const assetClass = entry?.assetClass ?? adviserClass!.name
+      const assetClassType = entry?.assetClassType ?? adviserClass!.type
+      const sector = entry?.sector ?? 'Classified by adviser'
 
-      sectorExposure[entry.sector] =
-        (sectorExposure[entry.sector] || 0) + holding.weight
-      assetClassExposure[entry.assetClass] =
-        (assetClassExposure[entry.assetClass] || 0) + holding.weight
-
-      if (entry.assetClassType === 'Growth') {
+      sectorExposure[sector] = (sectorExposure[sector] || 0) + holding.weight
+      assetClassExposure[assetClass] = (assetClassExposure[assetClass] || 0) + holding.weight
+      if (assetClassType === 'Growth') {
         growthWeight += holding.weight
       } else {
         defensiveWeight += holding.weight
       }
 
       mappedHoldings.push({
-        code: entry.code,
-        name: holding.name ?? entry.name,
+        code: entry?.code ?? normaliseCode(holding.code),
+        name: entry && recognised?.matchedBy !== 'code' && recognised?.matchedBy !== 'cash' ? entry.name : holding.name ?? entry?.name,
         weight: holding.weight,
         value: holding.value,
         quantity: holding.quantity,
-        sector: entry.sector,
-        assetClass: entry.assetClass,
-        assetClassType: entry.assetClassType,
+        sector,
+        assetClass,
+        assetClassType,
         mapped: true,
-        inSecurityMaster: entry.inSecurityMaster,
+        inSecurityMaster: entry?.inSecurityMaster ?? false,
+        matchedBy: recognised?.matchedBy ?? 'adviser',
+        statementCode:
+          entry && normaliseCode(entry.code) !== normaliseCode(holding.code) ? holding.code : undefined,
+        costBase: holding.costBase,
+        acquiredDate: holding.acquiredDate,
+        treatment: holding.treatment,
+        treatmentReason: holding.treatmentReason,
       })
 
       return
@@ -100,6 +147,10 @@ export async function mapClientHoldings(
       assetClassType: 'Unknown',
       mapped: false,
       inSecurityMaster: false,
+      costBase: holding.costBase,
+      acquiredDate: holding.acquiredDate,
+      treatment: holding.treatment,
+      treatmentReason: holding.treatmentReason,
     })
   })
 

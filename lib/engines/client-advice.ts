@@ -1,3 +1,4 @@
+import type { HoldingTreatment } from './holding-triage'
 import type { ModelPortfolio, RiskProfile } from './model-portfolios'
 import { fetchModelPortfolio, fetchAllRiskProfileWeights, computeGrowthDefensiveByProfile } from './model-portfolio-core'
 import { mapClientHoldings, type MappedHolding } from './client-holdings-mapping'
@@ -42,6 +43,20 @@ export type ProposedTrade = {
   currentWeight: number
   targetWeight: number
   rationale: string
+  /** Holdings outside the model: sell now vs staged exit. */
+  treatment?: HoldingTreatment
+  /** Code as printed on the statement where it differs (e.g. bond ISIN) - for cost-base lookup. */
+  statementCode?: string
+}
+
+/** A holding kept outside the model as a documented adviser exception. */
+export type RetainedHolding = {
+  code: string
+  name: string
+  assetClass: string
+  currentValue: number | null
+  currentWeight: number
+  reason: string | null
 }
 
 export type ClientAdvice = {
@@ -65,6 +80,9 @@ export type ClientAdvice = {
   cashDeployment: CashDeploymentResult | null
   holdingsOutsideModel: number
   unmappedHoldings: { code: string; name?: string; weight: number }[]
+  /** % of the existing portfolio still unclassified - excluded from this proposal until classified. */
+  unclassifiedWeightPct: number
+  retainedHoldings: RetainedHolding[]
   projectedIncome: number | null
   projectedYieldPct: number | null
   yieldCoveragePct: number
@@ -200,6 +218,8 @@ export async function buildClientAdvice(
         currentWeight: r.currentWeight,
         targetWeight: r.targetWeight,
         rationale: r.rationale,
+        treatment: r.treatment,
+        statementCode: r.statementCode,
       }))
   }
 
@@ -262,8 +282,27 @@ export async function buildClientAdvice(
   if (!isNewMoney && existingValue === null) {
     warnings.push('No portfolio value recorded - trades are shown by weight only. Enter it on the Construction tab.')
   }
+  const unclassifiedWeightPct = round2(comparison.unclassifiedHoldings.reduce((sum, h) => sum + h.weight, 0))
   if (comparison.unclassifiedHoldings.length > 0) {
-    warnings.push(`${comparison.unclassifiedHoldings.length} holding(s) couldn't be classified and are excluded - review them on the Construction tab.`)
+    warnings.push(
+      `${comparison.unclassifiedHoldings.length} holding(s), ${unclassifiedWeightPct}% of the portfolio, are not yet classified and are excluded from this proposal - classify them on the Construction tab before presenting.`,
+    )
+  }
+  const retainedHoldings: RetainedHolding[] = cashDeployment
+    ? []
+    : comparison.holdingRecommendations
+        .filter((r) => r.treatment === 'retain' && r.action === 'hold')
+        .map((r) => ({
+          code: r.code,
+          name: r.name,
+          assetClass: r.assetClass,
+          currentValue: r.currentValue,
+          currentWeight: r.currentWeight,
+          reason: r.treatmentReason ?? null,
+        }))
+  const undocumented = retainedHoldings.filter((h) => !h.reason)
+  if (undocumented.length > 0) {
+    warnings.push(`${undocumented.length} retained holding(s) have no documented reason: ${undocumented.map((h) => h.code).join(', ')}.`)
   }
 
   return {
@@ -286,6 +325,8 @@ export async function buildClientAdvice(
     cashDeployment,
     holdingsOutsideModel: comparison.holdingRecommendations.filter((r) => r.action === 'sell').length,
     unmappedHoldings: comparison.unclassifiedHoldings.map((h) => ({ code: h.code, name: h.name, weight: h.weight })),
+    unclassifiedWeightPct,
+    retainedHoldings,
     projectedIncome,
     projectedYieldPct,
     yieldCoveragePct,

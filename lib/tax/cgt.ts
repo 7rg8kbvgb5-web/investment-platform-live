@@ -65,6 +65,8 @@ export type CgtSaleInput = {
   proceeds: number
   /** Value of the whole holding before the sale - used to apportion the cost base on partial sales. */
   holdingValue: number
+  /** Code on the client's statement, where it differs from the model code (e.g. a bond ISIN). */
+  statementCode?: string
 }
 
 export type CgtSaleLine = CgtSaleInput & {

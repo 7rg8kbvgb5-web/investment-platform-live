@@ -12,6 +12,8 @@ export type SecurityUniverseEntry = {
   inSecurityMaster: boolean;
   /** True if this security appears in the live model portfolio's actual holdings. */
   inModelUniverse: boolean;
+  /** Wholesale bonds: ISIN, recorded in the rationale when added via bond lookup. Lets statements that list bonds by ISIN match. */
+  isin?: string;
 };
 
 /**
@@ -50,6 +52,7 @@ export async function buildSecurityUniverse(): Promise<Map<string, SecurityUnive
       assetClassType: assetClassMeta?.type ?? "Growth",
       inSecurityMaster: false,
       inModelUniverse: true,
+      isin: security.rationale?.match(/ISIN ([A-Z]{2}[A-Z0-9]{9}[0-9])/)?.[1],
     });
   }
 
@@ -77,6 +80,7 @@ export async function buildSecurityUniverse(): Promise<Map<string, SecurityUnive
       assetClassType: existing?.assetClassType ?? assetClassMeta?.type ?? "Growth",
       inSecurityMaster: security.status === "approved",
       inModelUniverse: existing?.inModelUniverse ?? false,
+      isin: existing?.isin,
     });
   }
 

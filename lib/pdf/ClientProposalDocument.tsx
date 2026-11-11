@@ -208,7 +208,10 @@ export function ClientProposalDocument({
                 {group.rows.map((t) => (
                   <View style={s.tr} key={`${t.code}-${t.action}`} wrap={false}>
                     <Text style={[s.td, { width: '12%', fontFamily: 'Helvetica-Bold' }]}>{t.code}</Text>
-                    <Text style={[s.td, { width: '36%' }]}>{t.name}</Text>
+                    <Text style={[s.td, { width: '36%' }]}>
+                      {t.name}
+                      {t.treatment === 'staged_exit' ? ' (staged exit)' : ''}
+                    </Text>
                     <Text style={[s.td, { width: '22%' }, s.muted]}>{t.assetClass}</Text>
                     <Text style={[s.td, { width: '15%', textAlign: 'right' }]}>{t.value !== null ? fmt(Math.abs(t.value)) : '-'}</Text>
                     <Text style={[s.td, { width: '15%', textAlign: 'right' }]}>
@@ -219,6 +222,41 @@ export function ClientProposalDocument({
               </View>
             </View>
           ))}
+
+        {sells.some((t) => t.treatment === 'staged_exit') ? (
+          <Text style={[s.p, s.muted]}>
+            Sales marked as a staged exit are recommended to be completed over time rather than in a single trade -
+            for example around unlisted fund redemption windows, or at or near a bond&apos;s maturity or call date -
+            to manage liquidity and transaction costs.
+          </Text>
+        ) : null}
+
+        {advice.retainedHoldings.length > 0 ? (
+          <View wrap>
+            <Text style={s.h2}>Holdings retained outside the model</Text>
+            <Text style={s.p}>
+              These investments sit outside the house model and are recommended to be retained for the reasons noted.
+            </Text>
+            <View style={s.table}>
+              <View style={s.tr}>
+                <Text style={[s.th, { width: '12%' }]}>CODE</Text>
+                <Text style={[s.th, { width: '30%' }]}>SECURITY</Text>
+                <Text style={[s.th, { width: '15%', textAlign: 'right' }]}>VALUE</Text>
+                <Text style={[s.th, { width: '43%' }]}>REASON</Text>
+              </View>
+              {advice.retainedHoldings.map((h) => (
+                <View style={s.tr} key={h.code} wrap={false}>
+                  <Text style={[s.td, { width: '12%', fontFamily: 'Helvetica-Bold' }]}>{h.code}</Text>
+                  <Text style={[s.td, { width: '30%' }]}>{h.name}</Text>
+                  <Text style={[s.td, { width: '15%', textAlign: 'right' }]}>
+                    {h.currentValue !== null ? fmt(h.currentValue) : `${h.currentWeight}%`}
+                  </Text>
+                  <Text style={[s.td, { width: '43%' }, s.muted]}>{h.reason ?? '-'}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
 
         <Text style={s.h2}>Basis of this proposal</Text>
         <Text style={[s.p, s.muted]}>

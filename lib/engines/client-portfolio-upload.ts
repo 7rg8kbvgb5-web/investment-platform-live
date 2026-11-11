@@ -9,6 +9,12 @@ export type UploadedHolding = {
     /** Acquisition date (YYYY-MM-DD), if the statement shows it - used for the 12-month CGT test. */
     acquiredDate?: string
     sourceRow: number
+    /** Adviser classification for a holding the platform couldn't recognise (Construction triage). */
+    assetClass?: string
+    /** How a holding outside the model is treated in the proposal - see holding-triage.ts. Unset = default. */
+    treatment?: 'sell' | 'staged_exit' | 'retain'
+    /** Adviser's reason for the treatment (required in practice for 'retain'); shown in the proposal. */
+    treatmentReason?: string
   }
   
   export type ParsedPortfolioUpload = {

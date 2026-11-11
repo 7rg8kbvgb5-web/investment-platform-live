@@ -1,4 +1,6 @@
 'use client'
+import { HoldingTriagePanel } from './HoldingTriagePanel'
+import type { HoldingTreatment } from '../lib/engines/holding-triage'
 import { uploadToPrivateStorage } from '../lib/storage-upload'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -674,15 +676,40 @@ export default function ClientPortfolioUploadPanel() {
   // Cost bases read from the statement / CSV, shown against current holdings
   // and carried into the Capital Gains / Losses tab automatically.
   const costBaseByCode = useMemo(() => {
+    // Keyed by the code the platform uses (which can differ from the
+    // statement's - e.g. a bond listed by ISIN, matched to the model).
     const map = new Map<string, number>()
-    for (const h of holdings) {
+    for (const h of mappingResult.mappedHoldings) {
       if (typeof h.costBase === 'number') {
         const code = normaliseCode(h.code)
         map.set(code, (map.get(code) ?? 0) + h.costBase)
       }
     }
     return map
-  }, [holdings])
+  }, [mappingResult.mappedHoldings])
+
+  /** Adviser classification of holdings the platform couldn't recognise (saved on the review's holdings). */
+  function classifyHoldings(changes: { code: string; assetClass: string }[]) {
+    const byCode = new Map(changes.map((c) => [normaliseCode(c.code), c.assetClass]))
+    setHoldings((prev) =>
+      prev.map((h) => {
+        const assetClass = byCode.get(normaliseCode(h.code))
+        return assetClass ? { ...h, assetClass } : h
+      }),
+    )
+  }
+
+  /** Sell now / staged exit / retain for a holding outside the model, with the adviser's reason. */
+  function setHoldingTreatment(code: string, treatment: HoldingTreatment, reason: string) {
+    const target = normaliseCode(code)
+    setHoldings((prev) =>
+      prev.map((h) =>
+        normaliseCode(h.code) === target
+          ? { ...h, treatment, treatmentReason: reason.trim() ? reason.trim() : undefined }
+          : h,
+      ),
+    )
+  }
 
   const pricesConnected = Object.values(prices).some((p) => p !== null && p !== undefined)
 
@@ -983,6 +1010,21 @@ export default function ClientPortfolioUploadPanel() {
               value={`${mappingResult.growthWeight}% / ${mappingResult.defensiveWeight}%`}
             />
           </div>
+
+          {comparison.unclassifiedHoldings.length > 0 ? (
+            <div style={coverageBannerWarn}>
+              <strong>
+                {round2Local(comparison.unclassifiedHoldings.reduce((sum, h) => sum + h.weight, 0))}% of this portfolio (
+                {comparison.unclassifiedHoldings.length} holdings) isn&apos;t in the proposal yet.
+              </strong>{' '}
+              The platform couldn&apos;t recognise these holdings, so the allocation and trades below exclude them.{' '}
+              <a href="#holding-triage" style={coverageLink}>
+                Classify them →
+              </a>
+            </div>
+          ) : (
+            <div style={coverageBannerOk}>✓ 100% of the portfolio is classified and included in the proposal.</div>
+          )}
 
           {/* Portfolio value + pricing status - drives dollar/unit trade sizing below */}
           <div style={subPanel}>
@@ -1459,6 +1501,11 @@ export default function ClientPortfolioUploadPanel() {
                                 <span style={holdingCardCode}>{rec.code}</span>
                                 <span style={holdingCardName}>{rec.name}</span>
                                 <span style={holdingCardBadge}>
+                                  {rec.treatment === 'staged_exit' || rec.treatment === 'retain' ? (
+                                    <span style={treatmentTag}>
+                                      {rec.treatment === 'staged_exit' ? 'STAGED EXIT' : 'RETAINED'}
+                                    </span>
+                                  ) : null}
                                   <ActionBadge action={rec.action} />
                                 </span>
                               </div>
@@ -1574,40 +1621,13 @@ export default function ClientPortfolioUploadPanel() {
             </div>
           </div>
 
-          {/* Unmapped holdings */}
-          {comparison.unclassifiedHoldings.length > 0 ? (
-            <div style={subPanel}>
-              <p style={subHeading}>
-                Needs Manual Review ({comparison.unclassifiedHoldings.length})
-              </p>
-              <p style={bodyText}>
-                These holdings aren't in the security master or any model
-                portfolio, so they can't be classified or compared
-                automatically. Check them manually before relying on the
-                growth/defensive split above.
-              </p>
-              <div style={tableWrap}>
-                <table style={table}>
-                  <thead>
-                    <tr>
-                      <th style={th}>Code</th>
-                      <th style={th}>Name</th>
-                      <th style={th}>Weight</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {comparison.unclassifiedHoldings.map((holding) => (
-                      <tr key={holding.code}>
-                        <td style={td}>{holding.code}</td>
-                        <td style={td}>{holding.name ?? '—'}</td>
-                        <td style={td}>{holding.weight}%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ) : null}
+          {/* Every holding into the proposal: classify, then sell / staged exit / retain */}
+          <HoldingTriagePanel
+            unclassified={comparison.unclassifiedHoldings}
+            outsideModel={comparison.holdingRecommendations.filter((r) => r.treatment !== undefined)}
+            onClassify={classifyHoldings}
+            onTreatment={setHoldingTreatment}
+          />
         </>
       ) : null}
     </section>
@@ -2375,4 +2395,45 @@ const resultingColumnTitle = {
   color: '#93c5fd',
   textTransform: 'uppercase' as const,
   letterSpacing: '0.03em',
+}
+
+function round2Local(value: number): number {
+  return Math.round(value * 100) / 100
+}
+
+const coverageBannerWarn = {
+  marginTop: '16px',
+  padding: '12px 16px',
+  borderRadius: '10px',
+  background: '#3f2b12',
+  border: '1px solid #a16207',
+  color: '#fde68a',
+  fontSize: '13px',
+  lineHeight: 1.5,
+}
+
+const coverageBannerOk = {
+  marginTop: '16px',
+  padding: '10px 16px',
+  borderRadius: '10px',
+  background: '#0f3d2e',
+  border: '1px solid #166534',
+  color: '#4ade80',
+  fontSize: '13px',
+}
+
+const coverageLink = {
+  color: '#fbbf24',
+  fontWeight: 700,
+}
+
+const treatmentTag = {
+  marginRight: '6px',
+  padding: '2px 8px',
+  borderRadius: '999px',
+  border: '1px solid #a16207',
+  color: '#fbbf24',
+  fontSize: '10px',
+  fontWeight: 700,
+  letterSpacing: '0.04em',
 }

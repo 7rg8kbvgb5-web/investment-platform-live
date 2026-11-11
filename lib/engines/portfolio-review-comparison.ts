@@ -2,6 +2,7 @@ import { sortSecurities } from './security-order'
 import type { ModelPortfolio } from './model-portfolios'
 import type { MappedHolding } from './client-holdings-mapping'
 import { normaliseCode } from './security-universe'
+import { defaultTreatment, type HoldingTreatment } from './holding-triage'
 
 export type AssetClassComparisonRow = {
   assetClass: string
@@ -49,6 +50,13 @@ export type HoldingRecommendation = {
   rationale: string
   /** True when the adviser has adjusted this trade away from the model-derived size. */
   adjusted: boolean
+  /** Holdings outside the model only: how they're treated (sell now / staged exit / retain). */
+  treatment?: HoldingTreatment
+  /** True when the treatment is the platform default rather than an adviser choice. */
+  treatmentIsDefault?: boolean
+  treatmentReason?: string
+  /** Code as printed on the client's statement, where it differs from the model code (e.g. a bond ISIN). */
+  statementCode?: string
 }
 
 export type PortfolioReviewComparison = {
@@ -189,6 +197,30 @@ export function compareClientPortfolioToModel(
     }
   }
 
+  const statementCodeFor = new Map<string, string>()
+  for (const holding of mappedHoldings) {
+    if (holding.mapped && holding.statementCode) statementCodeFor.set(normaliseCode(holding.code), holding.statementCode)
+  }
+
+  // Holdings retained outside the model take their share of the portfolio
+  // off the top; the model is applied to what's left, so retaining a
+  // holding doesn't push the resulting portfolio over 100%.
+  const modelCodeSet = new Set(model.assetClasses.flatMap((ac) => ac.holdings.map((h) => normaliseCode(h.code))))
+  let retainedValue = 0
+  let retainedWeight = 0
+  for (const holding of mappedHoldings) {
+    if (!holding.mapped || modelCodeSet.has(normaliseCode(holding.code))) continue
+    if (tradeOverrides[normaliseCode(holding.code)]) continue
+    const treatment = holding.treatment ?? defaultTreatment(holding.code, holding.name, holding.assetClass)
+    if (treatment !== 'retain') continue
+    retainedWeight += holding.weight
+    retainedValue += holding.value ?? currentValueFromWeight(holding.weight) ?? 0
+  }
+  const retainedShare = totalPortfolioValue && retainedValue > 0
+    ? Math.min(1, retainedValue / totalPortfolioValue)
+    : Math.min(1, retainedWeight / 100)
+  const modelScale = 1 - retainedShare
+
   const modelHoldingCodes = new Set<string>()
   const holdingRecommendations: HoldingRecommendation[] = []
 
@@ -212,7 +244,7 @@ export function compareClientPortfolioToModel(
       // holdings are re-based when new cash is in play.
       const currentWeightAfter =
         currentValue !== null && totalPortfolioValue ? round2((currentValue / totalPortfolioValue) * 100) : currentWeight
-      const targetWeight = adj ? adj.targetWeight : round2(modelHolding.weight)
+      const targetWeight = adj ? adj.targetWeight : round2(modelHolding.weight * modelScale)
       const changeWeight = round2(targetWeight - (adj ? currentWeightAfter : currentWeight))
       const targetValue = adj ? adj.targetValue : valueFromWeight(targetWeight)
       const changeValue = adj
@@ -266,6 +298,7 @@ export function compareClientPortfolioToModel(
         action,
         rationale,
         adjusted: !!adj,
+        statementCode: statementCodeFor.get(normalisedModelCode),
       })
     }
   }
@@ -295,11 +328,49 @@ export function compareClientPortfolioToModel(
       : actualQuantity !== undefined
         ? -actualQuantity
         : unitsFor(changeValue, holding.code)
+    const treatment = holding.treatment ?? defaultTreatment(holding.code, holding.name, holding.assetClass)
+    const reason = holding.treatmentReason?.trim() || undefined
+    const name = holding.name ?? holding.code
+
+    if (treatment === 'retain' && !adj) {
+      // Kept as-is: no trade, and it stays in the resulting portfolio.
+      const currentWeightAfter =
+        currentValue !== null && totalPortfolioValue ? round2((currentValue / totalPortfolioValue) * 100) : holding.weight
+      holdingRecommendations.push({
+        code: holding.code,
+        name,
+        assetClass: holding.assetClass,
+        currentWeight: holding.weight,
+        targetWeight: currentWeightAfter,
+        changeWeight: 0,
+        currentValue,
+        targetValue: currentValue,
+        changeValue: 0,
+        price,
+        units: 0,
+        action: 'hold',
+        rationale: reason
+          ? `Retained outside the model as a documented adviser exception: ${reason}`
+          : 'Retained outside the model as an adviser exception - add the reason so it is documented in the proposal.',
+        adjusted: false,
+        treatment,
+        treatmentIsDefault: !holding.treatment,
+        treatmentReason: reason,
+        statementCode: holding.statementCode,
+      })
+      continue
+    }
+
     const keptValue = adj ? adj.targetValue : 0
+    const baseRationale = adj
+      ? 'Not part of the selected model portfolio — sale adjusted by adviser (partial sale or retained as a documented exception).'
+      : treatment === 'staged_exit'
+        ? 'Not part of the selected model portfolio — exit recommended in stages rather than one trade, to manage liquidity (redemption windows, dealer spreads) and timing.'
+        : 'Not part of the selected model portfolio — does not meet the risk-adjusted return bar for this client. Full exit recommended.'
 
     holdingRecommendations.push({
       code: holding.code,
-      name: holding.name ?? holding.code,
+      name,
       assetClass: holding.assetClass,
       currentWeight: holding.weight,
       targetWeight: adj ? adj.targetWeight : 0,
@@ -310,10 +381,12 @@ export function compareClientPortfolioToModel(
       price,
       units,
       action: adj ? (adj.changeValue === 0 ? 'hold' : keptValue > 0 ? 'reduce' : 'sell') : 'sell',
-      rationale: adj
-        ? 'Not part of the selected model portfolio — sale adjusted by adviser (partial sale or retained as a documented exception).'
-        : 'Not part of the selected model portfolio — does not meet the risk-adjusted return bar for this client. Full exit recommended, or retain as a documented adviser exception.',
+      rationale: reason ? `${baseRationale} ${reason}` : baseRationale,
       adjusted: !!adj,
+      treatment,
+      treatmentIsDefault: !holding.treatment,
+      treatmentReason: reason,
+      statementCode: holding.statementCode,
     })
   }
 

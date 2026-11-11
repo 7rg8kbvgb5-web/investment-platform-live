@@ -164,7 +164,22 @@ export default function ClientAdvicePanel() {
         {review ? <span style={statusPill}>{STATUS_LABEL[review.status]}</span> : null}
         {advice ? (
           <div style={actions}>
-            <form method="POST" action="/api/proposals/pdf" target="_blank" style={pdfForm}>
+            <form
+              method="POST"
+              action="/api/proposals/pdf"
+              target="_blank"
+              style={pdfForm}
+              onSubmit={(e) => {
+                if (
+                  advice.unmappedHoldings.length > 0 &&
+                  !window.confirm(
+                    `${advice.unclassifiedWeightPct}% of this portfolio (${advice.unmappedHoldings.length} holdings) is still unclassified and won't appear in the proposal. Generate it anyway?`,
+                  )
+                ) {
+                  e.preventDefault()
+                }
+              }}
+            >
               <input type="hidden" name="review" value={review?.id ?? ''} />
               <input type="hidden" name="approach" value={approach ?? ''} />
               <input
@@ -359,7 +374,12 @@ export default function ClientAdvicePanel() {
                           <span style={{ ...pill, background: st.bg, color: st.fg }}>{t.action.toUpperCase()}</span>
                         </td>
                         <td style={codeStyle}>{t.code}</td>
-                        <td>{t.name}</td>
+                        <td>
+                          {t.name}
+                          {t.treatment === 'staged_exit' ? (
+                            <span style={{ ...muted, marginLeft: 6, fontSize: 11, color: '#fbbf24' }}>staged exit</span>
+                          ) : null}
+                        </td>
                         <td style={muted}>{t.assetClass}</td>
                         <td>{t.value !== null ? fmt(Math.abs(t.value)) : '—'}</td>
                         <td>{t.units !== null ? Math.abs(t.units).toLocaleString() : <span style={muted}>by $</span>}</td>
@@ -374,10 +394,41 @@ export default function ClientAdvicePanel() {
             </div>
           )}
 
+          {advice.retainedHoldings.length > 0 ? (
+            <>
+              <h3 style={sectionTitle}>Retained outside the model</h3>
+              <div className="ui-table-wrap">
+                <table className="ui-table">
+                  <thead>
+                    <tr>
+                      <th>Code</th>
+                      <th>Security</th>
+                      <th>Asset class</th>
+                      <th>Value</th>
+                      <th>Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {advice.retainedHoldings.map((h) => (
+                      <tr key={h.code}>
+                        <td style={codeStyle}>{h.code}</td>
+                        <td>{h.name}</td>
+                        <td style={muted}>{h.assetClass}</td>
+                        <td>{h.currentValue !== null ? fmt(h.currentValue) : `${h.currentWeight}%`}</td>
+                        <td style={h.reason ? undefined : { color: '#f87171' }}>{h.reason ?? 'No reason recorded'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : null}
+
           {advice.unmappedHoldings.length > 0 ? (
-            <p style={muted}>
-              Not assessed (unclassified): {advice.unmappedHoldings.map((h) => h.code).join(', ')}. These are left as
-              they are in the proposal.
+            <p style={{ ...muted, color: '#fbbf24' }}>
+              Not yet in this proposal ({advice.unclassifiedWeightPct}% of the portfolio, unclassified):{' '}
+              {advice.unmappedHoldings.map((h) => h.code).join(', ')}. Classify them on the Construction tab before
+              presenting.
             </p>
           ) : null}
 
