@@ -149,20 +149,35 @@ export default function ClientPortfolioUploadPanel() {
       // Upload to private storage first, then have the server read it by
       // path (it's deleted again once read). Avoids Vercel's ~4.5MB
       // request-size limit on larger or scanned statements.
-      let storagePath: string
+      let storagePath: string | null = null
+      let storageFailure: string | null = null
       try {
         storagePath = await uploadToPrivateStorage(file, 'client-statements')
       } catch (uploadError) {
+        storageFailure = uploadError instanceof Error ? uploadError.message : 'unknown error'
+      }
+
+      // Fallback: statements under ~4MB can go straight to the server, so a
+      // storage problem never blocks a normal-sized statement.
+      const DIRECT_LIMIT_BYTES = 4 * 1024 * 1024
+      if (!storagePath && file.size > DIRECT_LIMIT_BYTES) {
         throw new Error(
-          `Couldn't upload the statement: ${uploadError instanceof Error ? uploadError.message : 'unknown error'}`,
+          `Couldn't upload the statement (storage: ${storageFailure}). This file is ${(file.size / 1024 / 1024).toFixed(1)}MB - too large to send directly.`,
         )
       }
 
-      const response = await fetch('/api/portfolios/parse-pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storagePath }),
-      })
+      let response: Response
+      if (storagePath) {
+        response = await fetch('/api/portfolios/parse-pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ storagePath }),
+        })
+      } else {
+        const form = new FormData()
+        form.append('file', file)
+        response = await fetch('/api/portfolios/parse-pdf', { method: 'POST', body: form })
+      }
 
       const data = await response.json()
 
