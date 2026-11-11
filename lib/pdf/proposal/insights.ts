@@ -25,7 +25,9 @@ export const CAPITAL_MARKET_ASSUMPTIONS: Record<
   { ret: number; vol: number; group: 'growth' | 'alts' | 'defensive' | 'cash'; franking?: number }
 > = {
   'Australian Equities': { ret: 7.0, vol: 16.0, group: 'growth', franking: 1.0 },
-  'International Equities': { ret: 8.0, vol: 15.0, group: 'growth' },
+  // Published 10-year forecasts ~5.6-6.4% (Vanguard, AMP, Monash); 7.0% sits above the middle, reflecting
+  // a quality, actively selected global allocation, while remaining defensible.
+  'International Equities': { ret: 7.0, vol: 15.0, group: 'growth' },
   'Listed Property / Infrastructure': { ret: 7.0, vol: 14.0, group: 'growth' },
   Alternatives: { ret: 6.5, vol: 9.0, group: 'alts' },
   'Australian Fixed Interest': { ret: 4.8, vol: 4.5, group: 'defensive' },
