@@ -4,6 +4,7 @@ import {
   syncProposals,
   createManualProposal,
 } from '../../../../lib/engines/investment-committee-decisions'
+import { selectedModelIdFromCookies } from '../../../../lib/model-context-server'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -20,7 +21,8 @@ export async function GET(request: Request) {
       added = result.added
       warnings = result.warnings
     }
-    const decisions = await listCommitteeDecisions()
+    // Each adviser sees and decides their own model's queue.
+    const decisions = await listCommitteeDecisions(await selectedModelIdFromCookies())
     return Response.json({ ok: true, decisions, added, warnings })
   } catch (error) {
     console.error('Failed to load Investment Committee queue:', error)
@@ -50,6 +52,7 @@ export async function POST(request: Request) {
       proposedName: typeof body?.proposedName === 'string' ? body.proposedName : null,
       reasoning,
       severity: ['critical', 'high', 'medium', 'low'].includes(body?.severity) ? body.severity : 'medium',
+      modelId: await selectedModelIdFromCookies(),
     })
     return Response.json({ ok: true, decision })
   } catch (error) {

@@ -1,4 +1,5 @@
 'use client'
+import { DEFAULT_MODEL_ID, resolveModelId } from '../lib/model-context'
 import { HoldingTriagePanel } from './HoldingTriagePanel'
 import { rememberSecurityClassifications } from '../lib/engines/security-classifications'
 import type { HoldingTreatment } from '../lib/engines/holding-triage'
@@ -74,6 +75,13 @@ const EXAMPLE_HOLDINGS: UploadedHolding[] = [
 ]
 
 export default function ClientPortfolioUploadPanel() {
+  // The adviser model this review is built against: the selected model for
+  // a new review, the review's own model once one is resumed. Everything on
+  // this tab (classification, comparison, version check) follows it.
+  const [reviewModelId, setReviewModelId] = useState<string>(DEFAULT_MODEL_ID)
+  useEffect(() => {
+    setReviewModelId(resolveModelId())
+  }, [])
   const [mode, setMode] = useState<'pdf' | 'csv' | 'new-money'>('pdf')
   const isNewMoney = mode === 'new-money'
   const [csvText, setCsvText] = useState('')
@@ -104,7 +112,7 @@ export default function ClientPortfolioUploadPanel() {
 
   useEffect(() => {
     let cancelled = false
-    fetchAllRiskProfileWeights()
+    fetchAllRiskProfileWeights(reviewModelId)
       .then((w) => {
         if (!cancelled) setAllWeights(w)
       })
@@ -118,7 +126,7 @@ export default function ClientPortfolioUploadPanel() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [reviewModelId])
 
   // Total portfolio value used to size trades in dollars. The upload's own
   // stated total (from a PDF that prints it) takes precedence; otherwise
@@ -229,7 +237,7 @@ export default function ClientPortfolioUploadPanel() {
     }
     let cancelled = false
     setMappingLoading(true)
-    mapClientHoldings(holdings)
+    mapClientHoldings(holdings, reviewModelId)
       .then((result) => {
         if (!cancelled) setMappingResult(result)
       })
@@ -239,7 +247,7 @@ export default function ClientPortfolioUploadPanel() {
     return () => {
       cancelled = true
     }
-  }, [holdings])
+  }, [holdings, reviewModelId])
 
   const growthDefensiveByProfile = useMemo(
     () => (allWeights ? computeGrowthDefensiveByProfile(allWeights) : null),
@@ -281,7 +289,7 @@ export default function ClientPortfolioUploadPanel() {
     let cancelled = false
     setModelLoading(true)
     setModelError(null)
-    fetchModelPortfolio(effectiveRiskProfile)
+    fetchModelPortfolio(effectiveRiskProfile, reviewModelId)
       .then((m) => {
         if (!cancelled) setModel(m)
       })
@@ -298,7 +306,7 @@ export default function ClientPortfolioUploadPanel() {
     return () => {
       cancelled = true
     }
-  }, [effectiveRiskProfile])
+  }, [effectiveRiskProfile, reviewModelId])
 
   // Client-specific bespoke weight overrides for this proposal only - never
   // written back to the house model. Cleared whenever the risk profile
@@ -396,7 +404,7 @@ export default function ClientPortfolioUploadPanel() {
   const [reviewError, setReviewError] = useState<string | null>(null)
   const [showLoadPicker, setShowLoadPicker] = useState(false)
   const [savedReviews, setSavedReviews] = useState<
-    { id: string; clientName: string; updatedAt: string }[]
+    { id: string; clientName: string; updatedAt: string; modelId: string }[]
   >([])
   const [loadingSavedReviews, setLoadingSavedReviews] = useState(false)
   // Which published version of the house model this review was built on,
@@ -405,10 +413,10 @@ export default function ClientPortfolioUploadPanel() {
   const [currentModelVersion, setCurrentModelVersion] = useState<number | null>(null)
   const [reviewModelVersion, setReviewModelVersion] = useState<number | null>(null)
   useEffect(() => {
-    getLatestModelVersion()
+    getLatestModelVersion(reviewModelId)
       .then((v) => setCurrentModelVersion(v?.version ?? null))
       .catch(() => setCurrentModelVersion(null))
-  }, [])
+  }, [reviewModelId])
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isHydrating = useRef(false)
 
@@ -436,7 +444,7 @@ export default function ClientPortfolioUploadPanel() {
           entryMode: isNewMoney ? 'new-money' : 'portfolio',
           modelVersion: currentModelVersion,
           ...(tradeOverridesTouched.current ? { tradeOverrides } : {}),
-        })
+        }, reviewModelId)
         setReviewModelVersion(currentModelVersion)
         setReviewId((prev) => prev ?? savedId)
         setReviewStatus('saved')
@@ -459,8 +467,10 @@ export default function ClientPortfolioUploadPanel() {
     setShowLoadPicker(true)
     setLoadingSavedReviews(true)
     try {
+      // Your own model's clients first; other advisers' clients after.
+      const selected = resolveModelId()
       const reviews = await listClientReviews()
-      setSavedReviews(reviews)
+      setSavedReviews([...reviews.filter((r) => r.modelId === selected), ...reviews.filter((r) => r.modelId !== selected)])
     } catch (err) {
       setReviewError(err instanceof Error ? err.message : 'Failed to load saved reviews.')
     } finally {
@@ -474,6 +484,7 @@ export default function ClientPortfolioUploadPanel() {
       isHydrating.current = true
       setClientReviewName(review.clientName)
       setReviewId(review.id)
+      setReviewModelId(review.modelId)
       setHoldings(review.state.holdings)
       setMeta(review.state.meta)
       setRiskOverride(review.state.riskOverride)
@@ -518,6 +529,7 @@ export default function ClientPortfolioUploadPanel() {
     isHydrating.current = true
     setClientReviewName('')
     setReviewId(null)
+    setReviewModelId(resolveModelId())
     setReviewStatus('idle')
     setHoldings([])
     setCsvText('')
@@ -812,7 +824,12 @@ export default function ClientPortfolioUploadPanel() {
             <ul style={loadPickerList}>
               {savedReviews.map((r) => (
                 <li key={r.id} style={loadPickerRow} onClick={() => loadReview(r.id)}>
-                  <span style={loadPickerName}>{r.clientName}</span>
+                  <span style={loadPickerName}>
+                    {r.clientName}
+                    {r.modelId !== resolveModelId() ? (
+                      <span style={{ marginLeft: '8px', fontSize: '11px', color: '#fbbf24' }}>other adviser&apos;s model</span>
+                    ) : null}
+                  </span>
                   <span style={loadPickerDate}>
                     {new Date(r.updatedAt).toLocaleString('en-AU', {
                       day: 'numeric',

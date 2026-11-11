@@ -29,8 +29,9 @@ export function isQuotableCode(code: string): boolean {
   return /^[A-Z]{2,5}$/.test(code);
 }
 
-export async function dedupeHoldings(): Promise<ModelHolding[]> {
-  const securities = await fetchCoreSecurities();
+/** One adviser model's holdings, one entry per code (the selected model unless one is passed). */
+export async function dedupeHoldings(modelId?: string | null): Promise<ModelHolding[]> {
+  const securities = await fetchCoreSecurities(modelId);
   const seen = new Map<string, ModelHolding>();
   for (const security of securities) {
     if (!seen.has(security.code)) {
@@ -89,8 +90,8 @@ export async function getQuotesForCodes(
   return result;
 }
 
-export async function getModelPortfolioMarketData(): Promise<HoldingMarketData[]> {
-  const holdings = await dedupeHoldings();
+export async function getModelPortfolioMarketData(modelId?: string | null): Promise<HoldingMarketData[]> {
+  const holdings = await dedupeHoldings(modelId);
 
   if (!isEodhdConfigured()) {
     return holdings.map((holding) => ({

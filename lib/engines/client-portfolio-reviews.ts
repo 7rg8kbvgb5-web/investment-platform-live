@@ -1,3 +1,4 @@
+import { DEFAULT_MODEL_ID, isMissingModelColumn } from '../model-context'
 import { supabase } from '../supabase'
 import type { UploadedHolding } from './client-portfolio-upload'
 import type { RiskProfile } from './model-portfolios'
@@ -82,6 +83,8 @@ export type ClientPortfolioReview = {
   implementedAt: string | null
   cgtSettings: CgtSettings | null
   objectives: ClientObjectives | null
+  /** The adviser model this review is built against (migration 0028). */
+  modelId: string
 }
 
 type ReviewRow = {
@@ -104,6 +107,7 @@ type ReviewRow = {
   implemented_at?: string | null
   cgt_settings?: CgtSettings | null
   objectives?: ClientObjectives | null
+  model_id?: string | null
   updated_at: string
 }
 
@@ -131,21 +135,22 @@ function mapRow(row: ReviewRow): ClientPortfolioReview {
     implementedAt: row.implemented_at ?? null,
     cgtSettings: row.cgt_settings ?? null,
     objectives: row.objectives ?? null,
+    modelId: row.model_id ?? DEFAULT_MODEL_ID,
   }
 }
 
 /** Every saved review, most recently updated first - for a "resume a client" picker. */
-export async function listClientReviews(): Promise<{ id: string; clientName: string; updatedAt: string }[]> {
-  const { data, error } = await supabase
-    .from(TABLE)
-    .select('id, client_name, updated_at')
-    .order('updated_at', { ascending: false })
+export async function listClientReviews(): Promise<{ id: string; clientName: string; updatedAt: string; modelId: string }[]> {
+  const query = (cols: string) => supabase.from(TABLE).select(cols).order('updated_at', { ascending: false })
+  let { data, error } = await query('id, client_name, updated_at, model_id')
+  if (isMissingModelColumn(error)) ({ data, error } = await query('id, client_name, updated_at'))
 
   if (error) throw new Error(`Failed to load saved client reviews: ${error.message}`)
-  return (data ?? []).map((row) => ({
+  return ((data ?? []) as unknown as { id: string; client_name: string; updated_at: string; model_id?: string | null }[]).map((row) => ({
     id: row.id,
     clientName: row.client_name,
     updatedAt: row.updated_at,
+    modelId: row.model_id ?? DEFAULT_MODEL_ID,
   }))
 }
 
@@ -197,6 +202,7 @@ export async function saveClientReview(
   id: string | null,
   clientName: string,
   state: ClientPortfolioReviewState,
+  modelId?: string | null,
 ): Promise<string> {
   const payload: Record<string, unknown> = {
     client_name: clientName,
@@ -215,13 +221,24 @@ export async function saveClientReview(
   if (typeof state.modelVersion === 'number') payload.model_version = state.modelVersion
   if (state.tradeOverrides !== undefined) payload.trade_overrides = state.tradeOverrides
 
+  // Which adviser model the review is built against; a review keeps the model it was started on.
+  if (modelId) payload.model_id = modelId
+
   if (id) {
-    const { error } = await supabase.from(TABLE).update(payload).eq('id', id)
+    let { error } = await supabase.from(TABLE).update(payload).eq('id', id)
+    if (isMissingModelColumn(error)) {
+      delete payload.model_id
+      ;({ error } = await supabase.from(TABLE).update(payload).eq('id', id))
+    }
     if (error) throw new Error(`Failed to save client review: ${error.message}`)
     return id
   }
 
-  const { data, error } = await supabase.from(TABLE).insert(payload).select('id').single()
+  let { data, error } = await supabase.from(TABLE).insert(payload).select('id').single()
+  if (isMissingModelColumn(error)) {
+    delete payload.model_id
+    ;({ data, error } = await supabase.from(TABLE).insert(payload).select('id').single())
+  }
   if (error) throw new Error(`Failed to save client review: ${error.message}`)
   return (data as { id: string }).id
 }

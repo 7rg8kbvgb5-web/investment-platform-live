@@ -1,3 +1,4 @@
+import { selectedModelIdFromCookies } from '../../lib/model-context-server';
 import Link from 'next/link';
 import { getDashboardSummary } from '../../lib/engines/dashboard-summary';
 import { DashboardPriorityBanner } from './DashboardPriorityBanner';
@@ -60,7 +61,7 @@ const ICONS = {
 };
 
 export default async function DashboardSummaryGrid() {
-  const summary = await getDashboardSummary();
+  const summary = await getDashboardSummary(await selectedModelIdFromCookies());
 
   return (
     <>

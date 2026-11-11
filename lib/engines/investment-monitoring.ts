@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { supabase } from '../supabase'
-import { fetchCoreSecurities, ASSET_CLASSES } from './model-portfolio-core'
+import { fetchAllModelSecurities, ASSET_CLASSES } from './model-portfolio-core'
 
 const TABLE = 'investment_monitoring_alerts'
 
@@ -137,7 +137,7 @@ export async function runInvestmentMonitoringScan(): Promise<MonitoringAlert[]> 
     throw new Error('ANTHROPIC_API_KEY is not configured.')
   }
 
-  const securities = await fetchCoreSecurities()
+  const securities = await fetchAllModelSecurities()
   if (securities.length === 0) {
     throw new Error('The model portfolio has no securities yet - add some on the Model Portfolio tab first.')
   }

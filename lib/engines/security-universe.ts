@@ -37,10 +37,10 @@ export type SecurityUniverseEntry = {
  * security master or the live model portfolio will come back unmapped,
  * and the UI should say so plainly rather than guess.
  */
-export async function buildSecurityUniverse(): Promise<Map<string, SecurityUniverseEntry>> {
+export async function buildSecurityUniverse(modelId?: string | null): Promise<Map<string, SecurityUniverseEntry>> {
   const universe = new Map<string, SecurityUniverseEntry>();
 
-  const modelSecurities = await fetchCoreSecurities();
+  const modelSecurities = await fetchCoreSecurities(modelId);
   for (const security of modelSecurities) {
     const code = normaliseCode(security.code);
     if (universe.has(code)) continue;

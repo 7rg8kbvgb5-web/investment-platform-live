@@ -1,3 +1,4 @@
+import { selectedModelIdFromCookies } from '../../../../lib/model-context-server'
 import { describeAiError } from '../../../../lib/ai-errors'
 import { getClientImpact } from '../../../../lib/engines/client-impact'
 
@@ -8,7 +9,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json()
     const codes = Array.isArray(body?.codes) ? body.codes.filter((c: unknown) => typeof c === 'string') : []
-    const impact = await getClientImpact(codes)
+    const impact = await getClientImpact(codes, await selectedModelIdFromCookies())
     return Response.json({ ok: true, impact })
   } catch (error) {
     console.error('Failed to compute client impact:', error)

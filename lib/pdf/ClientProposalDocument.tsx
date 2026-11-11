@@ -652,8 +652,8 @@ export function ClientProposalDocument({
           <Chrome client={client} />
           <SectionTitle n={next()} eyebrow="Your recommended portfolio" title="The portfolio once implemented" />
           <Text style={s.p}>
-            Each holding is drawn from the Ord Minnett Approved List and selected through our research process, which
-            includes Ord Minnett and Barrenjoey research. Income estimates use forward-looking yields where available.
+            Each holding is selected through our research process, which draws on Ord Minnett and Barrenjoey research
+            and is overseen by our Investment Committee. Income estimates use forward-looking yields where available.
           </Text>
           <View style={s.table}>
             <View style={s.tr} fixed>

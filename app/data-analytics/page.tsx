@@ -1,3 +1,4 @@
+import { selectedModelIdFromCookies } from '../../lib/model-context-server';
 import PageContent from '../../components/PageContent';
 import MarketDataTable from '../../components/MarketDataTable';
 import SectorHealthScorePanel from '../../components/SectorHealthScorePanel';
@@ -10,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function DataAnalyticsPage() {
   const connected = isEodhdConfigured();
-  const holdings = await getModelPortfolioMarketData();
+  const holdings = await getModelPortfolioMarketData(await selectedModelIdFromCookies());
 
   return (
     <PageContent

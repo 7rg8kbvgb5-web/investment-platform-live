@@ -1,4 +1,5 @@
 import { supabase } from '../supabase'
+import { DEFAULT_MODEL_ID, isMissingModelColumn, resolveModelId } from '../model-context'
 import { fetchCoreSecurities, RISK_PROFILES } from './model-portfolio-core'
 import { normaliseCode } from './codes'
 import { ensureApproved } from './approved-list'
@@ -37,6 +38,8 @@ export const DEFAULT_TACTICAL_TILT_PP = 2
 
 export type CommitteeDecision = {
   id: string
+  /** The adviser model this decision belongs to - each adviser approves their own (migration 0028). */
+  modelId: string
   proposalType: ProposalType
   source: DecisionSource
   sourceAlertId: string | null
@@ -66,6 +69,7 @@ export type CommitteeDecision = {
 
 type DecisionRow = {
   id: string
+  model_id?: string | null
   proposal_type: ProposalType | null
   source: DecisionSource
   source_alert_id: string | null
@@ -93,6 +97,7 @@ type DecisionRow = {
 function mapRow(row: DecisionRow): CommitteeDecision {
   return {
     id: row.id,
+    modelId: row.model_id ?? DEFAULT_MODEL_ID,
     proposalType: row.proposal_type ?? 'swap',
     source: row.source,
     sourceAlertId: row.source_alert_id,
@@ -118,19 +123,20 @@ function mapRow(row: DecisionRow): CommitteeDecision {
   }
 }
 
-export async function listCommitteeDecisions(): Promise<CommitteeDecision[]> {
-  const { data, error } = await supabase.from(TABLE).select('*').order('created_at', { ascending: false })
+/** One adviser model's queue (the selected model unless one is passed). */
+export async function listCommitteeDecisions(modelId?: string | null): Promise<CommitteeDecision[]> {
+  const query = () => supabase.from(TABLE).select('*').order('created_at', { ascending: false })
+  let { data, error } = await query().eq('model_id', resolveModelId(modelId))
+  if (isMissingModelColumn(error)) ({ data, error } = await query())
   if (error) throw new Error(`Failed to load Investment Committee queue: ${error.message}`)
   return (data ?? []).map((row) => mapRow(row as DecisionRow))
 }
 
 /** Approved swaps - used to flag affected holdings in a client's Construction review. */
-export async function listApprovedSwaps(): Promise<CommitteeDecision[]> {
-  const { data, error } = await supabase
-    .from(TABLE)
-    .select('*')
-    .eq('status', 'approved')
-    .order('decided_at', { ascending: false })
+export async function listApprovedSwaps(modelId?: string | null, options: { allModels?: boolean } = {}): Promise<CommitteeDecision[]> {
+  const query = () => supabase.from(TABLE).select('*').eq('status', 'approved').order('decided_at', { ascending: false })
+  let { data, error } = options.allModels ? await query() : await query().eq('model_id', resolveModelId(modelId))
+  if (isMissingModelColumn(error)) ({ data, error } = await query())
   if (error) throw new Error(`Failed to load approved swaps: ${error.message}`)
   return (data ?? [])
     .map((row) => mapRow(row as DecisionRow))
@@ -181,6 +187,25 @@ export type SyncResult = { added: number; bySource: Partial<Record<DecisionSourc
  * research sources per model holding).
  */
 export async function syncProposals(options: { includeConviction?: boolean } = {}): Promise<SyncResult> {
+  // Every adviser model gets its own queue: scan findings are raised in each
+  // model that holds the affected security.
+  const { data: models, error: modelsError } = await supabase.from('portfolio_models').select('id')
+  const modelIds = modelsError || !models || models.length === 0 ? [DEFAULT_MODEL_ID] : models.map((m: { id: string }) => m.id)
+  const total: SyncResult = { added: 0, bySource: {}, warnings: [] }
+  for (const modelId of modelIds) {
+    const r = await syncProposalsForModel(modelId, options, !modelsError)
+    total.added += r.added
+    for (const [k, v] of Object.entries(r.bySource)) total.bySource[k as DecisionSource] = (total.bySource[k as DecisionSource] ?? 0) + (v ?? 0)
+    for (const w of r.warnings) if (!total.warnings.includes(w)) total.warnings.push(w)
+  }
+  return total
+}
+
+async function syncProposalsForModel(
+  modelId: string,
+  options: { includeConviction?: boolean },
+  modelAware: boolean,
+): Promise<SyncResult> {
   const includeConviction = options.includeConviction ?? true
   const warnings: string[] = []
 
@@ -199,8 +224,8 @@ export async function syncProposals(options: { includeConviction?: boolean } = {
       .eq('category', 'alternative')
       .neq('status', 'dismissed')
       .not('suggested_alternative_code', 'is', null),
-    supabase.from(TABLE).select('*'),
-    fetchCoreSecurities(),
+    modelAware ? supabase.from(TABLE).select('*').eq('model_id', modelId) : supabase.from(TABLE).select('*'),
+    fetchCoreSecurities(modelId),
   ])
 
   if (existingRes.error) throw new Error(`Failed to read Investment Committee queue: ${existingRes.error.message}`)
@@ -217,6 +242,7 @@ export async function syncProposals(options: { includeConviction?: boolean } = {
   const inserts: Insert[] = []
 
   function consider(entry: Insert) {
+    if (modelAware) entry.model_id = modelId
     if (entry.source_alert_id && queuedAlertIds.has(entry.source_alert_id)) return
     if (entry.source_key && queuedKeys.has(entry.source_key)) return
     const subject = subjectKeyFromInsert(entry)
@@ -231,6 +257,7 @@ export async function syncProposals(options: { includeConviction?: boolean } = {
     const currentCode = alert.affected_codes?.[0]
     if (!currentCode || !alert.suggested_alternative_code) continue
     const held = securityByCode.get(normaliseCode(currentCode))
+    if (!held) continue // not in this adviser's model
     consider({
       proposal_type: 'swap',
       source: 'monitoring',
@@ -250,6 +277,7 @@ export async function syncProposals(options: { includeConviction?: boolean } = {
   for (const alert of (fundRes.data ?? []) as FundAltRow[]) {
     if (!alert.suggested_alternative_code) continue
     const held = securityByCode.get(normaliseCode(alert.fund_code))
+    if (!held) continue // not in this adviser's model
     consider({
       proposal_type: 'swap',
       source: 'fund_review',
@@ -414,8 +442,10 @@ export async function createManualProposal(input: {
   proposedName?: string | null
   reasoning: string
   severity?: DecisionSeverity
+  modelId?: string | null
 }): Promise<CommitteeDecision> {
-  const securities = await fetchCoreSecurities()
+  const model = resolveModelId(input.modelId)
+  const securities = await fetchCoreSecurities(model)
   const held = securities.find((s) => normaliseCode(s.code) === normaliseCode(input.currentCode))
   if (!held) {
     throw new Error(`${input.currentCode.toUpperCase()} isn't in the model portfolio, so there's nothing to swap out.`)
@@ -424,6 +454,7 @@ export async function createManualProposal(input: {
   const { data, error } = await supabase
     .from(TABLE)
     .insert({
+      model_id: model,
       source: 'manual',
       asset_class: held.assetClass,
       current_code: held.code,
@@ -515,7 +546,7 @@ async function applySwap(decision: CommitteeDecision): Promise<void> {
   if (!decision.currentCode || !decision.proposedCode) throw new Error('This swap is missing a security code.')
   const proposedCode = decision.proposedCode.trim().toUpperCase()
 
-  const securities = await fetchCoreSecurities()
+  const securities = await fetchCoreSecurities(decision.modelId)
   const current = securities.find((s) => normaliseCode(s.code) === normaliseCode(decision.currentCode!))
   if (!current) throw new Error(`${decision.currentCode} is no longer in the model portfolio - nothing to replace.`)
   const existingProposed = securities.find(
@@ -549,6 +580,7 @@ async function applySwap(decision: CommitteeDecision): Promise<void> {
     icDecisionId: decision.id,
   })
   await logModelChange({
+    modelId: decision.modelId,
     changeType: 'security_swapped',
     assetClass: current.assetClass,
     code: proposedCode,
@@ -563,6 +595,7 @@ async function applySwap(decision: CommitteeDecision): Promise<void> {
     icDecisionId: decision.id,
   })
   await publishModelVersion({
+    modelId: decision.modelId,
     summary: `Investment Committee approved replacing ${current.code} with ${proposedCode} in ${current.assetClass}.`,
     publishedBy: decision.decidedBy,
     icDecisionId: decision.id,
@@ -588,6 +621,7 @@ async function applyAllocation(decision: CommitteeDecision): Promise<void> {
   const { data, error } = await supabase
     .from(WEIGHTS_TABLE)
     .select('risk_profile, asset_class, target_weight')
+    .eq('model_id', decision.modelId)
     .in('risk_profile', profiles)
     .in('asset_class', [assetClass, offset])
   if (error) throw new Error(`Failed to read risk profile weights: ${error.message}`)
@@ -608,14 +642,15 @@ async function applyAllocation(decision: CommitteeDecision): Promise<void> {
     const now = new Date().toISOString()
     const { error: upsertError } = await supabase.from(WEIGHTS_TABLE).upsert(
       [
-        { risk_profile: profile, asset_class: assetClass, target_weight: newTarget, updated_at: now },
-        { risk_profile: profile, asset_class: offset, target_weight: newFunding, updated_at: now },
+        { model_id: decision.modelId, risk_profile: profile, asset_class: assetClass, target_weight: newTarget, updated_at: now },
+        { model_id: decision.modelId, risk_profile: profile, asset_class: offset, target_weight: newFunding, updated_at: now },
       ],
-      { onConflict: 'risk_profile,asset_class' },
+      { onConflict: 'model_id,risk_profile,asset_class' },
     )
     if (upsertError) throw new Error(`Failed to update ${profile}: ${upsertError.message}`)
 
     await logModelChange({
+      modelId: decision.modelId,
       changeType: 'asset_class_weight',
       riskProfile: profile,
       assetClass,
@@ -626,6 +661,7 @@ async function applyAllocation(decision: CommitteeDecision): Promise<void> {
       icDecisionId: decision.id,
     })
     await logModelChange({
+      modelId: decision.modelId,
       changeType: 'asset_class_weight',
       riskProfile: profile,
       assetClass: offset,
@@ -641,6 +677,7 @@ async function applyAllocation(decision: CommitteeDecision): Promise<void> {
   if (applied.length === 0) throw new Error(`No room to tilt - ${tilt > 0 ? offset : assetClass} is already at 0% in every profile.`)
 
   await publishModelVersion({
+    modelId: decision.modelId,
     summary: `Investment Committee approved a tactical ${tilt > 0 ? 'overweight' : 'underweight'} in ${assetClass}, funded via ${offset} (${applied.join(', ')}).`,
     publishedBy: decision.decidedBy,
     icDecisionId: decision.id,

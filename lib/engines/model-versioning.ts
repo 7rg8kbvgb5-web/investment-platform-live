@@ -1,4 +1,5 @@
 import { supabase } from '../supabase'
+import { isMissingModelColumn, resolveModelId } from '../model-context'
 
 // The model's memory. Every edit to the house model is logged here with
 // before/after values, who made it and when; published versions snapshot
@@ -65,9 +66,10 @@ export async function logModelChange(entry: {
   after?: unknown
   changedBy?: string | null
   icDecisionId?: string | null
+  modelId?: string | null
 }): Promise<void> {
   const changedBy = entry.changedBy ?? (await currentUserEmail())
-  const { error } = await supabase.from(LOG_TABLE).insert({
+  const row = {
     change_type: entry.changeType,
     description: entry.description,
     risk_profile: entry.riskProfile ?? null,
@@ -77,7 +79,9 @@ export async function logModelChange(entry: {
     after_value: entry.after === undefined ? null : entry.after,
     changed_by: changedBy,
     ic_decision_id: entry.icDecisionId ?? null,
-  })
+  }
+  let { error } = await supabase.from(LOG_TABLE).insert({ ...row, model_id: resolveModelId(entry.modelId) })
+  if (isMissingModelColumn(error)) ({ error } = await supabase.from(LOG_TABLE).insert(row))
   if (error) console.error('Failed to log model change:', error.message)
 }
 
@@ -129,43 +133,45 @@ function mapVersion(row: VersionRow): ModelVersion {
   }
 }
 
-export async function getLatestModelVersion(): Promise<ModelVersion | null> {
-  const { data, error } = await supabase
-    .from(VERSIONS_TABLE)
-    .select('version, summary, published_by, ic_decision_id, published_at')
-    .order('version', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+/** The latest published version of one adviser's model. */
+export async function getLatestModelVersion(modelId?: string | null): Promise<ModelVersion | null> {
+  const query = () =>
+    supabase.from(VERSIONS_TABLE).select('version, summary, published_by, ic_decision_id, published_at').order('version', { ascending: false }).limit(1)
+  let { data, error } = await query().eq('model_id', resolveModelId(modelId)).maybeSingle()
+  if (isMissingModelColumn(error)) ({ data, error } = await query().maybeSingle())
   if (error) throw new Error(`Failed to load model version: ${error.message}`)
   return data ? mapVersion(data as VersionRow) : null
 }
 
-export async function listModelVersions(limit = 20): Promise<ModelVersion[]> {
-  const { data, error } = await supabase
-    .from(VERSIONS_TABLE)
-    .select('version, summary, published_by, ic_decision_id, published_at')
-    .order('version', { ascending: false })
-    .limit(limit)
+export async function listModelVersions(limit = 20, modelId?: string | null): Promise<ModelVersion[]> {
+  const query = () =>
+    supabase.from(VERSIONS_TABLE).select('version, summary, published_by, ic_decision_id, published_at').order('version', { ascending: false }).limit(limit)
+  let { data, error } = await query().eq('model_id', resolveModelId(modelId))
+  if (isMissingModelColumn(error)) ({ data, error } = await query())
   if (error) throw new Error(`Failed to load model versions: ${error.message}`)
   return (data ?? []).map((row) => mapVersion(row as VersionRow))
 }
 
-export async function listModelChanges(limit = 100): Promise<ModelChange[]> {
-  const { data, error } = await supabase
-    .from(LOG_TABLE)
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(limit)
+export async function listModelChanges(limit = 100, modelId?: string | null): Promise<ModelChange[]> {
+  const query = () => supabase.from(LOG_TABLE).select('*').order('created_at', { ascending: false }).limit(limit)
+  let { data, error } = await query().eq('model_id', resolveModelId(modelId))
+  if (isMissingModelColumn(error)) ({ data, error } = await query())
   if (error) throw new Error(`Failed to load model change log: ${error.message}`)
   return (data ?? []).map((row) => mapChange(row as ChangeRow))
 }
 
 /** Changes made since the latest published version - i.e. not yet signed off as a version. */
-export async function listUnpublishedChanges(): Promise<ModelChange[]> {
-  const latest = await getLatestModelVersion()
-  let query = supabase.from(LOG_TABLE).select('*').order('created_at', { ascending: false })
-  if (latest) query = query.gt('created_at', latest.publishedAt)
-  const { data, error } = await query
+export async function listUnpublishedChanges(modelId?: string | null): Promise<ModelChange[]> {
+  const model = resolveModelId(modelId)
+  const latest = await getLatestModelVersion(model)
+  const build = (withModel: boolean) => {
+    let query = supabase.from(LOG_TABLE).select('*').order('created_at', { ascending: false })
+    if (withModel) query = query.eq('model_id', model)
+    if (latest) query = query.gt('created_at', latest.publishedAt)
+    return query
+  }
+  let { data, error } = await build(true)
+  if (isMissingModelColumn(error)) ({ data, error } = await build(false))
   if (error) throw new Error(`Failed to load unpublished changes: ${error.message}`)
   return (data ?? []).map((row) => mapChange(row as ChangeRow))
 }
@@ -175,15 +181,20 @@ export async function publishModelVersion(input: {
   summary: string
   publishedBy?: string | null
   icDecisionId?: string | null
+  modelId?: string | null
 }): Promise<ModelVersion> {
   const summary = input.summary.trim()
   if (!summary) throw new Error('Describe what changed in this version.')
+  const model = resolveModelId(input.modelId)
 
-  const [securitiesRes, weightsRes, latest] = await Promise.all([
-    supabase.from('model_portfolio_securities').select('*').order('asset_class').order('display_order'),
-    supabase.from('risk_profile_asset_class_weights').select('*'),
-    getLatestModelVersion(),
+  // Version numbers are one sequence across every adviser's model, so a
+  // proposal's "version 12" is never ambiguous.
+  const [securitiesRes, weightsRes, latestAny] = await Promise.all([
+    supabase.from('model_portfolio_securities').select('*').eq('model_id', model).order('asset_class').order('display_order'),
+    supabase.from('risk_profile_asset_class_weights').select('*').eq('model_id', model),
+    supabase.from(VERSIONS_TABLE).select('version').order('version', { ascending: false }).limit(1).maybeSingle(),
   ])
+  const latest = latestAny.data as { version: number } | null
   if (securitiesRes.error) throw new Error(`Failed to snapshot securities: ${securitiesRes.error.message}`)
   if (weightsRes.error) throw new Error(`Failed to snapshot weights: ${weightsRes.error.message}`)
 
@@ -191,6 +202,7 @@ export async function publishModelVersion(input: {
   const { data, error } = await supabase
     .from(VERSIONS_TABLE)
     .insert({
+      model_id: model,
       version: (latest?.version ?? 0) + 1,
       summary,
       published_by: publishedBy,

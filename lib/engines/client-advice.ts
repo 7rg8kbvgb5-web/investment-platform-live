@@ -124,8 +124,8 @@ export type AdviceContext = {
   prices?: Record<string, number | null>
   approvedDecisions?: CommitteeDecision[]
   currentModelVersion?: number | null
-  /** Cache shared across many clients (register) so each model is fetched once. */
-  modelCache?: Map<RiskProfile, Promise<ModelPortfolio>>
+  /** Cache shared across many clients (register) so each model is fetched once - keyed "modelId:riskProfile". */
+  modelCache?: Map<string, Promise<ModelPortfolio>>
   growthDefensive?: Promise<ReturnType<typeof computeGrowthDefensiveByProfile>>
 }
 
@@ -142,7 +142,9 @@ export async function buildClientAdvice(
     ? 0
     : state.meta.totalPortfolioValue ?? (parseAmount(state.manualPortfolioValue) || null)
 
-  const mapping = isNewMoney || state.holdings.length === 0 ? null : await mapClientHoldings(state.holdings)
+  // Everything follows the adviser model this review is built against.
+  const modelId = review.modelId
+  const mapping = isNewMoney || state.holdings.length === 0 ? null : await mapClientHoldings(state.holdings, modelId)
   const mapped: MappedHolding[] = mapping?.mappedHoldings ?? []
 
   // Risk profile: the adviser's agreed profile if set, else the nearest by growth/defensive split.
@@ -152,7 +154,7 @@ export async function buildClientAdvice(
     riskProfile = state.riskOverride
   } else if (mapping) {
     const gd = await (context.growthDefensive ??
-      fetchAllRiskProfileWeights().then((w) => computeGrowthDefensiveByProfile(w)))
+      fetchAllRiskProfileWeights(modelId).then((w) => computeGrowthDefensiveByProfile(w)))
     riskProfile = classifyPortfolioRiskProfile(mapping.growthWeight, mapping.defensiveWeight, gd).nearestRiskProfile
     riskProfileSource = 'estimated'
     warnings.push(`No agreed risk profile recorded - compared against ${riskProfile}, the nearest by growth/defensive split. Set the agreed profile on the Construction tab.`)
@@ -163,10 +165,11 @@ export async function buildClientAdvice(
   }
 
   const cache = context.modelCache
-  let modelPromise = cache?.get(riskProfile)
+  const cacheKey = `${modelId}:${riskProfile}`
+  let modelPromise = cache?.get(cacheKey)
   if (!modelPromise) {
-    modelPromise = fetchModelPortfolio(riskProfile)
-    cache?.set(riskProfile, modelPromise)
+    modelPromise = fetchModelPortfolio(riskProfile, modelId)
+    cache?.set(cacheKey, modelPromise)
   }
   const baseModel = await modelPromise
   const model = applyClientWeightOverrides(baseModel, state.assetClassOverrides ?? {}, state.holdingOverrides ?? {})

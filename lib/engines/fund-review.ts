@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { supabase } from '../supabase'
-import { fetchCoreSecurities, type HoldingType } from './model-portfolio-core'
+import { fetchAllModelSecurities, type HoldingType } from './model-portfolio-core'
 
 const TABLE = 'fund_review_alerts'
 
@@ -134,7 +134,7 @@ function mapRow(row: {
 
 /** Every fund currently held in the model portfolio - listed or unlisted only. */
 export async function getFundsHeld(): Promise<FundHeld[]> {
-  const securities = await fetchCoreSecurities()
+  const securities = await fetchAllModelSecurities()
   return securities
     .filter((s) => s.holdingType === 'listed_fund' || s.holdingType === 'unlisted_fund')
     .map((s) => ({

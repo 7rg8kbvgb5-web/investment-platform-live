@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { supabase } from '../supabase'
-import { fetchCoreSecurities } from './model-portfolio-core'
+import { fetchAllModelSecurities } from './model-portfolio-core'
 import { calculateSectorHealthScore, type SectorHealthScore } from './sector-intelligence'
 
 const TABLE = 'sector_health_scores'
@@ -52,7 +52,7 @@ function extractJsonObject(text: string): string {
 
 /** Distinct sectors actually represented among the live model portfolio's holdings. */
 export async function getSectorsHeld(): Promise<string[]> {
-  const securities = await fetchCoreSecurities()
+  const securities = await fetchAllModelSecurities()
   const sectors = new Set<string>()
   for (const s of securities) {
     sectors.add(s.sector ?? s.assetClass)

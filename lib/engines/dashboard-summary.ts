@@ -106,7 +106,7 @@ function settled<T>(result: PromiseSettledResult<T>): T | null {
   return result.status === 'fulfilled' ? result.value : null
 }
 
-export async function getDashboardSummary(): Promise<DashboardSummary> {
+export async function getDashboardSummary(modelId?: string | null): Promise<DashboardSummary> {
   const [
     securitiesResult,
     tacticalResult,
@@ -122,9 +122,9 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     balancedModelResult,
     decisionsResult,
   ] = await Promise.allSettled([
-    fetchCoreSecurities(),
+    fetchCoreSecurities(modelId),
     getLatestTacticalAssetClassView(),
-    listClientReviews(),
+    listClientReviews().then((rows) => (modelId ? rows.filter((r) => r.modelId === modelId) : rows)),
     getLatestMonitoringAlerts(),
     getLatestFundReviewAlerts(),
     getFundsHeld(),
@@ -132,9 +132,9 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     listResearchDocuments(),
     listDeepDiveReviews(),
     getLatestSectorHealthScores(),
-    getPortfolioAnalytics(),
-    fetchModelPortfolio('Balanced'),
-    listCommitteeDecisions(),
+    getPortfolioAnalytics(undefined, modelId),
+    fetchModelPortfolio('Balanced', modelId),
+    listCommitteeDecisions(modelId),
   ])
 
   // --- Model Portfolio ---

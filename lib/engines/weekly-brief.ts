@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { supabase } from "../supabase";
-import { fetchCoreSecurities } from "./model-portfolio-core";
+import { fetchAllModelSecurities } from "./model-portfolio-core";
 import type { WeeklyBrief } from "../../domain/types/weekly-brief";
 
 const TABLE = "weekly_briefs";
@@ -62,7 +62,7 @@ export async function generateWeeklyBrief(): Promise<WeeklyBrief> {
   const client = new Anthropic({ apiKey });
   // The live model portfolio, not the old static Approved List - the brief
   // should watch what clients are actually being positioned into.
-  const modelHoldings = await fetchCoreSecurities();
+  const modelHoldings = await fetchAllModelSecurities();
   const holdingsList = modelHoldings
     .map((security) => `${security.code} — ${security.name} (${security.assetClass}${security.sector ? `, ${security.sector}` : ""})`)
     .join("\n");

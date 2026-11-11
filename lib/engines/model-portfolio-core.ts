@@ -1,6 +1,7 @@
 import { supabase } from '../supabase';
 import { compareSecurityCodes, sortSecurities } from './security-order';
 import { logModelChange } from './model-versioning';
+import { DEFAULT_MODEL_ID, isMissingModelColumn, resolveModelId } from '../model-context';
 import { ensureApproved } from './approved-list';
 import type {
   RiskProfile,
@@ -106,6 +107,8 @@ export const HOLDING_TYPE_LABELS: Record<HoldingType, string> = {
 
 export type CoreSecurity = {
   id: string;
+  /** Which adviser's model this row belongs to (migration 0028). */
+  modelId: string;
   assetClass: string;
   code: string;
   name: string;
@@ -123,6 +126,7 @@ export type CoreSecurity = {
 
 type CoreSecurityRow = {
   id: string;
+  model_id?: string | null;
   asset_class: string;
   code: string;
   name: string;
@@ -139,6 +143,7 @@ type CoreSecurityRow = {
 function mapSecurityRow(row: CoreSecurityRow): CoreSecurity {
   return {
     id: row.id,
+    modelId: row.model_id ?? DEFAULT_MODEL_ID,
     assetClass: row.asset_class,
     code: row.code,
     name: row.name,
@@ -157,28 +162,69 @@ function mapSecurityRow(row: CoreSecurityRow): CoreSecurity {
 const SECURITIES_TABLE = 'model_portfolio_securities';
 const WEIGHTS_TABLE = 'risk_profile_asset_class_weights';
 
-/** The full shared core: every security in every asset class, identical for all risk profiles. */
-export async function fetchCoreSecurities(): Promise<CoreSecurity[]> {
+/**
+ * One adviser model's securities: every security in every asset class,
+ * identical for all risk profiles. Defaults to the selected model (browser)
+ * or Sean's (server) - server callers tied to a model pass it explicitly.
+ */
+export async function fetchCoreSecurities(modelId?: string | null): Promise<CoreSecurity[]> {
+  const model = resolveModelId(modelId);
+  const query = () =>
+    supabase.from(SECURITIES_TABLE).select('*').order('asset_class', { ascending: true }).order('display_order', { ascending: true });
+  let { data, error } = await query().eq('model_id', model);
+  if (isMissingModelColumn(error)) ({ data, error } = await query()); // before migration 0028
+
+  if (error) {
+    throw new Error(`Failed to load the core model portfolio: ${error.message}`);
+  }
+  return sortSecurities((data ?? []).map((r) => mapSecurityRow(r as CoreSecurityRow)));
+}
+
+/**
+ * Every security in every adviser's model, one entry per code - for the
+ * scans (Monitoring, Fund Reviews, Sector Health, weekly brief, prices),
+ * which watch everything any adviser holds.
+ */
+export async function fetchAllModelSecurities(): Promise<CoreSecurity[]> {
   const { data, error } = await supabase
     .from(SECURITIES_TABLE)
     .select('*')
     .order('asset_class', { ascending: true })
     .order('display_order', { ascending: true });
-
-  if (error) {
-    throw new Error(`Failed to load the core model portfolio: ${error.message}`);
+  if (error) throw new Error(`Failed to load model securities: ${error.message}`);
+  const byCode = new Map<string, CoreSecurity>();
+  for (const row of data ?? []) {
+    const sec = mapSecurityRow(row as CoreSecurityRow);
+    const key = sec.code.toUpperCase();
+    if (!byCode.has(key)) byCode.set(key, sec);
   }
-  return sortSecurities((data ?? []).map(mapSecurityRow));
+  return sortSecurities(Array.from(byCode.values()));
+}
+
+/** Which models hold each code - lets alerts say whose model they affect. */
+export async function fetchModelsHoldingCodes(): Promise<Map<string, string[]>> {
+  const { data, error } = await supabase.from(SECURITIES_TABLE).select('code, model_id');
+  const out = new Map<string, string[]>();
+  if (error) return out;
+  for (const row of (data ?? []) as { code: string; model_id: string | null }[]) {
+    const key = row.code.toUpperCase();
+    const list = out.get(key) ?? [];
+    const m = row.model_id ?? DEFAULT_MODEL_ID;
+    if (!list.includes(m)) list.push(m);
+    out.set(key, list);
+  }
+  return out;
 }
 
 /** One risk profile's asset-class-level target weights (% of the whole portfolio each class carries). */
 export async function fetchRiskProfileWeights(
-  riskProfile: RiskProfile
+  riskProfile: RiskProfile,
+  modelId?: string | null
 ): Promise<Record<string, number>> {
-  const { data, error } = await supabase
-    .from(WEIGHTS_TABLE)
-    .select('asset_class, target_weight')
-    .eq('risk_profile', riskProfile);
+  const model = resolveModelId(modelId);
+  const query = () => supabase.from(WEIGHTS_TABLE).select('asset_class, target_weight').eq('risk_profile', riskProfile);
+  let { data, error } = await query().eq('model_id', model);
+  if (isMissingModelColumn(error)) ({ data, error } = await query());
 
   if (error) {
     throw new Error(`Failed to load ${riskProfile} weights: ${error.message}`);
@@ -192,12 +238,13 @@ export async function fetchRiskProfileWeights(
 }
 
 /** All five risk profiles' asset-class weights in one call - used for risk classification and cross-profile summaries. */
-export async function fetchAllRiskProfileWeights(): Promise<
+export async function fetchAllRiskProfileWeights(modelId?: string | null): Promise<
   Record<RiskProfile, Record<string, number>>
 > {
-  const { data, error } = await supabase
-    .from(WEIGHTS_TABLE)
-    .select('risk_profile, asset_class, target_weight');
+  const model = resolveModelId(modelId);
+  const query = () => supabase.from(WEIGHTS_TABLE).select('risk_profile, asset_class, target_weight');
+  let { data, error } = await query().eq('model_id', model);
+  if (isMissingModelColumn(error)) ({ data, error } = await query());
 
   if (error) {
     throw new Error(`Failed to load risk profile weights: ${error.message}`);
@@ -244,10 +291,11 @@ export function computeGrowthDefensiveByProfile(
  * fetchRiskProfileWeights directly when the caller needs to edit
  * individual securities (this collapses ids away).
  */
-export async function fetchModelPortfolio(riskProfile: RiskProfile): Promise<ModelPortfolio> {
+export async function fetchModelPortfolio(riskProfile: RiskProfile, modelId?: string | null): Promise<ModelPortfolio> {
+  const model = resolveModelId(modelId);
   const [securities, weights] = await Promise.all([
-    fetchCoreSecurities(),
-    fetchRiskProfileWeights(riskProfile),
+    fetchCoreSecurities(model),
+    fetchRiskProfileWeights(riskProfile, model),
   ]);
 
   const growthWeight = round2(
@@ -317,10 +365,13 @@ export async function addCoreSecurity(input: {
   yield?: number | null;
   holdingType?: HoldingType;
   frankingPct?: number | null;
+  modelId?: string | null;
 }): Promise<CoreSecurity> {
+  const model = resolveModelId(input.modelId);
   const { data, error } = await supabase
     .from(SECURITIES_TABLE)
     .insert({
+      model_id: model,
       asset_class: input.assetClass,
       code: input.code.toUpperCase(),
       name: input.name,
@@ -354,6 +405,7 @@ export async function addCoreSecurity(input: {
     console.error(err);
   }
   await logModelChange({
+    modelId: model,
     changeType: 'security_added',
     assetClass: added.assetClass,
     code: added.code,
@@ -379,6 +431,7 @@ export async function updateCoreSecurityYield(id: string, yieldPct: number | nul
   }
   if (before && Number(before.yield ?? NaN) !== Number(yieldPct ?? NaN)) {
     await logModelChange({
+      modelId: before.model_id ?? DEFAULT_MODEL_ID,
       changeType: 'yield',
       assetClass: before.asset_class,
       code: before.code,
@@ -405,6 +458,7 @@ export async function updateCoreSecurityFranking(id: string, frankingPct: number
   }
   if (before && Number(before.franking_pct ?? NaN) !== Number(value ?? NaN)) {
     await logModelChange({
+      modelId: before.model_id ?? DEFAULT_MODEL_ID,
       changeType: 'franking',
       assetClass: before.asset_class,
       code: before.code,
@@ -426,6 +480,7 @@ export async function updateCoreSecurityHoldingType(id: string, holdingType: Hol
   }
   if (before && before.holding_type !== holdingType) {
     await logModelChange({
+      modelId: before.model_id ?? DEFAULT_MODEL_ID,
       changeType: 'holding_type',
       assetClass: before.asset_class,
       code: before.code,
@@ -444,6 +499,7 @@ export async function removeCoreSecurity(id: string): Promise<void> {
   }
   if (before) {
     await logModelChange({
+      modelId: before.model_id ?? DEFAULT_MODEL_ID,
       changeType: 'security_removed',
       assetClass: before.asset_class,
       code: before.code,
@@ -467,6 +523,7 @@ export async function updateCoreSecurityInClassWeight(
   }
   if (before && Number(before.in_class_weight) !== inClassWeight) {
     await logModelChange({
+      modelId: before.model_id ?? DEFAULT_MODEL_ID,
       changeType: 'in_class_weight',
       assetClass: before.asset_class,
       code: before.code,
@@ -480,29 +537,34 @@ export async function updateCoreSecurityInClassWeight(
 export async function updateRiskProfileAssetClassWeight(
   riskProfile: RiskProfile,
   assetClass: string,
-  targetWeight: number
+  targetWeight: number,
+  modelId?: string | null
 ): Promise<void> {
+  const model = resolveModelId(modelId);
   const { data: beforeRow } = await supabase
     .from(WEIGHTS_TABLE)
     .select('target_weight')
+    .eq('model_id', model)
     .eq('risk_profile', riskProfile)
     .eq('asset_class', assetClass)
     .maybeSingle();
   const beforeWeight = beforeRow ? Number((beforeRow as { target_weight: number }).target_weight) : null;
   const { error } = await supabase.from(WEIGHTS_TABLE).upsert(
     {
+      model_id: model,
       risk_profile: riskProfile,
       asset_class: assetClass,
       target_weight: targetWeight,
       updated_at: new Date().toISOString(),
     },
-    { onConflict: 'risk_profile,asset_class' }
+    { onConflict: 'model_id,risk_profile,asset_class' }
   );
   if (error) {
     throw new Error(`Failed to update ${riskProfile} ${assetClass} weight: ${error.message}`);
   }
   if (beforeWeight !== targetWeight) {
     await logModelChange({
+      modelId: model,
       changeType: 'asset_class_weight',
       riskProfile,
       assetClass,

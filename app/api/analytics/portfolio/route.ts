@@ -1,3 +1,4 @@
+import { selectedModelIdFromCookies } from '../../../../lib/model-context-server'
 import { describeAiError } from '../../../../lib/ai-errors'
 import { getPortfolioAnalytics } from '../../../../lib/engines/portfolio-analytics'
 
@@ -6,7 +7,7 @@ export const maxDuration = 60
 
 export async function GET() {
   try {
-    const analytics = await getPortfolioAnalytics()
+    const analytics = await getPortfolioAnalytics(undefined, await selectedModelIdFromCookies())
     return Response.json({ ok: true, analytics })
   } catch (error) {
     console.error('Failed to load portfolio analytics:', error)

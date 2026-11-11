@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { supabase } from '../lib/supabase';
+import ModelSwitcher from './ModelSwitcher';
 import type { ReactNode } from 'react';
 
 type NavItem = {
@@ -105,6 +106,8 @@ function isNavItemActive(pathname: string, href: string): boolean {
 
 async function signOut() {
   await supabase.auth.signOut();
+  // The next adviser to sign in on this browser starts on their own model.
+  document.cookie = 'om_model=; path=/; max-age=0';
   window.location.href = '/login';
 }
 
@@ -118,6 +121,8 @@ export default function AppSidebar() {
         <div className="brand">Investment Strategy Hub</div>
         <p className="brand-tagline">Adviser &amp; committee platform</p>
       </div>
+
+      <ModelSwitcher />
 
       <nav className="nav" aria-label="Main navigation">
         <p className="nav-section-label">Sections</p>

@@ -12,8 +12,8 @@ export async function loadAdviceForReview(
 ): Promise<{ review: ClientPortfolioReview; advice: ClientAdvice }> {
   const review = await fetchClientReview(id)
   const [version, approvedRes] = await Promise.all([
-    getLatestModelVersion().catch(() => null),
-    fetch('/api/investment-committee/approved-swaps')
+    getLatestModelVersion(review.modelId).catch(() => null),
+    fetch(`/api/investment-committee/approved-swaps?model=${encodeURIComponent(review.modelId)}`)
       .then((res) => res.json())
       .catch(() => ({ swaps: [] })),
   ])

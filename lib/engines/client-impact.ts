@@ -1,3 +1,4 @@
+import { isMissingModelColumn } from '../model-context'
 import { supabase } from '../supabase'
 import type { UploadedHolding } from './client-portfolio-upload'
 import { normaliseCode } from './security-universe'
@@ -34,16 +35,20 @@ type ReviewRow = {
   manual_portfolio_value: string | null
 }
 
-export async function getClientImpact(codes: string[]): Promise<Record<string, SecurityImpact>> {
+/** Which of an adviser model's clients hold each code (all clients if no model is given). */
+export async function getClientImpact(codes: string[], modelId?: string | null): Promise<Record<string, SecurityImpact>> {
   const wanted = Array.from(new Set(codes.map(normaliseCode).filter(Boolean)))
   const result: Record<string, SecurityImpact> = {}
   for (const code of wanted) result[code] = { code, clients: [], totalValue: 0, unvaluedCount: 0 }
   if (wanted.length === 0) return result
 
-  const { data, error } = await supabase
-    .from('client_portfolio_reviews')
-    .select('id, client_name, updated_at, holdings, extraction_meta, manual_portfolio_value')
-    .order('updated_at', { ascending: false })
+  const query = () =>
+    supabase
+      .from('client_portfolio_reviews')
+      .select('id, client_name, updated_at, holdings, extraction_meta, manual_portfolio_value')
+      .order('updated_at', { ascending: false })
+  let { data, error } = modelId ? await query().eq('model_id', modelId) : await query()
+  if (isMissingModelColumn(error)) ({ data, error } = await query())
   if (error) throw new Error(`Failed to read client reviews: ${error.message}`)
 
   for (const row of (data ?? []) as ReviewRow[]) {

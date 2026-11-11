@@ -148,8 +148,8 @@ async function realReturns(code: string): Promise<{ returns: number[]; source: P
   return null;
 }
 
-export async function getPortfolioAnalytics(customHoldings?: ModelHolding[]): Promise<PortfolioAnalytics> {
-  const allHoldings = customHoldings ?? (await dedupeHoldings());
+export async function getPortfolioAnalytics(customHoldings?: ModelHolding[], modelId?: string | null): Promise<PortfolioAnalytics> {
+  const allHoldings = customHoldings ?? (await dedupeHoldings(modelId));
   const holdings = allHoldings.filter((h) => isQuotableCode(h.code));
   const connected = isEodhdConfigured();
 
@@ -266,8 +266,10 @@ export type RecommendedPortfolioResult = {
  * by which saved review was touched most recently (autosave updates
  * that timestamp on every edit).
  */
-export async function getRecommendedPortfolioAnalytics(): Promise<RecommendedPortfolioResult> {
-  const reviews = await listClientReviews()
+/** The most recent client review on the given adviser model (each adviser sees their own clients here). */
+export async function getRecommendedPortfolioAnalytics(modelId?: string | null): Promise<RecommendedPortfolioResult> {
+  const all = await listClientReviews()
+  const reviews = modelId ? all.filter((r) => r.modelId === modelId) : all
   if (reviews.length === 0) {
     return { analytics: null, clientName: null }
   }
@@ -279,9 +281,9 @@ export async function getRecommendedPortfolioAnalytics(): Promise<RecommendedPor
     return { analytics: null, clientName: review.clientName }
   }
 
-  const mappingResult = await mapClientHoldings(state.holdings)
+  const mappingResult = await mapClientHoldings(state.holdings, review.modelId)
 
-  const allWeights = await fetchAllRiskProfileWeights()
+  const allWeights = await fetchAllRiskProfileWeights(review.modelId)
   const growthDefensiveByProfile = computeGrowthDefensiveByProfile(allWeights)
   const riskClassification = classifyPortfolioRiskProfile(
     mappingResult.growthWeight,
@@ -291,7 +293,7 @@ export async function getRecommendedPortfolioAnalytics(): Promise<RecommendedPor
   const effectiveRiskProfile =
     state.riskOverride === 'auto' ? riskClassification.nearestRiskProfile : state.riskOverride
 
-  const model = await fetchModelPortfolio(effectiveRiskProfile)
+  const model = await fetchModelPortfolio(effectiveRiskProfile, review.modelId)
   const clientAdjustedModel = applyClientWeightOverrides(
     model,
     state.assetClassOverrides,
@@ -317,6 +319,6 @@ export async function getRecommendedPortfolioAnalytics(): Promise<RecommendedPor
     return { analytics: null, clientName: review.clientName }
   }
 
-  const analytics = await getPortfolioAnalytics(recommendedHoldings)
+  const analytics = await getPortfolioAnalytics(recommendedHoldings, review.modelId)
   return { analytics, clientName: review.clientName }
 }

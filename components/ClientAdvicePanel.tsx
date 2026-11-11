@@ -1,4 +1,5 @@
 'use client'
+import { resolveModelId } from '../lib/model-context'
 import { ObjectivesEditor, IncomeComparison, ProposalHistory } from './ClientAdviceExtras'
 
 import { useCallback, useEffect, useState } from 'react'
@@ -55,7 +56,10 @@ export default function ClientAdvicePanel() {
 
   useEffect(() => {
     listClientReviews()
-      .then((list) => {
+      .then((all) => {
+        // Your own model's clients first.
+        const selected = resolveModelId()
+        const list = [...all.filter((c) => c.modelId === selected), ...all.filter((c) => c.modelId !== selected)]
         setClients(list)
         const fromUrl = new URLSearchParams(window.location.search).get('review')
         const initial = fromUrl && list.some((c) => c.id === fromUrl) ? fromUrl : list[0]?.id ?? ''

@@ -43,8 +43,8 @@ async function buildPdf(reviewId: string | null, approachParam: string | null, c
 
     const review = await fetchClientReview(reviewId)
     const [approved, version] = await Promise.all([
-      listApprovedSwaps().catch(() => []),
-      getLatestModelVersion().catch(() => null),
+      listApprovedSwaps(review.modelId).catch(() => []),
+      getLatestModelVersion(review.modelId).catch(() => null),
     ])
     const context = { approvedDecisions: approved, currentModelVersion: version?.version ?? null }
 

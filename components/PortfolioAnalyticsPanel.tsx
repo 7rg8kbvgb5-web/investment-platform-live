@@ -1,3 +1,4 @@
+import { selectedModelIdFromCookies } from '../lib/model-context-server';
 import { getPortfolioAnalytics } from '../lib/engines/portfolio-analytics';
 import { HoldingLevelAnalyticsTabs } from './HoldingLevelAnalyticsTabs';
 import CorrelationHeatmap from './CorrelationHeatmap';
@@ -11,7 +12,7 @@ function diversificationLabel(avgCorrelation: number): { label: string; color: s
 }
 
 export default async function PortfolioAnalyticsPanel() {
-  const analytics = await getPortfolioAnalytics();
+  const analytics = await getPortfolioAnalytics(undefined, await selectedModelIdFromCookies());
   const overall = diversificationLabel(analytics.overallDiversification);
 
   return (

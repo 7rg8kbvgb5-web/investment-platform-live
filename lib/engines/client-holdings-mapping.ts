@@ -52,8 +52,9 @@ export const EMPTY_HOLDINGS_MAPPING_RESULT: HoldingsMappingResult = {
 
 export async function mapClientHoldings(
   holdings: UploadedHolding[],
+  modelId?: string | null,
 ): Promise<HoldingsMappingResult> {
-  const universe = await buildSecurityUniverse()
+  const universe = await buildSecurityUniverse(modelId)
   const mappedHoldings: MappedHolding[] = []
 
   // Secondary indexes so a statement that prints a bond by ISIN, or puts the

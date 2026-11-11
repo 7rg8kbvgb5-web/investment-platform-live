@@ -2,7 +2,7 @@ import { listClientReviewsFull, type ClientStatus } from './client-portfolio-rev
 import { buildClientAdvice, type DriftStatus, type AdviceContext } from './client-advice'
 import { listApprovedSwaps } from './investment-committee-decisions'
 import { getLatestModelVersion } from './model-versioning'
-import { fetchAllRiskProfileWeights, computeGrowthDefensiveByProfile } from './model-portfolio-core'
+import { DEFAULT_MODEL_ID } from '../model-context'
 import type { RiskProfile } from './model-portfolios'
 
 // The client register: every client on the platform, measured against the
@@ -45,17 +45,19 @@ export type ClientRegister = {
 }
 
 export async function getClientRegister(): Promise<ClientRegister> {
-  const [reviews, approved, latest] = await Promise.all([
+  const [reviews, approved] = await Promise.all([
     listClientReviewsFull(),
-    listApprovedSwaps().catch(() => []),
-    getLatestModelVersion().catch(() => null),
+    listApprovedSwaps(null, { allModels: true }).catch(() => []),
   ])
 
-  const context: AdviceContext = {
-    approvedDecisions: approved,
-    currentModelVersion: latest?.version ?? null,
-    modelCache: new Map(),
-    growthDefensive: fetchAllRiskProfileWeights().then((w) => computeGrowthDefensiveByProfile(w)),
+  // Reviews can be on different advisers' models: share the model cache,
+  // but take each review's IC swaps and current version from its own model.
+  const modelCache: AdviceContext['modelCache'] = new Map()
+  const versionByModel = new Map<string, Promise<number | null>>()
+  const versionFor = (modelId: string) => {
+    if (!versionByModel.has(modelId))
+      versionByModel.set(modelId, getLatestModelVersion(modelId).then((v) => v?.version ?? null).catch(() => null))
+    return versionByModel.get(modelId)!
   }
 
   const rows: ClientRegisterRow[] = await Promise.all(
@@ -69,6 +71,11 @@ export async function getClientRegister(): Promise<ClientRegister> {
         isNewMoney: review.state.entryMode === 'new-money',
       }
       try {
+        const context: AdviceContext = {
+          approvedDecisions: approved.filter((d) => d.modelId === review.modelId),
+          currentModelVersion: await versionFor(review.modelId),
+          modelCache,
+        }
         const advice = await buildClientAdvice(review, context)
         const reviewVersion = review.state.modelVersion ?? null
         return {
@@ -82,7 +89,7 @@ export async function getClientRegister(): Promise<ClientRegister> {
           holdingsOutsideModel: advice.holdingsOutsideModel,
           approvedSwapsAffecting: advice.relevantDecisions.length,
           reviewModelVersion: reviewVersion,
-          staleModel: reviewVersion !== null && latest !== null && reviewVersion < latest.version,
+          staleModel: reviewVersion !== null && context.currentModelVersion != null && reviewVersion < context.currentModelVersion,
           error: null,
         }
       } catch (err) {
@@ -109,7 +116,7 @@ export async function getClientRegister(): Promise<ClientRegister> {
 
   return {
     rows,
-    currentModelVersion: latest?.version ?? null,
+    currentModelVersion: await versionFor(DEFAULT_MODEL_ID),
     totals: {
       clients: rows.length,
       outsideTolerance: rows.filter((r) => r.driftStatus === 'outside-tolerance').length,
