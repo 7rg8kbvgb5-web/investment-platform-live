@@ -13,7 +13,14 @@ import {
 // outright buys and sells, and one line on each ETF / fund held. Saved per
 // security, so each is written (or approved) once and reused for every client.
 
-export default function ProposalCommentaryEditor({ advice }: { advice: ClientAdvice }) {
+export default function ProposalCommentaryEditor({
+  advice,
+  onMissingChange,
+}: {
+  advice: ClientAdvice
+  /** Reports how many items have no saved commentary yet (so the download can warn). */
+  onMissingChange?: (missing: number) => void
+}) {
   const items = useMemo(() => commentaryItemsFor(advice), [advice])
   const [saved, setSaved] = useState<Record<string, string>>({})
   const [text, setText] = useState<Record<string, string>>({})
@@ -37,6 +44,11 @@ export default function ProposalCommentaryEditor({ advice }: { advice: ClientAdv
       cancelled = true
     }
   }, [codes])
+
+  const unsavedCount = items.filter((i) => !saved[commentaryKey(i.code, i.kind)]?.trim()).length
+  useEffect(() => {
+    onMissingChange?.(unsavedCount)
+  }, [unsavedCount, onMissingChange])
 
   if (items.length === 0) return null
 
@@ -88,7 +100,7 @@ export default function ProposalCommentaryEditor({ advice }: { advice: ClientAdv
   }
 
   return (
-    <div>
+    <div id="proposal-commentary">
       <h3 style={title}>
         Proposal commentary{' '}
         <span style={sub}>

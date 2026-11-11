@@ -54,6 +54,7 @@ export default function ClientAdvicePanel() {
   const [pdfClientName, setPdfClientName] = useState('')
   const [pdfCount, setPdfCount] = useState(0)
   const [cgt, setCgt] = useState<CgtResult | null>(null)
+  const [commentaryMissing, setCommentaryMissing] = useState(0)
 
   useEffect(() => {
     listClientReviews()
@@ -186,6 +187,16 @@ export default function ClientAdvicePanel() {
                   e.preventDefault()
                   return
                 }
+                if (
+                  commentaryMissing > 0 &&
+                  !window.confirm(
+                    `${commentaryMissing} proposal commentary line${commentaryMissing === 1 ? ' hasn\u2019t' : 's haven\u2019t'} been written and saved yet, so ${commentaryMissing === 1 ? 'it' : 'they'} won't appear in the PDF. Generate it anyway?\n\n(Cancel, then use "Draft with AI" in Proposal commentary below.)`,
+                  )
+                ) {
+                  e.preventDefault()
+                  document.getElementById('proposal-commentary')?.scrollIntoView({ behavior: 'smooth' })
+                  return
+                }
                 // The record is written while the PDF renders; refresh the list shortly after.
                 setTimeout(() => setPdfCount((n) => n + 1), 8000)
               }}
@@ -204,6 +215,11 @@ export default function ClientAdvicePanel() {
               <button type="submit" style={primaryButton}>
                 Download proposal (PDF)
               </button>
+              {commentaryMissing > 0 ? (
+                <a href="#proposal-commentary" style={{ fontSize: '12px', color: '#fbbf24', whiteSpace: 'nowrap' }}>
+                  {commentaryMissing} commentary line{commentaryMissing === 1 ? '' : 's'} to write ↓
+                </a>
+              ) : null}
             </form>
             {review?.status === 'in_progress' ? (
               <button type="button" style={secondaryButton} onClick={() => setStatus('proposed')} disabled={saving}>
@@ -464,7 +480,7 @@ export default function ClientAdvicePanel() {
             </p>
           ) : null}
 
-          <ProposalCommentaryEditor advice={advice} />
+          <ProposalCommentaryEditor advice={advice} onMissingChange={setCommentaryMissing} />
 
           <h3 style={sectionTitle}>Adviser notes</h3>
           <textarea
