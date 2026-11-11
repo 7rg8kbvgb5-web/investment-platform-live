@@ -123,9 +123,11 @@ export async function getModelPortfolioMarketData(modelId?: string | null): Prom
       const ticker = toEodhdTicker(holding.code);
       // Fundamentals need a higher EODHD plan than prices - if they're
       // refused, keep the price rather than losing the whole row.
+      // Fundamentals cost 10 API calls each and need EODHD's Fundamentals plan -
+      // only requested when EODHD_FUNDAMENTALS=1 is set in Vercel.
       const [quoteResult, fundamentalsResult] = await Promise.allSettled([
         getQuote(ticker),
-        getFundamentals(ticker),
+        process.env.EODHD_FUNDAMENTALS === '1' ? getFundamentals(ticker) : Promise.reject(new Error('not on plan')),
       ]);
       const quote = quoteResult.status === 'fulfilled' ? quoteResult.value : null;
       const fundamentals = fundamentalsResult.status === 'fulfilled' ? fundamentalsResult.value : null;

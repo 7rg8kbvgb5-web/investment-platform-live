@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { supabase } from '../supabase'
 import { fetchAllModelSecurities } from './model-portfolio-core'
 import { calculateSectorHealthScore, type SectorHealthScore } from './sector-intelligence'
+import { AI_MODEL, SEARCH_LIMITS } from '../ai/models'
 
 const TABLE = 'sector_health_scores'
 
@@ -104,7 +105,7 @@ export async function runSectorHealthScan(): Promise<LiveSectorHealthScore[]> {
   const client = new Anthropic({ apiKey })
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: AI_MODEL,
     max_tokens: 6000,
     system: SYSTEM_PROMPT,
     messages: [
@@ -113,7 +114,7 @@ export async function runSectorHealthScan(): Promise<LiveSectorHealthScore[]> {
         content: `Sectors currently held in the model portfolio: ${sectors.join(', ')}. Run the scan and return the JSON.`,
       },
     ],
-    tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+    tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: SEARCH_LIMITS.sectorHealth }],
   })
 
   const textBlocks = response.content.filter(

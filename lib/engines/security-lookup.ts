@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { AI_MODEL, SEARCH_LIMITS } from '../ai/models'
 
 /**
  * Strips exchange suffixes that aren't part of the actual ticker code
@@ -110,7 +111,7 @@ function extractJsonObject(text: string): string {
 
 async function lookupBond(client: Anthropic, input: string): Promise<SecurityLookupResult> {
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: AI_MODEL,
     max_tokens: 2000,
     system: BOND_SYSTEM_PROMPT,
     messages: [
@@ -119,7 +120,7 @@ async function lookupBond(client: Anthropic, input: string): Promise<SecurityLoo
         content: `Bond identifier: ${input.trim()}. Look it up and return the JSON.`,
       },
     ],
-    tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+    tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: SEARCH_LIMITS.securityLookup }],
   })
 
   const textBlocks = response.content.filter(
@@ -183,7 +184,7 @@ export async function lookupSecurity(code: string): Promise<SecurityLookupResult
   }
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: AI_MODEL,
     max_tokens: 2000,
     system: SYSTEM_PROMPT,
     messages: [
@@ -192,7 +193,7 @@ export async function lookupSecurity(code: string): Promise<SecurityLookupResult
         content: `Ticker: ${trimmedCode}. Assume ASX-listed unless the code is clearly not an ASX code. Look it up and return the JSON.`,
       },
     ],
-    tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+    tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: SEARCH_LIMITS.securityLookup }],
   })
 
   const textBlocks = response.content.filter(

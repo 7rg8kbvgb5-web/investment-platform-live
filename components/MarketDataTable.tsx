@@ -27,6 +27,8 @@ export default function MarketDataTable({
   connected: boolean;
 }) {
   const quotable = holdings.filter((h) => h.quotable);
+  // Fundamentals need EODHD's Fundamentals plan; hide the columns when none came back.
+  const hasFundamentals = holdings.some((h) => h.fundamentals?.Highlights);
   const notQuotable = holdings.filter((h) => !h.quotable);
 
   return (
@@ -48,9 +50,9 @@ export default function MarketDataTable({
               <th>Sector / Asset Class</th>
               <th>Last Price</th>
               <th>Change</th>
-              <th>P/E</th>
-              <th>Dividend Yield</th>
-              <th>Market Cap</th>
+              {hasFundamentals ? <th>P/E</th> : null}
+              {hasFundamentals ? <th>Dividend Yield</th> : null}
+              {hasFundamentals ? <th>Market Cap</th> : null}
             </tr>
           </thead>
           <tbody>
@@ -61,13 +63,17 @@ export default function MarketDataTable({
                 <td>{holding.sector ?? '—'}</td>
                 <td>{formatCurrency(holding.quote?.close)}</td>
                 <td>{formatPercent(holding.quote?.change_p)}</td>
-                <td>{typeof holding.fundamentals?.Highlights?.PERatio === 'number' ? holding.fundamentals.Highlights.PERatio.toFixed(1) : '—'}</td>
-                <td>
-                  {typeof holding.fundamentals?.Highlights?.DividendYield === 'number' && holding.fundamentals.Highlights.DividendYield > 0
-                    ? `${(holding.fundamentals.Highlights.DividendYield * 100).toFixed(2)}%`
-                    : '—'}
-                </td>
-                <td>{formatMarketCap(holding.fundamentals?.Highlights?.MarketCapitalization)}</td>
+                {hasFundamentals ? (
+                  <>
+                    <td>{typeof holding.fundamentals?.Highlights?.PERatio === 'number' ? holding.fundamentals.Highlights.PERatio.toFixed(1) : '—'}</td>
+                    <td>
+                      {typeof holding.fundamentals?.Highlights?.DividendYield === 'number' && holding.fundamentals.Highlights.DividendYield > 0
+                        ? `${(holding.fundamentals.Highlights.DividendYield * 100).toFixed(2)}%`
+                        : '—'}
+                    </td>
+                    <td>{formatMarketCap(holding.fundamentals?.Highlights?.MarketCapitalization)}</td>
+                  </>
+                ) : null}
               </tr>
             ))}
           </tbody>

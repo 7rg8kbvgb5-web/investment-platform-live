@@ -9,7 +9,8 @@ import { syncProposals } from '../../../../lib/engines/investment-committee-deci
 export const runtime = 'nodejs'
 export const maxDuration = 300
 
-// Daily job (vercel.json). Every day: Monitoring. Then one of the slower
+// Daily job (vercel.json): 21:00 UTC Sun-Thu = early morning Mon-Fri in Sydney,
+// so it never runs on a weekend. Every weekday: Monitoring. Then one of the slower
 // scans on a weekly rotation, so each runs once a week without needing
 // extra cron slots on the Vercel plan:
 //   Monday    - Fund Reviews

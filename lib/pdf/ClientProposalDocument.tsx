@@ -245,12 +245,12 @@ export function ClientProposalDocument({
       `Your growth / defensive mix moves from ${Math.round(gdNow.growth)}/${Math.round(gdNow.defensive)} to ${Math.round(gdAfter.growth)}/${Math.round(gdAfter.defensive)}, in line with a ${advice.riskProfile} investor.`,
     )
     const moves = classRows
-      .map((r) => ({ label: r.label, d: r.after - r.current }))
+      .map((r) => ({ label: r.label, from: r.current, to: r.after, d: r.after - r.current }))
       .filter((m) => Math.abs(m.d) >= 2)
       .sort((a, b) => Math.abs(b.d) - Math.abs(a.d))
       .slice(0, 2)
     for (const m of moves)
-      keyChanges.push(`${m.label} ${m.d > 0 ? 'increases' : 'reduces'} by ${pct(Math.abs(m.d), 0)} of the portfolio.`)
+      keyChanges.push(`${m.label} ${m.d > 0 ? 'rises' : 'falls'} from ${pct(m.from, m.from % 1 ? 1 : 0)} to ${pct(m.to, m.to % 1 ? 1 : 0)} of the portfolio.`)
   }
   if (advice.trades.length > 0) {
     keyChanges.push(
@@ -632,8 +632,9 @@ export function ClientProposalDocument({
         ) : null}
 
         {advice.retainedHoldings.length > 0 ? (
-          <View>
-            <Text style={s.h2} minPresenceAhead={60}>Holdings retained outside the model</Text>
+          // Heading, intro and table stay together so the heading is never stranded at a page foot.
+          <View wrap={advice.retainedHoldings.length > 10}>
+            <Text style={s.h2} minPresenceAhead={160}>Holdings retained outside the model</Text>
             <Text style={s.p}>These investments sit outside the house model and are recommended to be retained for the reasons noted.</Text>
             <View style={s.table}>
               <View style={s.tr}>

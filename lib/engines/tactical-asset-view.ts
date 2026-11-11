@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { supabase } from '../supabase'
 import { ASSET_CLASSES } from './model-portfolio-core'
+import { AI_MODEL, SEARCH_LIMITS } from '../ai/models'
 
 const TABLE = 'tactical_asset_class_view'
 
@@ -67,7 +68,7 @@ export async function runTacticalAssetClassScan(): Promise<TacticalAssetClassVie
   const client = new Anthropic({ apiKey })
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: AI_MODEL,
     max_tokens: 4000,
     system: SYSTEM_PROMPT,
     messages: [
@@ -76,7 +77,7 @@ export async function runTacticalAssetClassScan(): Promise<TacticalAssetClassVie
         content: `Asset classes: ${assetClassNames.join(', ')}. Run the tactical read and return the JSON.`,
       },
     ],
-    tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+    tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: SEARCH_LIMITS.tacticalView }],
   })
 
   const textBlocks = response.content.filter(

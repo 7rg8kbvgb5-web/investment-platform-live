@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { describeAiError } from '../../../../lib/ai-errors'
 import { getSignedInAdviser } from '../../../../lib/adviser-identity'
 import { fetchHouseViews, houseViewSentence } from '../../../../lib/engines/house-view'
+import { AI_MODEL } from '../../../../lib/ai/models'
 import {
   fetchCommentary,
   saveCommentary,
@@ -81,7 +82,7 @@ async function draft(items: CommentaryItem[]): Promise<Record<string, string>> {
 
   const client = new Anthropic({ apiKey })
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: AI_MODEL,
     max_tokens: 4000,
     system: SYSTEM,
     messages: [{ role: 'user', content: `Write commentary for these items:\n${lines.join('\n')}` }],

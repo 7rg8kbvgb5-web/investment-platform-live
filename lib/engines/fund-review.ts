@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { supabase } from '../supabase'
 import { fetchAllModelSecurities, type HoldingType } from './model-portfolio-core'
+import { AI_MODEL, SEARCH_LIMITS } from '../ai/models'
 
 const TABLE = 'fund_review_alerts'
 
@@ -166,7 +167,7 @@ export async function runFundReviewScan(): Promise<FundReviewAlert[]> {
   const client = new Anthropic({ apiKey })
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: AI_MODEL,
     max_tokens: 8000,
     system: SYSTEM_PROMPT,
     messages: [
@@ -175,7 +176,7 @@ export async function runFundReviewScan(): Promise<FundReviewAlert[]> {
         content: `Funds currently held:\n\n${fundListing}\n\nRun the review and produce the JSON.`,
       },
     ],
-    tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+    tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: SEARCH_LIMITS.fundReview }],
   })
 
   const textBlocks = response.content.filter(

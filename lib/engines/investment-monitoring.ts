@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { supabase } from '../supabase'
 import { fetchAllModelSecurities, ASSET_CLASSES } from './model-portfolio-core'
+import { AI_MODEL, SEARCH_LIMITS } from '../ai/models'
 
 const TABLE = 'investment_monitoring_alerts'
 
@@ -158,7 +159,7 @@ export async function runInvestmentMonitoringScan(): Promise<MonitoringAlert[]> 
   const client = new Anthropic({ apiKey })
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: AI_MODEL,
     max_tokens: 8000,
     system: SYSTEM_PROMPT,
     messages: [
@@ -167,7 +168,7 @@ export async function runInvestmentMonitoringScan(): Promise<MonitoringAlert[]> 
         content: `Current model portfolio, by asset class:\n\n${portfolioListing}\n\nRun the scan and produce the JSON.`,
       },
     ],
-    tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+    tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: SEARCH_LIMITS.monitoring }],
   })
 
   const textBlocks = response.content.filter(

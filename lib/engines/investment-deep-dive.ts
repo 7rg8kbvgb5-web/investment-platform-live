@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { supabase } from '../supabase'
+import { AI_MODEL, SEARCH_LIMITS } from '../ai/models'
 
 const TABLE = 'investment_deep_dive_reviews'
 
@@ -129,7 +130,7 @@ export async function runInvestmentDeepDive(
     : "The adviser hasn't specified the type - determine it yourself from research."
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: AI_MODEL,
     max_tokens: 8000,
     system: SYSTEM_PROMPT,
     messages: [
@@ -138,7 +139,7 @@ export async function runInvestmentDeepDive(
         content: `Subject: ${subjectName.trim()}. ${hintLine} Run the deep dive and return the JSON.`,
       },
     ],
-    tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+    tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: SEARCH_LIMITS.deepDive }],
   })
 
   const textBlocks = response.content.filter(

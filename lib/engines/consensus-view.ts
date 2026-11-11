@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { supabase } from '../supabase'
 import { stripExchangeSuffix } from './security-lookup'
+import { AI_MODEL, SEARCH_LIMITS } from '../ai/models'
 
 export type BrokerRecommendation = {
   institution: string
@@ -96,7 +97,7 @@ export async function fetchConsensusView(code: string): Promise<ConsensusView> {
   const client = new Anthropic({ apiKey })
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: AI_MODEL,
     max_tokens: 4000,
     system: SYSTEM_PROMPT,
     messages: [
@@ -105,7 +106,7 @@ export async function fetchConsensusView(code: string): Promise<ConsensusView> {
         content: `Ticker: ${trimmedCode}. Assume ASX-listed unless clearly not. Compile the consensus view and return the JSON.`,
       },
     ],
-    tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+    tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: SEARCH_LIMITS.consensus }],
   })
 
   const textBlocks = response.content.filter(

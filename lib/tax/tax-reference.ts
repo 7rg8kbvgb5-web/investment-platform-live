@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { supabase } from '../supabase'
+import { AI_MODEL, SEARCH_LIMITS } from '../ai/models'
 
 // Tax reference data for capital gains estimates, as published by the ATO.
 // A verified default ships with the platform; "Check the ATO for updates"
@@ -97,11 +98,11 @@ export async function checkAtoForUpdates(): Promise<TaxReference> {
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not configured.')
   const client = new Anthropic({ apiKey })
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: AI_MODEL,
     max_tokens: 4000,
     system: CHECK_PROMPT,
     messages: [{ role: 'user', content: 'Check the current ATO rates and return the JSON.' }],
-    tools: [{ type: 'web_search_20250305', name: 'web_search', allowed_domains: ['ato.gov.au'] }],
+    tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: SEARCH_LIMITS.taxReference, allowed_domains: ['ato.gov.au'] }],
   })
   const texts = response.content.filter((b): b is Extract<typeof b, { type: 'text' }> => b.type === 'text')
   const raw = texts.length ? texts[texts.length - 1].text : ''

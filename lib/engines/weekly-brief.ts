@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { supabase } from "../supabase";
 import { fetchAllModelSecurities } from "./model-portfolio-core";
 import type { WeeklyBrief } from "../../domain/types/weekly-brief";
+import { AI_MODEL, SEARCH_LIMITS } from '../ai/models'
 
 const TABLE = "weekly_briefs";
 
@@ -68,7 +69,7 @@ export async function generateWeeklyBrief(): Promise<WeeklyBrief> {
     .join("\n");
 
   const response = await client.messages.create({
-    model: "claude-sonnet-4-6",
+    model: AI_MODEL,
     max_tokens: 8000,
     system: SYSTEM_PROMPT,
     messages: [
@@ -77,7 +78,7 @@ export async function generateWeeklyBrief(): Promise<WeeklyBrief> {
         content: `Model portfolio holdings to check:\n${holdingsList}\n\nProduce this week's brief.`,
       },
     ],
-    tools: [{ type: "web_search_20250305", name: "web_search" }],
+    tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: SEARCH_LIMITS.weeklyBrief }],
   });
 
   // When web search is used, the model emits multiple content blocks —

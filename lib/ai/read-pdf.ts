@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { supabase } from '../supabase'
+import { AI_MODEL } from './models'
 
 // Shared PDF reading for client statements and research documents.
 //
@@ -32,7 +33,7 @@ export async function extractJsonFromPdf<T>(input: {
   const client = new Anthropic({ apiKey })
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: AI_MODEL,
     max_tokens: input.maxTokens ?? 16000,
     system: input.system,
     messages: [
