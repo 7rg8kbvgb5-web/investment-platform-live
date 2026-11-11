@@ -14,8 +14,17 @@ import { isIsin } from '../../engines/holding-triage'
  */
 export const CMA_AS_AT = 'November 2026'
 
-export const CAPITAL_MARKET_ASSUMPTIONS: Record<string, { ret: number; vol: number; group: 'growth' | 'alts' | 'defensive' | 'cash' }> = {
-  'Australian Equities': { ret: 8.0, vol: 16.0, group: 'growth' },
+/**
+ * ret is the total return before franking; franking is the extra benefit of
+ * franking credits for an Australian investor (received in full). Australian
+ * equities: 7.0% + ~1.0% franking = ~8.0%, in line with published forecasts
+ * that include franking (e.g. AMP 7.8%).
+ */
+export const CAPITAL_MARKET_ASSUMPTIONS: Record<
+  string,
+  { ret: number; vol: number; group: 'growth' | 'alts' | 'defensive' | 'cash'; franking?: number }
+> = {
+  'Australian Equities': { ret: 7.0, vol: 16.0, group: 'growth', franking: 1.0 },
   'International Equities': { ret: 8.0, vol: 15.0, group: 'growth' },
   'Listed Property / Infrastructure': { ret: 7.0, vol: 14.0, group: 'growth' },
   Alternatives: { ret: 6.5, vol: 9.0, group: 'alts' },
@@ -41,7 +50,12 @@ function correlation(a: string, b: string): number {
 export const CPI_ASSUMPTION = 2.5
 
 export type PortfolioRiskStats = {
+  /** Expected return before fees, excluding franking credits. Risk measures are based on this. */
   expectedReturn: number
+  /** Annual benefit of franking credits, percentage points. */
+  frankingBenefit: number
+  /** Expected return before fees, including franking credits - the headline figure. */
+  expectedReturnInclFranking: number
   volatility: number
   negativeYearsPer20: number
   srm: { band: number; label: string }
@@ -77,7 +91,11 @@ export function portfolioRiskStats(weights: Record<string, number>): PortfolioRi
   if (total <= 0) return null
   const w = (k: string) => weights[k] / total
   let ret = 0
-  for (const k of classes) ret += w(k) * CAPITAL_MARKET_ASSUMPTIONS[k].ret
+  let franking = 0
+  for (const k of classes) {
+    ret += w(k) * CAPITAL_MARKET_ASSUMPTIONS[k].ret
+    franking += w(k) * (CAPITAL_MARKET_ASSUMPTIONS[k].franking ?? 0)
+  }
   let variance = 0
   for (const a of classes)
     for (const b of classes)
@@ -88,6 +106,8 @@ export function portfolioRiskStats(weights: Record<string, number>): PortfolioRi
   const srm = SRM_BANDS.find((b) => negativeYearsPer20 < b.max) ?? SRM_BANDS[SRM_BANDS.length - 1]
   return {
     expectedReturn: round1(ret),
+    frankingBenefit: round1(franking),
+    expectedReturnInclFranking: round1(ret + franking),
     volatility: round1(vol),
     negativeYearsPer20: round1(negativeYearsPer20),
     srm: { band: srm.band, label: srm.label },

@@ -201,7 +201,8 @@ export function ClientProposalDocument({
     total && riskAfter
       ? projectScenarios({
           startValue: total,
-          expectedReturn: riskAfter.expectedReturn,
+          // Headline return includes franking credits (assumed received and reinvested).
+          expectedReturn: riskAfter.expectedReturnInclFranking,
           feePct: fees?.effectiveRatePct ?? 0,
           yieldPct,
         })
@@ -289,8 +290,12 @@ export function ClientProposalDocument({
           <Tile label="Risk profile" value={advice.riskProfile} note={guide.timeframe} />
           <Tile
             label="Expected return"
-            value={riskAfter ? `${pct(riskAfter.expectedReturn)} p.a.` : '—'}
-            note="long term, before fees (estimate)"
+            value={riskAfter ? `${pct(riskAfter.expectedReturnInclFranking)} p.a.` : '—'}
+            note={
+              riskAfter && fees
+                ? `incl. franking · ${pct(riskAfter.expectedReturnInclFranking - fees.effectiveRatePct)} after fees`
+                : 'long term, before fees, incl. franking (estimate)'
+            }
           />
           <Tile
             label="Estimated income"
@@ -382,6 +387,8 @@ export function ClientProposalDocument({
               </View>
               {[
                 { l: 'Expected long-term return (p.a., before fees)', a: riskNow ? pct(riskNow.expectedReturn) : '', b: pct(riskAfter.expectedReturn) },
+                { l: 'Plus franking credits (p.a.)', a: riskNow ? pct(riskNow.frankingBenefit) : '', b: pct(riskAfter.frankingBenefit) },
+                { l: 'Expected return including franking (p.a., before fees)', a: riskNow ? pct(riskNow.expectedReturnInclFranking) : '', b: pct(riskAfter.expectedReturnInclFranking) },
                 { l: 'Volatility (typical yearly variation)', a: riskNow ? pct(riskNow.volatility) : '', b: pct(riskAfter.volatility) },
                 { l: 'Typical year: two years in three fall within', a: riskNow ? `${pct(riskNow.typicalLow)} to ${pct(riskNow.typicalHigh)}` : '', b: `${pct(riskAfter.typicalLow)} to ${pct(riskAfter.typicalHigh)}` },
                 { l: 'A severe year (1 in 20)', a: riskNow ? pct(riskNow.severeYear) : '', b: pct(riskAfter.severeYear) },
@@ -757,9 +764,14 @@ export function ClientProposalDocument({
             baseline={{ value: total, label: `Starting value ${shortMoney(total)}` }}
           />
           <View style={[s.row, { marginTop: 6, marginBottom: 8 }]}>
-            <View style={{ marginRight: 14 }}><LegendRow colour={OM.dusty} label={`Higher returns (${pct(high.returnPct)} p.a.)`} /></View>
-            <View style={{ marginRight: 14 }}><LegendRow colour={OM.navy} label={`Expected (${pct(base.returnPct)} p.a.)`} /></View>
-            <View><LegendRow colour={OM.silver} label={`Lower returns (${pct(low.returnPct)} p.a.)`} /></View>
+            {[high, base, low].map((sc) => (
+              <View style={{ marginRight: 14 }} key={sc.key}>
+                <LegendRow
+                  colour={sc.key === 'high' ? OM.dusty : sc.key === 'base' ? OM.navy : OM.silver}
+                  label={`${sc.label}: ${pct(sc.returnPct + (fees?.effectiveRatePct ?? 0))} before fees, ${pct(sc.returnPct)} after`}
+                />
+              </View>
+            ))}
           </View>
           <View style={s.table}>
             <View style={s.tr}>
@@ -780,8 +792,9 @@ export function ClientProposalDocument({
             ))}
           </View>
           <Text style={s.small}>
-            Scenario returns are the expected long-term return for this allocation, less the estimated advisory fee,
-            plus or minus two percentage points a year. &ldquo;In today&apos;s dollars&rdquo; adjusts the year-10 value for
+            Scenario returns are the expected long-term return for this allocation including franking credits (assumed
+            to be received in full and reinvested), less the estimated advisory fee, plus or minus two percentage
+            points a year. &ldquo;In today&apos;s dollars&rdquo; adjusts the year-10 value for
             inflation of {CPI_ASSUMPTION}% a year. Projections are illustrations, not forecasts or guarantees, and do not
             allow for tax, transaction costs or changes to the portfolio.
           </Text>
@@ -985,19 +998,23 @@ export function ClientProposalDocument({
         <View style={s.table}>
           <View style={s.tr}>
             <Text style={[s.th, { width: '50%' }]}>ASSET CLASS</Text>
-            <Text style={[s.th, { width: '25%', textAlign: 'right' }]}>EXPECTED RETURN (P.A.)</Text>
-            <Text style={[s.th, { width: '25%', textAlign: 'right' }]}>VOLATILITY</Text>
+            <Text style={[s.th, { width: '20%', textAlign: 'right' }]}>EXPECTED RETURN (P.A.)</Text>
+            <Text style={[s.th, { width: '15%', textAlign: 'right' }]}>FRANKING</Text>
+            <Text style={[s.th, { width: '15%', textAlign: 'right' }]}>VOLATILITY</Text>
           </View>
           {Object.entries(CAPITAL_MARKET_ASSUMPTIONS).map(([k, v]) => (
             <View style={s.tr} key={k}>
               <Text style={[s.td, { width: '50%' }]}>{k}</Text>
-              <Text style={[s.td, { width: '25%', textAlign: 'right' }]}>{pct(v.ret)}</Text>
-              <Text style={[s.td, { width: '25%', textAlign: 'right' }]}>{pct(v.vol)}</Text>
+              <Text style={[s.td, { width: '20%', textAlign: 'right' }]}>{pct(v.ret)}</Text>
+              <Text style={[s.td, { width: '15%', textAlign: 'right' }]}>{v.franking ? `+${pct(v.franking)}` : '—'}</Text>
+              <Text style={[s.td, { width: '15%', textAlign: 'right' }]}>{pct(v.vol)}</Text>
             </View>
           ))}
         </View>
         <Text style={s.small}>
-          Long-term (10-year) nominal assumptions before fees and tax, as at {CMA_AS_AT}. Inflation is assumed at{' '}
+          Long-term (10-year) nominal assumptions before fees and tax, as at {CMA_AS_AT}. Franking is the estimated
+          annual benefit of franking credits to an Australian investor able to use them in full; investors who cannot
+          (for example non-residents) should disregard it. Inflation is assumed at{' '}
           {CPI_ASSUMPTION}% a year. Portfolio risk allows for diversification between asset classes. These assumptions
           are estimates, are reviewed periodically, and actual returns will differ.
         </Text>
