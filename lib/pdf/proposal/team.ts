@@ -4,6 +4,6 @@
 export type TeamMember = { name: string; title: string; phone?: string; email?: string }
 
 export const ADVICE_TEAM: TeamMember[] = [
-  { name: 'Sean Allitt', title: 'Senior Private Wealth Adviser' },
-  { name: 'Louie Ognenovski', title: 'Senior Private Wealth Adviser' },
+  { name: 'Sean Allitt', title: 'Senior Private Wealth Adviser', phone: '(02) 8216 6464', email: 'sallitt@ords.com.au' },
+  { name: 'Louie Ognenovski', title: 'Senior Private Wealth Adviser', phone: '(02) 8216 6372', email: 'lognen@ords.com.au' },
 ]
