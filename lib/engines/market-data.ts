@@ -121,31 +121,28 @@ export async function getModelPortfolioMarketData(modelId?: string | null): Prom
       }
 
       const ticker = toEodhdTicker(holding.code);
-      try {
-        const [quote, fundamentals] = await Promise.all([
-          getQuote(ticker),
-          getFundamentals(ticker),
-        ]);
-        return {
-          code: holding.code,
-          name: holding.name,
-          sector: holding.sector,
-          quotable: true,
-          quote,
-          fundamentals,
-          error: null,
-        };
-      } catch (error) {
-        return {
-          code: holding.code,
-          name: holding.name,
-          sector: holding.sector,
-          quotable: true,
-          quote: null,
-          fundamentals: null,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        };
-      }
+      // Fundamentals need a higher EODHD plan than prices - if they're
+      // refused, keep the price rather than losing the whole row.
+      const [quoteResult, fundamentalsResult] = await Promise.allSettled([
+        getQuote(ticker),
+        getFundamentals(ticker),
+      ]);
+      const quote = quoteResult.status === 'fulfilled' ? quoteResult.value : null;
+      const fundamentals = fundamentalsResult.status === 'fulfilled' ? fundamentalsResult.value : null;
+      return {
+        code: holding.code,
+        name: holding.name,
+        sector: holding.sector,
+        quotable: true,
+        quote,
+        fundamentals,
+        error:
+          quoteResult.status === 'rejected'
+            ? quoteResult.reason instanceof Error
+              ? quoteResult.reason.message
+              : 'Unknown error'
+            : null,
+      };
     })
   );
 
