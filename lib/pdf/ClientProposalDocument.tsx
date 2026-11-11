@@ -195,6 +195,35 @@ export function ClientProposalDocument({
   const riskAfter = portfolioRiskStats(after, advice.frankingBenefitByClass?.projected)
   const riskNow = hasCurrent ? portfolioRiskStats(current, advice.frankingBenefitByClass?.current) : null
   const fees = estimateFees(advice)
+  // Investment rationale page: the briefs the adviser ticked, grouped.
+  const tradedCodes = new Set(advice.trades.map((t) => t.code.trim().toUpperCase()))
+  const TRADE_TAG = { buy: 'NEW PURCHASE', increase: 'TOP-UP', sell: 'FULL SALE', reduce: 'PARTIAL SALE' } as const
+  const rationale = [
+    {
+      title: 'Purchases',
+      items: buys
+        .map((t) => ({ code: t.code, name: t.name, tag: TRADE_TAG[t.action] as string, text: note(t.code, 'buy') }))
+        .filter((i): i is typeof i & { text: string } => !!i.text),
+    },
+    {
+      title: 'Sales',
+      items: sells
+        .map((t) => ({ code: t.code, name: t.name, tag: TRADE_TAG[t.action] as string, text: note(t.code, 'sell') }))
+        .filter((i): i is typeof i & { text: string } => !!i.text),
+    },
+    {
+      title: 'Holdings you keep',
+      items: advice.resultingHoldings
+        .filter((h) => !tradedCodes.has(h.code.trim().toUpperCase()))
+        .map((h) => ({
+          code: h.code,
+          name: h.name,
+          tag: h.holdingType === 'listed_fund' ? 'ETF / LISTED FUND' : h.holdingType === 'unlisted_fund' ? 'UNLISTED FUND' : 'HELD',
+          text: note(h.code, 'exposure'),
+        }))
+        .filter((i): i is typeof i & { text: string } => !!i.text),
+    },
+  ].filter((g) => g.items.length > 0)
   const scorecard = hasCurrent ? buildScorecard({ advice, gdNow, gdAfter, current, after, riskNow, riskAfter }) : []
   // The three clearest improvements lead the page.
   const highlights = scorecard.filter((r) => r.direction === 'better').slice(0, 3)
@@ -684,10 +713,9 @@ export function ClientProposalDocument({
                   <Text style={[s.th, { width: '12%', textAlign: 'right' }]}>UNITS</Text>
                 </View>
                 {group.rows.map((t) => {
-                  const why = note(t.code, t.action === 'buy' || t.action === 'increase' ? 'buy' : 'sell')
                   return (
                   <View key={`${t.code}-${t.action}`} wrap={false}>
-                  <View style={why ? [s.tr, { borderBottomWidth: 0 }] : s.tr}>
+                  <View style={s.tr}>
                     <Text style={[s.code, { width: '15%' }]}>{t.code}</Text>
                     <View style={{ width: '37%' }}>
                       <Text style={s.td}>{t.name}</Text>
@@ -704,12 +732,6 @@ export function ClientProposalDocument({
                       {t.units !== null ? Math.abs(t.units).toLocaleString('en-AU') : 'by value'}
                     </Text>
                   </View>
-                  {why ? (
-                    <View style={[s.tr, { paddingTop: 0 }]}>
-                      <Text style={{ width: '15%' }} />
-                      <Text style={[s.td, s.muted, { width: '85%', fontFamily: 'Helvetica-Oblique', lineHeight: 1.4 }]}>{why}</Text>
-                    </View>
-                  ) : null}
                   </View>
                   )
                 })}
@@ -756,6 +778,38 @@ export function ClientProposalDocument({
           quantities are rounded down to whole units; investments without a listed price are transacted by value.
         </Text>
       </Page>
+
+      {/* ---------- Investment rationale (the adviser's ticked briefs) ---------- */}
+      {rationale.length > 0 ? (
+        <Page size="A4" style={s.page}>
+          <Chrome client={client} />
+          <SectionTitle n={next()} eyebrow="Investment rationale" title="Why we recommend these changes" />
+          <Text style={s.p}>
+            The reasoning behind the key changes to your portfolio, and the role of the investments you continue to hold.
+          </Text>
+          {rationale.map((group) => (
+            <View key={group.title}>
+              <Text style={s.h2} minPresenceAhead={70}>{group.title}</Text>
+              {group.items.map((it) => (
+                <View
+                  key={`${it.code}-${it.tag}`}
+                  wrap={false}
+                  style={{ flexDirection: 'row', paddingVertical: 8, borderBottomWidth: 0.5, borderBottomColor: OM.grid }}
+                >
+                  <View style={{ width: '22%', paddingRight: 8 }}>
+                    <Text style={[s.code, { fontSize: 9.5 }]}>{it.code}</Text>
+                    <Text style={{ fontSize: 6.5, letterSpacing: 0.8, color: it.tag.includes('SALE') ? OM.red : OM.slate, marginTop: 3 }}>{it.tag}</Text>
+                  </View>
+                  <View style={{ width: '78%' }}>
+                    <Text style={[s.td, s.bold, { fontSize: 9, color: OM.navy, marginBottom: 3 }]}>{it.name}</Text>
+                    <Text style={[s.p, { marginBottom: 0 }]}>{it.text}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          ))}
+        </Page>
+      ) : null}
 
       {/* ---------- 5. Recommended portfolio holdings ---------- */}
       {advice.resultingHoldings.length > 0 ? (
@@ -852,42 +906,6 @@ export function ClientProposalDocument({
               forecasts or guarantees.
             </Text>
           ) : null}
-          {(() => {
-            // Briefs on holdings kept without a trade (traded ones carry theirs in the transactions table).
-            const traded = new Set(advice.trades.map((t) => t.code.trim().toUpperCase()))
-            const briefs = advice.resultingHoldings
-              .filter((h) => !traded.has(h.code.trim().toUpperCase()))
-              .map((h) => ({ h, line: note(h.code, 'exposure') }))
-              .filter((f): f is { h: typeof f.h; line: string } => !!f.line)
-            if (briefs.length === 0) return null
-            const groups = [
-              { title: 'Shares', match: (t?: string | null) => !t || t === 'direct_equity' },
-              { title: 'Exchange-traded and listed funds', match: (t?: string | null) => t === 'listed_fund' },
-              { title: 'Unlisted funds', match: (t?: string | null) => t === 'unlisted_fund' },
-              { title: 'Other holdings', match: (t?: string | null) => !!t && !['direct_equity', 'listed_fund', 'unlisted_fund'].includes(t) },
-            ]
-            return (
-              // Kept in one piece (when short) so the heading never sits alone at a page foot.
-              <View style={{ marginTop: 12 }} wrap={briefs.length > 8}>
-                <Text style={s.h3} minPresenceAhead={80}>ABOUT YOUR HOLDINGS</Text>
-                {groups.map((g) => {
-                  const rows = briefs.filter((b) => g.match(b.h.holdingType))
-                  if (rows.length === 0) return null
-                  return (
-                    <View key={g.title} style={{ marginBottom: 4 }}>
-                      <Text style={[s.td, s.bold, { color: OM.navy, marginBottom: 2 }]}>{g.title}</Text>
-                      {rows.map(({ h, line }) => (
-                        <View key={h.code} style={{ flexDirection: 'row', marginBottom: 3 }} wrap={false}>
-                          <Text style={[s.code, { width: '16%' }]}>{h.code}</Text>
-                          <Text style={[s.td, { width: '84%', lineHeight: 1.4 }]}>{line}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  )
-                })}
-              </View>
-            )
-          })()}
         </Page>
       ) : null}
 
