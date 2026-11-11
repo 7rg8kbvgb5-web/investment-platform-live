@@ -1,3 +1,4 @@
+import { uploadToPrivateStorage } from "../storage-upload";
 import { supabase } from "../supabase";
 import type {
   ResearchDocument,
@@ -84,13 +85,11 @@ export type ExtractedSecurity = {
 
 /** Puts a file in research storage ahead of reading it; returns its path. */
 export async function stageResearchFile(file: File, source: string): Promise<string> {
-  const storagePath = `${source.replace(/\s+/g, "-").toLowerCase()}/${Date.now()}-${file.name.replace(/[^\w.\-]/g, "_")}`;
-  const { error } = await supabase.storage.from(BUCKET).upload(storagePath, file, {
-    cacheControl: "3600",
-    upsert: false,
-  });
-  if (error) throw new Error(`Failed to upload document: ${error.message}`);
-  return storagePath;
+  try {
+    return await uploadToPrivateStorage(file, source);
+  } catch (error) {
+    throw new Error(`Failed to upload document: ${error instanceof Error ? error.message : "unknown error"}`);
+  }
 }
 
 export async function discardStagedFile(storagePath: string): Promise<void> {

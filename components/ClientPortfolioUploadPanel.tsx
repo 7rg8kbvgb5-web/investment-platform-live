@@ -1,4 +1,5 @@
 'use client'
+import { uploadToPrivateStorage } from '../lib/storage-upload'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -43,7 +44,6 @@ import { deployCash } from '../lib/engines/cash-deployment'
 import CashDeploymentView from './CashDeploymentView'
 import ApprovedSwapsBanner from './ApprovedSwapsBanner'
 import { getLatestModelVersion } from '../lib/engines/model-versioning'
-import { supabase } from '../lib/supabase'
 
 type ExtractionMeta = {
   clientName: string | null
@@ -149,11 +149,14 @@ export default function ClientPortfolioUploadPanel() {
       // Upload to private storage first, then have the server read it by
       // path (it's deleted again once read). Avoids Vercel's ~4.5MB
       // request-size limit on larger or scanned statements.
-      const storagePath = `client-statements/${Date.now()}-${file.name.replace(/[^\w.\-]/g, '_')}`
-      const { error: uploadError } = await supabase.storage
-        .from('research-documents')
-        .upload(storagePath, file, { contentType: 'application/pdf', upsert: false })
-      if (uploadError) throw new Error(`Couldn't upload the statement: ${uploadError.message}`)
+      let storagePath: string
+      try {
+        storagePath = await uploadToPrivateStorage(file, 'client-statements')
+      } catch (uploadError) {
+        throw new Error(
+          `Couldn't upload the statement: ${uploadError instanceof Error ? uploadError.message : 'unknown error'}`,
+        )
+      }
 
       const response = await fetch('/api/portfolios/parse-pdf', {
         method: 'POST',
