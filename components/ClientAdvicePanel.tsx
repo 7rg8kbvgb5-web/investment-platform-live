@@ -480,7 +480,7 @@ export default function ClientAdvicePanel() {
             </p>
           ) : null}
 
-          <ProposalCommentaryEditor advice={advice} onMissingChange={setCommentaryMissing} />
+          <ProposalCommentaryEditor advice={advice} review={review} onMissingChange={setCommentaryMissing} />
 
           <h3 style={sectionTitle}>Adviser notes</h3>
           <textarea

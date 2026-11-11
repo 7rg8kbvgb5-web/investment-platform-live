@@ -9,7 +9,7 @@ import { ClientProposalDocument } from '../../../../lib/pdf/ClientProposalDocume
 import { cgtForReview } from '../../../../lib/tax/cgt-for-review'
 import { getTaxReference } from '../../../../lib/tax/tax-reference'
 import { recordProposal } from '../../../../lib/engines/proposal-records'
-import { commentaryItemsFor, fetchCommentary } from '../../../../lib/engines/security-commentary'
+import { commentaryItemsFor, commentaryKey, defaultCommentarySelection, fetchCommentary } from '../../../../lib/engines/security-commentary'
 import { getSignedInAdviser } from '../../../../lib/adviser-identity'
 import { CAPITAL_MARKET_ASSUMPTIONS, CMA_AS_AT, CPI_ASSUMPTION, estimateFees } from '../../../../lib/pdf/proposal/insights'
 
@@ -71,8 +71,15 @@ async function buildPdf(reviewId: string | null, approachParam: string | null, c
       if (result.lines.length > 0) capitalGains = { result, reference }
     }
 
-    // Adviser-approved commentary for outright trades and the funds held.
-    const commentary = await fetchCommentary(commentaryItemsFor(advice).map((i) => i.code)).catch(() => ({}))
+    // Briefs the adviser ticked for this client (defaults if never chosen), with their approved text.
+    const commentaryItems = commentaryItemsFor(advice)
+    const ticked = new Set(review.commentarySelection ?? defaultCommentarySelection(commentaryItems))
+    const allCommentary: Record<string, string> = await fetchCommentary(commentaryItems.map((i) => i.code)).catch(() => ({}))
+    const commentary: Record<string, string> = {}
+    for (const i of commentaryItems) {
+      const k = commentaryKey(i.code, i.kind)
+      if (ticked.has(k) && allCommentary[k]) commentary[k] = allCommentary[k]
+    }
 
     const clientName = clientNameInput?.trim().slice(0, 120) || null
     const displayName = clientName ?? review.clientName

@@ -590,7 +590,7 @@ export function ClientProposalDocument({
                   <Text style={[s.th, { width: '12%', textAlign: 'right' }]}>UNITS</Text>
                 </View>
                 {group.rows.map((t) => {
-                  const why = t.action === 'buy' || t.action === 'sell' ? note(t.code, t.action) : null
+                  const why = note(t.code, t.action === 'buy' || t.action === 'increase' ? 'buy' : 'sell')
                   return (
                   <View key={`${t.code}-${t.action}`} wrap={false}>
                   <View style={why ? [s.tr, { borderBottomWidth: 0 }] : s.tr}>
@@ -730,22 +730,28 @@ export function ClientProposalDocument({
             </Text>
           ) : null}
           {(() => {
-            const funds = advice.resultingHoldings
-              .filter((h) => h.holdingType === 'listed_fund' || h.holdingType === 'unlisted_fund')
+            // Briefs on holdings kept without a trade (traded ones carry theirs in the transactions table).
+            const traded = new Set(advice.trades.map((t) => t.code.trim().toUpperCase()))
+            const briefs = advice.resultingHoldings
+              .filter((h) => !traded.has(h.code.trim().toUpperCase()))
               .map((h) => ({ h, line: note(h.code, 'exposure') }))
               .filter((f): f is { h: typeof f.h; line: string } => !!f.line)
-            if (funds.length === 0) return null
+            if (briefs.length === 0) return null
+            const groups = [
+              { title: 'Shares', match: (t?: string | null) => !t || t === 'direct_equity' },
+              { title: 'Exchange-traded and listed funds', match: (t?: string | null) => t === 'listed_fund' },
+              { title: 'Unlisted funds', match: (t?: string | null) => t === 'unlisted_fund' },
+              { title: 'Other holdings', match: (t?: string | null) => !!t && !['direct_equity', 'listed_fund', 'unlisted_fund'].includes(t) },
+            ]
             return (
               <View style={{ marginTop: 12 }}>
-                <Text style={s.h3} minPresenceAhead={40}>THE FUNDS IN YOUR PORTFOLIO</Text>
-                {(['listed_fund', 'unlisted_fund'] as const).map((type) => {
-                  const rows = funds.filter((f) => f.h.holdingType === type)
+                <Text style={s.h3} minPresenceAhead={40}>ABOUT YOUR HOLDINGS</Text>
+                {groups.map((g) => {
+                  const rows = briefs.filter((b) => g.match(b.h.holdingType))
                   if (rows.length === 0) return null
                   return (
-                    <View key={type} style={{ marginBottom: 4 }}>
-                      <Text style={[s.td, s.bold, { color: OM.navy, marginBottom: 2 }]}>
-                        {type === 'listed_fund' ? 'Exchange-traded and listed funds' : 'Unlisted funds'}
-                      </Text>
+                    <View key={g.title} style={{ marginBottom: 4 }}>
+                      <Text style={[s.td, s.bold, { color: OM.navy, marginBottom: 2 }]}>{g.title}</Text>
                       {rows.map(({ h, line }) => (
                         <View key={h.code} style={{ flexDirection: 'row', marginBottom: 3 }} wrap={false}>
                           <Text style={[s.code, { width: '16%' }]}>{h.code}</Text>

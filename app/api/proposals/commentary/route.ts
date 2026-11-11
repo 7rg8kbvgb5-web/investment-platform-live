@@ -52,9 +52,9 @@ export async function POST(request: Request) {
 const SYSTEM = `You write short client-facing commentary for an Ord Minnett private wealth investment proposal, read by affluent Australian investors.
 
 For each item write:
-- kind "buy": 1-2 sentences (max 45 words) on why we recommend buying this new position - what it is, the role it plays in the portfolio, and the investment case.
-- kind "sell": 1-2 sentences (max 45 words) on why we recommend selling it outright - e.g. it sits outside our house model, a better-quality alternative, concentration, or the research view.
-- kind "exposure": ONE sentence (max 25 words) on the exposure this ETF or fund gives the portfolio (what it holds / tracks / invests in and why that helps).
+- kind "buy" (a new purchase or a top-up of an existing holding): 1-2 sentences (max 45 words) on why - what it is, the role it plays in the portfolio, and the investment case. For a top-up, explain why we're adding to it.
+- kind "sell" (a full or partial sale): 1-2 sentences (max 45 words) on why - e.g. it sits outside our house model, a better-quality alternative, reducing concentration or bringing it back to its target weight, or the research view.
+- kind "exposure" (a holding kept as is): ONE sentence (max 25 words) on what it adds to the portfolio - for an ETF or fund, what it holds or tracks; for a share, the role it plays.
 
 Rules:
 - Use the facts provided. You may use web search to confirm what a fund or company does and what an ETF tracks; never invent figures, returns, fees or ratings.
@@ -72,7 +72,7 @@ async function draft(items: CommentaryItem[]): Promise<Record<string, string>> {
   const lines = items.map((i) => {
     const v = views.get(i.code)
     return [
-      `- ${i.code}:${i.kind} | ${i.name} | asset class: ${i.assetClass}`,
+      `- ${i.code}:${i.kind} | ${i.name} | asset class: ${i.assetClass} | ${i.action}`,
       i.fundType ? ` | ${i.fundType}` : '',
       i.context ? ` | platform notes: ${i.context}` : '',
       v ? ` | research: ${houseViewSentence(v)}` : '',

@@ -15,55 +15,93 @@ export const COMMENTARY_LABELS: Record<CommentaryKind, string> = {
   exposure: 'What it adds to the portfolio',
 }
 
-/** Something the proposal should explain, with the facts a draft can draw on. */
+/** A security in the proposal that can carry a brief, with the facts a draft can draw on. */
 export type CommentaryItem = {
   code: string
   name: string
   kind: CommentaryKind
   assetClass: string
-  /** Facts for drafting: the platform's own reasoning for the trade, house view, holding type. */
+  /** What happens to it in this proposal. */
+  action: 'buy' | 'increase' | 'sell' | 'reduce' | 'hold'
+  /** direct_equity / listed_fund / unlisted_fund / ... where known. */
+  holdingType: string | null
+  /** Facts for drafting: the platform's own reasoning for the trade, holding type. */
   context: string
-  /** 'ETF / listed fund' or 'Unlisted fund' for exposure lines. */
+  /** 'ETF / listed fund' or 'Unlisted fund' where relevant. */
   fundType?: string
+}
+
+export const ACTION_LABELS: Record<CommentaryItem['action'], string> = {
+  buy: 'New purchase',
+  increase: 'Top-up',
+  sell: 'Full sale',
+  reduce: 'Partial sale',
+  hold: 'Held',
 }
 
 export function commentaryKey(code: string, kind: CommentaryKind): string {
   return `${normaliseCode(code)}:${kind}`
 }
 
-/** Outright buys and sells, and the funds in the recommended portfolio. */
+function fundTypeOf(holdingType: string | null | undefined): string | undefined {
+  if (holdingType === 'listed_fund') return 'ETF / listed fund'
+  if (holdingType === 'unlisted_fund') return 'Unlisted fund'
+  return undefined
+}
+
+/**
+ * Every security in the proposal: each trade (buy, top-up, sale, trim) and
+ * each holding kept without a trade. A traded security gets a "why" brief
+ * (buy or sell); a held one gets a "what it adds" brief.
+ */
 export function commentaryItemsFor(advice: Pick<ClientAdvice, 'trades' | 'resultingHoldings'>): CommentaryItem[] {
+  const typeByCode = new Map(advice.resultingHoldings.map((h) => [normaliseCode(h.code), h.holdingType ?? null]))
   const items = new Map<string, CommentaryItem>()
   for (const t of advice.trades) {
-    if (t.action !== 'buy' && t.action !== 'sell') continue
-    const kind: CommentaryKind = t.action
-    items.set(commentaryKey(t.code, kind), {
-      code: normaliseCode(t.code),
+    const code = normaliseCode(t.code)
+    const kind: CommentaryKind = t.action === 'buy' || t.action === 'increase' ? 'buy' : 'sell'
+    const holdingType = typeByCode.get(code) ?? null
+    items.set(code, {
+      code,
       name: t.name,
       kind,
       assetClass: t.assetClass,
+      action: t.action,
+      holdingType,
+      fundType: fundTypeOf(holdingType),
       context: [
+        `${ACTION_LABELS[t.action]}.`,
         t.rationale,
-        t.action === 'sell' && t.treatment === 'staged_exit' ? 'To be sold as a staged exit over time.' : '',
+        t.treatment === 'staged_exit' ? 'To be sold as a staged exit over time.' : '',
       ]
         .filter(Boolean)
         .join(' '),
     })
   }
   for (const h of advice.resultingHoldings) {
-    if (h.holdingType !== 'listed_fund' && h.holdingType !== 'unlisted_fund') continue
-    const fundType = h.holdingType === 'listed_fund' ? 'ETF / listed fund' : 'Unlisted fund'
-    items.set(commentaryKey(h.code, 'exposure'), {
-      code: normaliseCode(h.code),
+    const code = normaliseCode(h.code)
+    if (items.has(code) || h.holdingType === 'cash') continue
+    const fundType = fundTypeOf(h.holdingType)
+    items.set(code, {
+      code,
       name: h.name,
       kind: 'exposure',
       assetClass: h.assetClass,
+      action: 'hold',
+      holdingType: h.holdingType ?? null,
       fundType,
-      context: `${fundType} held in the ${h.assetClass} allocation.`,
+      context: `${fundType ?? 'Holding'} kept in the ${h.assetClass} allocation${h.inModel ? '' : ' (retained outside the house model)'}.`,
     })
   }
-  const order: Record<CommentaryKind, number> = { buy: 0, sell: 1, exposure: 2 }
-  return Array.from(items.values()).sort((a, b) => order[a.kind] - order[b.kind] || a.code.localeCompare(b.code))
+  const order: Record<CommentaryItem['action'], number> = { buy: 0, increase: 1, sell: 2, reduce: 3, hold: 4 }
+  return Array.from(items.values()).sort((a, b) => order[a.action] - order[b.action] || a.code.localeCompare(b.code))
+}
+
+/** Ticked by default until the adviser chooses: outright buys and sells, and every ETF / fund. */
+export function defaultCommentarySelection(items: CommentaryItem[]): string[] {
+  return items
+    .filter((i) => i.action === 'buy' || i.action === 'sell' || i.fundType)
+    .map((i) => commentaryKey(i.code, i.kind))
 }
 
 /** Saved commentary, keyed by commentaryKey(code, kind). */

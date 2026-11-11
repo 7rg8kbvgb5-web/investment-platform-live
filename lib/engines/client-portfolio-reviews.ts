@@ -59,6 +59,18 @@ export type ClientObjectives = {
 
 export const EMPTY_OBJECTIVES: ClientObjectives = { primaryGoal: null, incomeNeed: null, timeframeYears: null, constraints: '' }
 
+/** The briefs ticked for this client's proposal (migration 0032). */
+export async function saveCommentarySelection(id: string, keys: string[]): Promise<void> {
+  const { error } = await supabase.from(TABLE).update({ commentary_selection: keys }).eq('id', id)
+  if (error) {
+    throw new Error(
+      error.message.includes('commentary_selection')
+        ? 'Run migration 0032 in Supabase to save which briefs are included.'
+        : `Failed to save the selection: ${error.message}`,
+    )
+  }
+}
+
 export async function saveClientObjectives(id: string, objectives: ClientObjectives): Promise<void> {
   const { error } = await supabase.from(TABLE).update({ objectives }).eq('id', id)
   if (error) {
@@ -83,6 +95,8 @@ export type ClientPortfolioReview = {
   implementedAt: string | null
   cgtSettings: CgtSettings | null
   objectives: ClientObjectives | null
+  /** Briefs ticked for this client's proposal, as "CODE:kind" keys (migration 0032). Null = not yet chosen. */
+  commentarySelection: string[] | null
   /** The adviser model this review is built against (migration 0028). */
   modelId: string
 }
@@ -107,6 +121,7 @@ type ReviewRow = {
   implemented_at?: string | null
   cgt_settings?: CgtSettings | null
   objectives?: ClientObjectives | null
+  commentary_selection?: string[] | null
   model_id?: string | null
   updated_at: string
 }
@@ -135,6 +150,7 @@ function mapRow(row: ReviewRow): ClientPortfolioReview {
     implementedAt: row.implemented_at ?? null,
     cgtSettings: row.cgt_settings ?? null,
     objectives: row.objectives ?? null,
+    commentarySelection: Array.isArray(row.commentary_selection) ? row.commentary_selection : null,
     modelId: row.model_id ?? DEFAULT_MODEL_ID,
   }
 }
