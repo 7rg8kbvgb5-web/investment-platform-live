@@ -1,3 +1,4 @@
+import { sortSecurities } from './security-order'
 import type { HoldingTreatment } from './holding-triage'
 import type { ModelPortfolio, RiskProfile } from './model-portfolios'
 import { fetchModelPortfolio, fetchAllRiskProfileWeights, computeGrowthDefensiveByProfile } from './model-portfolio-core'
@@ -49,6 +50,19 @@ export type ProposedTrade = {
   statementCode?: string
 }
 
+/** One holding in the portfolio as it stands after the advice is implemented. */
+export type ResultingHolding = {
+  code: string
+  name: string
+  assetClass: string
+  weight: number
+  value: number | null
+  yield: number | null
+  frankingPct: number | null
+  /** False for holdings retained (or left untouched) outside the house model. */
+  inModel: boolean
+}
+
 /** A holding kept outside the model as a documented adviser exception. */
 export type RetainedHolding = {
   code: string
@@ -83,6 +97,7 @@ export type ClientAdvice = {
   /** % of the existing portfolio still unclassified - excluded from this proposal until classified. */
   unclassifiedWeightPct: number
   retainedHoldings: RetainedHolding[]
+  resultingHoldings: ResultingHolding[]
   projectedIncome: number | null
   projectedYieldPct: number | null
   yieldCoveragePct: number
@@ -223,7 +238,9 @@ export async function buildClientAdvice(
       }))
   }
 
-  // Projected income on the model holdings once the trades are done.
+  // The portfolio as it stands once the advice is implemented - every
+  // holding with its resulting weight and value, plus yield and franking
+  // from the model where known. Drives projected income and the proposal.
   const yieldByCode = new Map<string, number>()
   const frankingByCode = new Map<string, number>()
   for (const ac of model.assetClasses)
@@ -231,35 +248,70 @@ export async function buildClientAdvice(
       if (typeof h.yield === 'number') yieldByCode.set(normaliseCode(h.code), h.yield)
       if (typeof h.frankingPct === 'number') frankingByCode.set(normaliseCode(h.code), h.frankingPct)
     }
+  const resultingHoldings: ResultingHolding[] = []
+  if (cashDeployment) {
+    for (const l of cashDeployment.lines) {
+      if (l.resultingValue <= 0) continue
+      resultingHoldings.push({
+        code: l.code,
+        name: l.name,
+        assetClass: l.assetClass,
+        weight: l.resultingWeight,
+        value: l.resultingValue,
+        yield: yieldByCode.get(normaliseCode(l.code)) ?? null,
+        frankingPct: frankingByCode.get(normaliseCode(l.code)) ?? null,
+        inModel: true,
+      })
+    }
+    // Existing holdings outside the model are untouched when only new cash is invested.
+    const modelCodes = new Set(cashDeployment.lines.map((l) => normaliseCode(l.code)))
+    for (const h of mapped) {
+      if (!h.mapped || modelCodes.has(normaliseCode(h.code))) continue
+      const value = h.value ?? (existingValue ? (h.weight / 100) * existingValue : 0)
+      resultingHoldings.push({
+        code: h.code,
+        name: h.name ?? h.code,
+        assetClass: h.assetClass,
+        weight: cashDeployment.totalAfter > 0 ? round2((value / cashDeployment.totalAfter) * 100) : 0,
+        value,
+        yield: null,
+        frankingPct: null,
+        inModel: false,
+      })
+    }
+  } else {
+    for (const r of comparison.holdingRecommendations) {
+      if (r.targetWeight <= 0) continue
+      resultingHoldings.push({
+        code: r.code,
+        name: r.name,
+        assetClass: r.assetClass,
+        weight: r.targetWeight,
+        value: r.targetValue ?? (totalAfter ? (r.targetWeight / 100) * totalAfter : null),
+        yield: yieldByCode.get(normaliseCode(r.code)) ?? null,
+        frankingPct: frankingByCode.get(normaliseCode(r.code)) ?? null,
+        inModel: r.treatment === undefined,
+      })
+    }
+  }
+
+  // Projected income on the resulting portfolio.
   let projectedIncome: number | null = null
   let credits = 0
   let coveredWeight = 0
   let modelWeight = 0
-  if (cashDeployment) {
+  if (totalAfter) {
     projectedIncome = 0
-    for (const l of cashDeployment.lines) {
-      modelWeight += l.resultingValue
-      const y = yieldByCode.get(normaliseCode(l.code))
-      if (y !== undefined) {
-        const income = (l.resultingValue * y) / 100
+    for (const h of resultingHoldings) {
+      const value = h.value ?? (h.weight / 100) * totalAfter
+      modelWeight += value
+      if (typeof h.yield === 'number') {
+        const income = (value * h.yield) / 100
         projectedIncome += income
-        credits += frankingCredit(income, frankingByCode.get(normaliseCode(l.code)) ?? 0)
-        coveredWeight += l.resultingValue
+        credits += frankingCredit(income, h.frankingPct ?? 0)
+        coveredWeight += value
       }
     }
-  } else if (totalAfter) {
-    projectedIncome = 0
-    for (const ac of model.assetClasses)
-      for (const h of ac.holdings) {
-        const value = (h.weight / 100) * totalAfter
-        modelWeight += value
-        if (typeof h.yield === 'number') {
-          const income = (value * h.yield) / 100
-          projectedIncome += income
-          credits += frankingCredit(income, h.frankingPct ?? 0)
-          coveredWeight += value
-        }
-      }
   }
   const yieldCoveragePct = modelWeight > 0 ? Math.round((coveredWeight / modelWeight) * 100) : 0
   const projectedYieldPct = projectedIncome !== null && coveredWeight > 0 ? round2((projectedIncome / coveredWeight) * 100) : null
@@ -327,6 +379,7 @@ export async function buildClientAdvice(
     unmappedHoldings: comparison.unclassifiedHoldings.map((h) => ({ code: h.code, name: h.name, weight: h.weight })),
     unclassifiedWeightPct,
     retainedHoldings,
+    resultingHoldings: sortSecurities(resultingHoldings),
     projectedIncome,
     projectedYieldPct,
     yieldCoveragePct,
