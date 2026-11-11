@@ -71,7 +71,7 @@ async function buildPdf(reviewId: string | null, approachParam: string | null, c
       if (result.lines.length > 0) capitalGains = { result, reference }
     }
 
-    // Briefs the adviser ticked for this client (defaults if never chosen), with their approved text.
+    // Briefs the adviser ticked for this client, with their approved text.
     const commentaryItems = commentaryItemsFor(advice)
     const ticked = new Set(review.commentarySelection ?? defaultCommentarySelection(commentaryItems))
     const allCommentary: Record<string, string> = await fetchCommentary(commentaryItems.map((i) => i.code)).catch(() => ({}))

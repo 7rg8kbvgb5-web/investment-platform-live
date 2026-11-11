@@ -36,7 +36,7 @@ export default function ProposalCommentaryEditor({
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
 
-  // Selection: what the adviser chose for this client, else sensible defaults.
+  // Selection: what the adviser ticked for this client (nothing until they choose).
   const reviewId = review?.id ?? null
   const chosen = review?.commentarySelection ?? null
   // Latest ticks this session, so recomputing the advice never reverts them.

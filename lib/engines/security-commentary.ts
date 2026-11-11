@@ -97,11 +97,10 @@ export function commentaryItemsFor(advice: Pick<ClientAdvice, 'trades' | 'result
   return Array.from(items.values()).sort((a, b) => order[a.action] - order[b.action] || a.code.localeCompare(b.code))
 }
 
-/** Ticked by default until the adviser chooses: outright buys and sells, and every ETF / fund. */
-export function defaultCommentarySelection(items: CommentaryItem[]): string[] {
-  return items
-    .filter((i) => i.action === 'buy' || i.action === 'sell' || i.fundType)
-    .map((i) => commentaryKey(i.code, i.kind))
+/** Nothing is ticked until the adviser chooses - a brief appears only where they tick it. */
+export function defaultCommentarySelection(_items: CommentaryItem[]): string[] {
+  void _items
+  return []
 }
 
 /** Saved commentary, keyed by commentaryKey(code, kind). */
