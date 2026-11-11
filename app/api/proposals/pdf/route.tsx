@@ -9,6 +9,7 @@ import { ClientProposalDocument } from '../../../../lib/pdf/ClientProposalDocume
 import { cgtForReview } from '../../../../lib/tax/cgt-for-review'
 import { getTaxReference } from '../../../../lib/tax/tax-reference'
 import { recordProposal } from '../../../../lib/engines/proposal-records'
+import { fetchHouseViews } from '../../../../lib/engines/house-view'
 import { commentaryItemsFor, commentaryKey, defaultCommentarySelection, fetchCommentary } from '../../../../lib/engines/security-commentary'
 import { getSignedInAdviser } from '../../../../lib/adviser-identity'
 import { CAPITAL_MARKET_ASSUMPTIONS, CMA_AS_AT, CPI_ASSUMPTION, estimateFees } from '../../../../lib/pdf/proposal/insights'
@@ -81,6 +82,16 @@ async function buildPdf(reviewId: string | null, approachParam: string | null, c
       if (ticked.has(k) && allCommentary[k]) commentary[k] = allCommentary[k]
     }
 
+    // Ord Minnett research view on each recommended holding (from the coverage universe / research uploads).
+    const research: Record<string, { rating: string; lean: 'bullish' | 'neutral' | 'bearish'; priceTarget: number | null; upside: number | null }> = {}
+    try {
+      const views = await fetchHouseViews(advice.resultingHoldings.map((h) => h.code), 'Ord Minnett', prices)
+      for (const [code, v] of Array.from(views.entries()))
+        research[code] = { rating: v.rating, lean: v.lean, priceTarget: v.priceTarget, upside: v.upside }
+    } catch {
+      // Research is supporting detail - the proposal still renders without it.
+    }
+
     const clientName = clientNameInput?.trim().slice(0, 120) || null
     const displayName = clientName ?? review.clientName
     const render = (name: string) =>
@@ -92,6 +103,7 @@ async function buildPdf(reviewId: string | null, approachParam: string | null, c
           preparedOn={preparedOn}
           capitalGains={capitalGains}
           commentary={commentary}
+          research={research}
         />,
       )
     const buffer = await render(displayName)

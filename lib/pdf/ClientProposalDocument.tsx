@@ -6,6 +6,8 @@ import { ASSET_CLASSES, RISK_PROFILES } from '../engines/model-portfolio-core'
 import { CGT_DISCLAIMERS, ENTITY_LABELS, type CgtResult } from '../tax/cgt'
 import type { TaxReference } from '../tax/tax-reference'
 import type { ClientObjectives } from '../engines/client-portfolio-reviews'
+import { buildScorecard } from './proposal/scorecard'
+import { ADVICE_TEAM } from './proposal/team'
 import {
   OM,
   colourFor,
@@ -164,6 +166,7 @@ export function ClientProposalDocument({
   preparedOn,
   capitalGains,
   commentary = {},
+  research = {},
 }: {
   advice: ClientAdvice
   adviserNotes: string
@@ -172,6 +175,8 @@ export function ClientProposalDocument({
   capitalGains?: { result: CgtResult; reference: TaxReference } | null
   /** Adviser-approved commentary keyed "CODE:buy" / "CODE:sell" / "CODE:exposure". */
   commentary?: Record<string, string>
+  /** Ord Minnett research view per holding code: rating, price target, upside to target. */
+  research?: Record<string, { rating: string; lean: 'bullish' | 'neutral' | 'bearish'; priceTarget: number | null; upside: number | null }>
 }) {
   const note = (code: string, kind: 'buy' | 'sell' | 'exposure') => commentary[`${code.trim().toUpperCase()}:${kind}`] ?? null
   const client = advice.clientName
@@ -190,7 +195,15 @@ export function ClientProposalDocument({
   const riskAfter = portfolioRiskStats(after, advice.frankingBenefitByClass?.projected)
   const riskNow = hasCurrent ? portfolioRiskStats(current, advice.frankingBenefitByClass?.current) : null
   const fees = estimateFees(advice)
+  const scorecard = hasCurrent ? buildScorecard({ advice, gdNow, gdAfter, current, after, riskNow, riskAfter }) : []
+  // The three clearest improvements lead the page.
+  const highlights = scorecard.filter((r) => r.direction === 'better').slice(0, 3)
   const total = advice.totalAfter
+  // Recommended-holdings table: an extra column for the Ord Minnett view when research is available.
+  const hasResearch = Object.keys(research).length > 0
+  const HW = hasResearch
+    ? { code: '12%', sec: '32%', res: '16%', w: '9%', v: '13%', y: '9%', f: '9%', lead: '60%', rest: '18%' }
+    : { code: '16%', sec: '40%', res: '0%', w: '11%', v: '14%', y: '10%', f: '9%', lead: '56%', rest: '19%' }
   const guide = PROFILE_GUIDE[advice.riskProfile]
 
   const classRows = ASSET_CLASSES.map((ac) => ({
@@ -291,6 +304,8 @@ export function ClientProposalDocument({
           <Text style={{ fontSize: 12, color: OM.white, marginBottom: 6 }}>Prepared for {client}</Text>
           <Text style={{ fontSize: 10, color: OM.paleSilver, marginBottom: 4 }}>{advice.riskProfile} portfolio</Text>
           <Text style={{ fontSize: 10, color: OM.paleSilver }}>{preparedOn}</Text>
+          <Text style={{ fontSize: 7, letterSpacing: 2, color: OM.paleSilver, marginTop: 26 }}>YOUR ADVISERS</Text>
+          <Text style={{ fontSize: 10, color: OM.white, marginTop: 5 }}>{ADVICE_TEAM.map((m) => m.name).join('  ·  ')}</Text>
         </View>
         <Weave width={595} height={170} />
         <View style={{ position: 'absolute', bottom: 18, left: 0, right: 0, alignItems: 'center' }}>
@@ -392,6 +407,85 @@ export function ClientProposalDocument({
           </View>
         ) : null}
       </Page>
+
+      {/* ---------- Before and after ---------- */}
+      {scorecard.length > 0 ? (
+        <Page size="A4" style={s.page}>
+          <Chrome client={client} />
+          <SectionTitle n={next()} eyebrow="Before and after" title="How your portfolio changes" />
+          <Text style={s.p}>
+            The measures that matter most, for your portfolio today and as recommended. Each figure is drawn from the
+            same analysis as the rest of this proposal.
+          </Text>
+          {highlights.length > 0 ? (
+            <View style={{ flexDirection: 'row', marginTop: 4, marginBottom: 14 }}>
+              {highlights.map((r, i) => (
+                <View
+                  key={r.label}
+                  style={{
+                    flex: 1,
+                    backgroundColor: OM.navy,
+                    padding: 12,
+                    marginRight: i < highlights.length - 1 ? 8 : 0,
+                  }}
+                >
+                  <Text style={{ fontSize: 6.5, letterSpacing: 1, color: OM.paleSilver }}>{r.label.toUpperCase()}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginTop: 8 }}>
+                    <Text style={{ fontSize: 11, color: OM.paleSilver, marginRight: 6, marginBottom: 2 }}>{r.today}</Text>
+                    <Text style={{ fontSize: 9, color: OM.red, marginRight: 6, marginBottom: 3, fontFamily: 'Helvetica-Bold' }}>to</Text>
+                    <Text style={{ fontSize: 20, color: OM.white, fontFamily: 'Times-Bold' }}>{r.recommended}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : null}
+          <View style={s.table}>
+            <View style={s.tr}>
+              <Text style={[s.th, { width: '40%' }]}>MEASURE</Text>
+              <Text style={[s.th, { width: '22%', textAlign: 'right' }]}>TODAY</Text>
+              <Text style={[s.th, { width: '24%', textAlign: 'right' }]}>RECOMMENDED</Text>
+              <Text style={[s.th, { width: '14%', textAlign: 'right' }]} />
+            </View>
+            {(['Diversification', 'Shape', 'Income', 'Return and risk'] as const).map((group) => {
+              const rows = scorecard.filter((r) => r.group === group)
+              if (rows.length === 0) return null
+              return (
+                <View key={group} wrap={false}>
+                  <View style={s.trGroup}>
+                    <Text style={[s.td, s.bold, { color: OM.navy }]}>{group}</Text>
+                  </View>
+                  {rows.map((r) => (
+                    <View style={[s.tr, { paddingVertical: 6 }]} key={r.label}>
+                      <Text style={[s.td, { width: '40%', fontSize: 8.5 }]}>{r.label}</Text>
+                      <View style={{ width: '22%', alignItems: 'flex-end' }}>
+                        <Text style={{ fontSize: 10, color: OM.slate }}>{r.today}</Text>
+                        {r.todayNote ? <Text style={{ fontSize: 6.5, color: OM.silver, marginTop: 1 }}>{r.todayNote}</Text> : null}
+                      </View>
+                      <View style={{ width: '24%', alignItems: 'flex-end' }}>
+                        <Text style={{ fontSize: 11, color: OM.navy, fontFamily: 'Helvetica-Bold' }}>{r.recommended}</Text>
+                        {r.recommendedNote ? <Text style={{ fontSize: 6.5, color: OM.silver, marginTop: 1 }}>{r.recommendedNote}</Text> : null}
+                      </View>
+                      <View style={{ width: '14%', alignItems: 'flex-end', justifyContent: 'center' }}>
+                        {r.direction === 'better' ? (
+                          <Text style={{ fontSize: 6.5, letterSpacing: 0.8, color: OM.white, backgroundColor: OM.navy, paddingVertical: 2, paddingHorizontal: 5 }}>IMPROVES</Text>
+                        ) : r.direction === 'worse' ? (
+                          <Text style={{ fontSize: 6.5, letterSpacing: 0.8, color: OM.slate, borderWidth: 0.5, borderColor: OM.paleSilver, paddingVertical: 2, paddingHorizontal: 5 }}>TRADE-OFF</Text>
+                        ) : null}
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )
+            })}
+          </View>
+          <Text style={s.small}>
+            Income and franking are first-year estimates from forward yields; expected return and variation are long-term
+            estimates based on the capital market assumptions under Important information. &quot;Return for each unit of
+            risk&quot; divides expected return by typical yearly variation - higher means the portfolio is working harder
+            for the risk it takes.
+          </Text>
+        </Page>
+      ) : null}
 
       {/* ---------- 2. Investor profile ---------- */}
       <Page size="A4" style={s.page}>
@@ -674,12 +768,13 @@ export function ClientProposalDocument({
           </Text>
           <View style={s.table}>
             <View style={s.tr} fixed>
-              <Text style={[s.th, { width: '16%' }]}>CODE</Text>
-              <Text style={[s.th, { width: '40%' }]}>SECURITY</Text>
-              <Text style={[s.th, { width: '11%', textAlign: 'right' }]}>WEIGHT</Text>
-              <Text style={[s.th, { width: '14%', textAlign: 'right' }]}>VALUE</Text>
-              <Text style={[s.th, { width: '10%', textAlign: 'right' }]}>YIELD</Text>
-              <Text style={[s.th, { width: '9%', textAlign: 'right' }]}>FRANKED</Text>
+              <Text style={[s.th, { width: HW.code }]}>CODE</Text>
+              <Text style={[s.th, { width: HW.sec }]}>SECURITY</Text>
+              {hasResearch ? <Text style={[s.th, { width: HW.res }]}>ORD MINNETT VIEW</Text> : null}
+              <Text style={[s.th, { width: HW.w, textAlign: 'right' }]}>WEIGHT</Text>
+              <Text style={[s.th, { width: HW.v, textAlign: 'right' }]}>VALUE</Text>
+              <Text style={[s.th, { width: HW.y, textAlign: 'right' }]}>YIELD</Text>
+              <Text style={[s.th, { width: HW.f, textAlign: 'right' }]}>FRANKED</Text>
             </View>
             {ASSET_CLASSES.map((ac) => {
               const rows = advice.resultingHoldings.filter((h) => h.assetClass === ac.name)
@@ -689,45 +784,72 @@ export function ClientProposalDocument({
               return (
                 <View key={ac.name}>
                   <View style={s.trGroup} wrap={false} minPresenceAhead={20}>
-                    <View style={{ width: '56%', flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{ width: HW.lead, flexDirection: 'row', alignItems: 'center' }}>
                       <View style={{ width: 6, height: 6, backgroundColor: colourFor(ac.name), marginRight: 5 }} />
                       <Text style={[s.td, s.bold, { color: OM.navy }]}>{ac.name}</Text>
                     </View>
-                    <Text style={[s.td, s.bold, { width: '11%', textAlign: 'right', color: OM.navy }]}>{pct(w)}</Text>
-                    <Text style={[s.td, s.bold, { width: '14%', textAlign: 'right', color: OM.navy }]}>{v ? fmt(v) : ''}</Text>
-                    <Text style={{ width: '19%' }} />
+                    <Text style={[s.td, s.bold, { width: HW.w, textAlign: 'right', color: OM.navy }]}>{pct(w)}</Text>
+                    <Text style={[s.td, s.bold, { width: HW.v, textAlign: 'right', color: OM.navy }]}>{v ? fmt(v) : ''}</Text>
+                    <Text style={{ width: HW.rest }} />
                   </View>
-                  {rows.map((h) => (
+                  {rows.map((h) => {
+                    const r = research[h.code.trim().toUpperCase()]
+                    return (
                     <View style={s.tr} key={h.code} wrap={false}>
-                      <Text style={[s.code, { width: '16%' }]}>{h.code}</Text>
-                      <Text style={[s.td, { width: '40%' }]}>
+                      <Text style={[s.code, { width: HW.code }]}>{h.code}</Text>
+                      <Text style={[s.td, { width: HW.sec }]}>
                         {h.name}
                         {!h.inModel ? <Text style={{ color: OM.slate }}> (retained)</Text> : null}
                       </Text>
-                      <Text style={[s.td, { width: '11%', textAlign: 'right' }]}>{pct(h.weight)}</Text>
-                      <Text style={[s.td, { width: '14%', textAlign: 'right' }]}>{h.value !== null ? fmt(h.value) : '—'}</Text>
-                      <Text style={[s.td, { width: '10%', textAlign: 'right' }]}>{h.yield !== null ? pct(h.yield) : '—'}</Text>
-                      <Text style={[s.td, s.muted, { width: '9%', textAlign: 'right' }]}>{h.frankingPct !== null ? `${Math.round(h.frankingPct)}%` : '—'}</Text>
+                      {hasResearch ? (
+                        <View style={{ width: HW.res }}>
+                          {r ? (
+                            <>
+                              <Text style={[s.td, s.bold, { color: r.lean === 'bearish' ? OM.red : OM.navy }]}>{r.rating}</Text>
+                              {r.priceTarget !== null ? (
+                                <Text style={{ fontSize: 6.5, color: OM.slate, marginTop: 1 }}>
+                                  Target ${r.priceTarget.toFixed(2)}
+                                  {r.upside !== null ? ` · ${r.upside >= 0 ? '+' : ''}${Math.round(r.upside * 100)}%` : ''}
+                                </Text>
+                              ) : null}
+                            </>
+                          ) : (
+                            <Text style={[s.td, s.muted]}>—</Text>
+                          )}
+                        </View>
+                      ) : null}
+                      <Text style={[s.td, { width: HW.w, textAlign: 'right' }]}>{pct(h.weight)}</Text>
+                      <Text style={[s.td, { width: HW.v, textAlign: 'right' }]}>{h.value !== null ? fmt(h.value) : '—'}</Text>
+                      <Text style={[s.td, { width: HW.y, textAlign: 'right' }]}>{h.yield !== null ? pct(h.yield) : '—'}</Text>
+                      <Text style={[s.td, s.muted, { width: HW.f, textAlign: 'right' }]}>{h.frankingPct !== null ? `${Math.round(h.frankingPct)}%` : '—'}</Text>
                     </View>
-                  ))}
+                    )
+                  })}
                 </View>
               )
             })}
             <View style={s.trTotal} wrap={false}>
-              <Text style={[s.td, s.bold, { width: '56%' }]}>Total</Text>
-              <Text style={[s.td, s.bold, { width: '11%', textAlign: 'right' }]}>
+              <Text style={[s.td, s.bold, { width: HW.lead }]}>Total</Text>
+              <Text style={[s.td, s.bold, { width: HW.w, textAlign: 'right' }]}>
                 {pct(advice.resultingHoldings.reduce((sum, h) => sum + h.weight, 0))}
               </Text>
-              <Text style={[s.td, s.bold, { width: '14%', textAlign: 'right' }]}>
+              <Text style={[s.td, s.bold, { width: HW.v, textAlign: 'right' }]}>
                 {total ? fmt(advice.resultingHoldings.reduce((sum, h) => sum + (h.value ?? 0), 0)) : ''}
               </Text>
-              <Text style={[s.td, s.bold, { width: '10%', textAlign: 'right' }]}>{advice.projectedYieldPct !== null ? pct(advice.projectedYieldPct) : ''}</Text>
-              <Text style={{ width: '9%' }} />
+              <Text style={[s.td, s.bold, { width: HW.y, textAlign: 'right' }]}>{advice.projectedYieldPct !== null ? pct(advice.projectedYieldPct) : ''}</Text>
+              <Text style={{ width: HW.f }} />
             </View>
           </View>
           {advice.cashDeployment && advice.cashDeployment.residualCash > 1 ? (
             <Text style={s.small}>
               About {fmt(advice.cashDeployment.residualCash)} remains in cash after rounding to whole units.
+            </Text>
+          ) : null}
+          {hasResearch ? (
+            <Text style={s.small}>
+              Ord Minnett view: the research rating and 12-month price target published by Ord Minnett Research at the date
+              of this proposal, with the potential move to target from the current price. Price targets are estimates, not
+              forecasts or guarantees.
             </Text>
           ) : null}
           {(() => {
@@ -745,8 +867,9 @@ export function ClientProposalDocument({
               { title: 'Other holdings', match: (t?: string | null) => !!t && !['direct_equity', 'listed_fund', 'unlisted_fund'].includes(t) },
             ]
             return (
-              <View style={{ marginTop: 12 }}>
-                <Text style={s.h3} minPresenceAhead={40}>ABOUT YOUR HOLDINGS</Text>
+              // Kept in one piece (when short) so the heading never sits alone at a page foot.
+              <View style={{ marginTop: 12 }} wrap={briefs.length > 8}>
+                <Text style={s.h3} minPresenceAhead={80}>ABOUT YOUR HOLDINGS</Text>
                 {groups.map((g) => {
                   const rows = briefs.filter((b) => g.match(b.h.holdingType))
                   if (rows.length === 0) return null
@@ -1124,6 +1247,99 @@ export function ClientProposalDocument({
           Our recommendations draw on Ord Minnett research and exclusive access to Barrenjoey research, not available
           through any other private wealth channel.
         </Bullet>
+      </Page>
+
+      {/* ---------- Your advice team ---------- */}
+      <Page size="A4" style={s.page}>
+        <Chrome client={client} />
+        <SectionTitle n={next()} eyebrow="Your advice team" title="The people looking after your wealth" />
+        <Text style={s.lead}>
+          Your portfolio is looked after by a dedicated private wealth team, supported by Ord Minnett&apos;s research,
+          our Investment Committee and Ord Minnett&apos;s operations team. We are your first point of contact for
+          anything to do with your investments.
+        </Text>
+        <View style={{ flexDirection: 'row', marginTop: 6 }}>
+          {ADVICE_TEAM.map((m, i) => (
+            <View
+              key={m.name}
+              style={{ flex: 1, borderTopWidth: 2, borderTopColor: OM.navy, backgroundColor: OM.paleGrey, padding: 14, marginRight: i < ADVICE_TEAM.length - 1 ? 10 : 0 }}
+            >
+              <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: OM.navy, alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+                <Text style={{ color: OM.white, fontSize: 11, fontFamily: 'Times-Bold' }}>
+                  {m.name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2)}
+                </Text>
+              </View>
+              <Text style={{ fontFamily: 'Times-Bold', fontSize: 14, color: OM.navy }}>{m.name}</Text>
+              <Text style={{ fontSize: 8, color: OM.slate, marginTop: 2, marginBottom: 8 }}>{m.title}</Text>
+              {m.phone ? <Text style={{ fontSize: 8.5, color: OM.ink, marginBottom: 2 }}>{m.phone}</Text> : null}
+              {m.email ? <Text style={{ fontSize: 8.5, color: OM.ink }}>{m.email}</Text> : null}
+            </View>
+          ))}
+        </View>
+        <Text style={[s.h2, { marginTop: 22 }]}>Our commitment to you</Text>
+        <Bullet>
+          <Text style={s.bold}>One integrated view. </Text>
+          Your investments are considered alongside your wider circumstances - structures, tax and estate planning - as
+          one balance sheet.
+        </Bullet>
+        <Bullet>
+          <Text style={s.bold}>Nothing happens without you. </Text>
+          Every change is recommended to you first and only implemented on your instruction.
+        </Bullet>
+        <Bullet>
+          <Text style={s.bold}>Clear, regular reporting. </Text>
+          You receive consolidated reporting on your portfolio, its income and its tax position, and a review with us at
+          least once a year.
+        </Bullet>
+      </Page>
+
+      {/* ---------- Authority to proceed ---------- */}
+      <Page size="A4" style={s.page}>
+        <Chrome client={client} />
+        <SectionTitle n={next()} eyebrow="Authority to proceed" title="Your instruction to proceed" />
+        <Text style={s.p}>
+          Once you are comfortable with the recommendations in this proposal, please sign below to instruct us to
+          implement them. This authority should be read together with your Statement of Advice.
+        </Text>
+        <View style={{ backgroundColor: OM.paleGrey, padding: 14, marginTop: 6, marginBottom: 16 }}>
+          <Text style={[s.p, { marginBottom: 4 }]}>I / We confirm that:</Text>
+          {[
+            'I/we have read this proposal and the accompanying Statement of Advice, and have had the opportunity to ask questions.',
+            `I/we instruct Ord Minnett to implement the recommended transactions set out under Recommended changes, in line with the Ord Minnett ${advice.riskProfile} portfolio${advice.currentModelVersion !== null ? ` (house model version ${advice.currentModelVersion})` : ''}.`,
+            'I/we understand that prices will move between the date of this proposal and when transactions are placed, and that staged exits will be completed over time.',
+            'I/we understand the fees and costs set out in this proposal and the Statement of Advice.',
+          ].map((line) => (
+            <View key={line} style={{ flexDirection: 'row', marginBottom: 4 }}>
+              <Text style={{ width: 12, fontSize: 9, color: OM.red }}>-</Text>
+              <Text style={[s.p, { flex: 1, marginBottom: 0 }]}>{line}</Text>
+            </View>
+          ))}
+        </View>
+        {[0, 1].map((i) => (
+          <View key={i} style={{ flexDirection: 'row', marginTop: 22 }} wrap={false}>
+            {['Signature', 'Full name', 'Date'].map((label, j) => (
+              <View key={label} style={{ flex: j === 0 ? 1.4 : 1, marginRight: j < 2 ? 14 : 0 }}>
+                <View style={{ borderBottomWidth: 0.8, borderBottomColor: OM.navy, height: 26 }} />
+                <Text style={{ fontSize: 7, color: OM.slate, marginTop: 3 }}>
+                  {label}
+                  {j === 0 ? ` - ${i === 0 ? 'investor' : 'second investor / director / trustee (if applicable)'}` : ''}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ))}
+        <View style={{ flexDirection: 'row', marginTop: 30 }} wrap={false}>
+          {['Adviser signature', 'Adviser name', 'Date'].map((label, j) => (
+            <View key={label} style={{ flex: j === 0 ? 1.4 : 1, marginRight: j < 2 ? 14 : 0 }}>
+              <View style={{ borderBottomWidth: 0.8, borderBottomColor: OM.navy, height: 26 }} />
+              <Text style={{ fontSize: 7, color: OM.slate, marginTop: 3 }}>{label}</Text>
+            </View>
+          ))}
+        </View>
+        <Text style={[s.small, { marginTop: 18 }]}>
+          Proposal reference: {advice.reviewId.slice(0, 8).toUpperCase()} · prepared {preparedOn}. Please return a
+          signed copy to your adviser.
+        </Text>
       </Page>
 
       {/* ---------- Important information ---------- */}

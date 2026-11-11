@@ -110,6 +110,8 @@ export type ClientAdvice = {
   unclassifiedWeightPct: number
   retainedHoldings: RetainedHolding[]
   resultingHoldings: ResultingHolding[]
+  /** The client's holdings today, by % of the portfolio (for before/after comparisons). Empty for new money. */
+  currentHoldings: { code: string; name: string; assetClass: string; weight: number }[]
   projectedIncome: number | null
   projectedYieldPct: number | null
   yieldCoveragePct: number
@@ -474,6 +476,11 @@ export async function buildClientAdvice(
     currentYieldPct,
     currentFrankingCredits: currentIncome !== null ? Math.round(currentCredits) : null,
     frankingBenefitByClass: { current: classBenefit(currentByClass), projected: classBenefit(projectedByClass) },
+    currentHoldings: isNewMoney
+      ? []
+      : mapped
+          .filter((h) => h.weight > 0)
+          .map((h) => ({ code: h.code, name: h.name ?? h.code, assetClass: h.assetClass, weight: h.weight })),
     currentIncomeCoveragePct,
     incomeLookupNeeded,
     projectedIncome,
