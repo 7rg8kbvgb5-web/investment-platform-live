@@ -1,5 +1,6 @@
 'use client'
 import { resolveModelId } from '../lib/model-context'
+import ProposalCommentaryEditor from './ProposalCommentaryEditor'
 import { ObjectivesEditor, IncomeComparison, ProposalHistory } from './ClientAdviceExtras'
 
 import { useCallback, useEffect, useState } from 'react'
@@ -462,6 +463,8 @@ export default function ClientAdvicePanel() {
               presenting.
             </p>
           ) : null}
+
+          <ProposalCommentaryEditor advice={advice} />
 
           <h3 style={sectionTitle}>Adviser notes</h3>
           <textarea

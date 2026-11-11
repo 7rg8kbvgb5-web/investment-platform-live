@@ -63,6 +63,8 @@ export type ResultingHolding = {
   frankingPct: number | null
   /** False for holdings retained (or left untouched) outside the house model. */
   inModel: boolean
+  /** From the model: direct_equity / listed_fund / unlisted_fund / ... - null outside the model. */
+  holdingType?: string | null
 }
 
 /** A holding kept outside the model as a documented adviser exception. */
@@ -111,6 +113,13 @@ export type ClientAdvice = {
   projectedIncome: number | null
   projectedYieldPct: number | null
   yieldCoveragePct: number
+  /**
+   * Franking credit benefit by asset class, in percentage points of return a
+   * year: each class's franking credits / value of its holdings with a known
+   * yield. Worked out from each holding's own yield and franking level
+   * (credit = cash dividend x 30/70 when fully franked).
+   */
+  frankingBenefitByClass: { current: Record<string, number>; projected: Record<string, number> }
   /** Annual franking credits on the projected income (30% company tax rate). */
   projectedFrankingCredits: number | null
   /** Projected yield including franking credits. */
@@ -281,10 +290,12 @@ export async function buildClientAdvice(
   // from the model where known. Drives projected income and the proposal.
   const yieldByCode = new Map<string, number>()
   const frankingByCode = new Map<string, number>()
+  const holdingTypeByCode = new Map<string, string>()
   for (const ac of model.assetClasses)
     for (const h of ac.holdings) {
       if (typeof h.yield === 'number') yieldByCode.set(normaliseCode(h.code), h.yield)
       if (typeof h.frankingPct === 'number') frankingByCode.set(normaliseCode(h.code), h.frankingPct)
+      if (h.holdingType) holdingTypeByCode.set(normaliseCode(h.code), h.holdingType)
     }
   const resultingHoldings: ResultingHolding[] = []
   if (cashDeployment) {
@@ -299,6 +310,7 @@ export async function buildClientAdvice(
         yield: yieldByCode.get(normaliseCode(l.code)) ?? null,
         frankingPct: frankingByCode.get(normaliseCode(l.code)) ?? null,
         inModel: true,
+        holdingType: holdingTypeByCode.get(normaliseCode(l.code)) ?? null,
       })
     }
     // Existing holdings outside the model are untouched when only new cash is invested.
@@ -329,9 +341,14 @@ export async function buildClientAdvice(
         yield: yieldByCode.get(normaliseCode(r.code)) ?? null,
         frankingPct: frankingByCode.get(normaliseCode(r.code)) ?? null,
         inModel: r.treatment === undefined,
+        holdingType: r.treatment === undefined ? holdingTypeByCode.get(normaliseCode(r.code)) ?? null : null,
       })
     }
   }
+
+  // Franking benefit per asset class, from the actual holdings (see frankingBenefitByClass).
+  const currentByClass: Record<string, { value: number; credits: number }> = {}
+  const projectedByClass: Record<string, { value: number; credits: number }> = {}
 
   // Income today, on the client's current holdings: model yields where the
   // holding is in the model, otherwise remembered lookups (security_income).
@@ -357,6 +374,7 @@ export async function buildClientAdvice(
         currentIncome += income
         currentCredits += frankingCredit(income, f)
         currentCovered += value
+        addClassFranking(currentByClass, h.assetClass, value, frankingCredit(income, f))
       } else if (!fromLookup || isIncomeStale(fromLookup)) {
         incomeLookupNeeded.push({ code: h.statementCode ?? h.code, name: h.name ?? h.code })
       }
@@ -381,6 +399,7 @@ export async function buildClientAdvice(
         projectedIncome += income
         credits += frankingCredit(income, h.frankingPct ?? 0)
         coveredWeight += value
+        addClassFranking(projectedByClass, h.assetClass, value, frankingCredit(income, h.frankingPct ?? 0))
       }
     }
   }
@@ -454,6 +473,7 @@ export async function buildClientAdvice(
     currentIncome: currentIncome !== null ? Math.round(currentIncome) : null,
     currentYieldPct,
     currentFrankingCredits: currentIncome !== null ? Math.round(currentCredits) : null,
+    frankingBenefitByClass: { current: classBenefit(currentByClass), projected: classBenefit(projectedByClass) },
     currentIncomeCoveragePct,
     incomeLookupNeeded,
     projectedIncome,
@@ -476,4 +496,23 @@ function parseAmount(value: string | null | undefined): number {
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100
+}
+
+function addClassFranking(
+  acc: Record<string, { value: number; credits: number }>,
+  assetClass: string | null | undefined,
+  value: number,
+  credits: number,
+): void {
+  if (!assetClass || value <= 0) return
+  const row = (acc[assetClass] ??= { value: 0, credits: 0 })
+  row.value += value
+  row.credits += credits
+}
+
+/** Percentage points of return a year from franking credits, per asset class. */
+function classBenefit(acc: Record<string, { value: number; credits: number }>): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const [k, v] of Object.entries(acc)) if (v.value > 0) out[k] = Math.round((v.credits / v.value) * 1000) / 10
+  return out
 }

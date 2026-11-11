@@ -325,6 +325,7 @@ export async function fetchModelPortfolio(riskProfile: RiskProfile, modelId?: st
       rationale: s.rationale,
       yield: s.yield ?? undefined,
       frankingPct: s.frankingPct ?? undefined,
+      holdingType: s.holdingType ?? undefined,
     }));
 
     return {

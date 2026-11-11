@@ -17,6 +17,8 @@ export type ModelHolding = {
   yield?: number;
   /** Expected franking level of distributions, 0-100%. Undefined if not stated. */
   frankingPct?: number;
+  /** direct_equity / listed_fund / unlisted_fund / direct_bond / cash / other, where known. */
+  holdingType?: string;
 };
 
 export type ModelAssetClass = {

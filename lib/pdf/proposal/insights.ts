@@ -16,15 +16,23 @@ export const CMA_AS_AT = 'November 2026'
 
 /**
  * ret is the total return before franking; franking is the extra benefit of
- * franking credits for an Australian investor (received in full). Australian
- * equities: 7.0% + ~1.0% franking = ~8.0%, in line with published forecasts
- * that include franking (e.g. AMP 7.8%).
+ * franking credits for an Australian investor (received in full).
+ *
+ * A franking credit is the company tax already paid: on a fully franked
+ * dividend it is 30/70 = 42.9% of the cash dividend (a $1.00 dividend
+ * grosses up to $1.43). As a return, the benefit is therefore
+ *   dividend yield x franked % x 30/70.
+ * In a proposal the figure is worked out from the actual holdings' forecast
+ * yields and franking levels (ClientAdvice.frankingBenefitByClass). The
+ * default below is used only where no holding in the class has a known
+ * yield: an Australian share market yield of ~3.6%, ~80% franked, gives
+ * 3.6 x 0.8 x 0.4286 = ~1.2 percentage points.
  */
 export const CAPITAL_MARKET_ASSUMPTIONS: Record<
   string,
   { ret: number; vol: number; group: 'growth' | 'alts' | 'defensive' | 'cash'; franking?: number }
 > = {
-  'Australian Equities': { ret: 7.0, vol: 16.0, group: 'growth', franking: 1.0 },
+  'Australian Equities': { ret: 7.0, vol: 16.0, group: 'growth', franking: 1.2 },
   // Published 10-year forecasts ~5.6-6.4% (Vanguard, AMP, Monash); 7.0% sits above the middle, reflecting
   // a quality, actively selected global allocation, while remaining defensible.
   'International Equities': { ret: 7.0, vol: 15.0, group: 'growth' },
@@ -86,8 +94,15 @@ function normCdf(x: number): number {
   return x > 0 ? 1 - p : p
 }
 
-/** weights: asset class -> % of portfolio. */
-export function portfolioRiskStats(weights: Record<string, number>): PortfolioRiskStats | null {
+/**
+ * weights: asset class -> % of portfolio. frankingByClass: the franking
+ * benefit (percentage points a year) worked out from the actual holdings;
+ * classes not in it fall back to the default assumption.
+ */
+export function portfolioRiskStats(
+  weights: Record<string, number>,
+  frankingByClass?: Record<string, number>,
+): PortfolioRiskStats | null {
   const classes = Object.keys(weights).filter((k) => weights[k] > 0 && CAPITAL_MARKET_ASSUMPTIONS[k])
   const total = classes.reduce((s, k) => s + weights[k], 0)
   if (total <= 0) return null
@@ -96,7 +111,7 @@ export function portfolioRiskStats(weights: Record<string, number>): PortfolioRi
   let franking = 0
   for (const k of classes) {
     ret += w(k) * CAPITAL_MARKET_ASSUMPTIONS[k].ret
-    franking += w(k) * (CAPITAL_MARKET_ASSUMPTIONS[k].franking ?? 0)
+    franking += w(k) * (frankingByClass?.[k] ?? CAPITAL_MARKET_ASSUMPTIONS[k].franking ?? 0)
   }
   let variance = 0
   for (const a of classes)
@@ -108,7 +123,7 @@ export function portfolioRiskStats(weights: Record<string, number>): PortfolioRi
   const srm = SRM_BANDS.find((b) => negativeYearsPer20 < b.max) ?? SRM_BANDS[SRM_BANDS.length - 1]
   return {
     expectedReturn: round1(ret),
-    frankingBenefit: round1(franking),
+    frankingBenefit: round2(franking),
     expectedReturnInclFranking: round1(ret + franking),
     volatility: round1(vol),
     negativeYearsPer20: round1(negativeYearsPer20),
@@ -287,4 +302,8 @@ function round1(v: number): number {
 
 function money(v: number): string {
   return v >= 1_000_000 ? `$${(v / 1_000_000).toFixed(v % 1_000_000 === 0 ? 0 : 1)}m` : `$${Math.round(v).toLocaleString('en-AU')}`
+}
+
+function round2(v: number): number {
+  return Math.round(v * 100) / 100
 }

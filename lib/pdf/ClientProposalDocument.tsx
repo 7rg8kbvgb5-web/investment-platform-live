@@ -163,13 +163,17 @@ export function ClientProposalDocument({
   objectives,
   preparedOn,
   capitalGains,
+  commentary = {},
 }: {
   advice: ClientAdvice
   adviserNotes: string
   objectives?: ClientObjectives | null
   preparedOn: string
   capitalGains?: { result: CgtResult; reference: TaxReference } | null
+  /** Adviser-approved commentary keyed "CODE:buy" / "CODE:sell" / "CODE:exposure". */
+  commentary?: Record<string, string>
 }) {
+  const note = (code: string, kind: 'buy' | 'sell' | 'exposure') => commentary[`${code.trim().toUpperCase()}:${kind}`] ?? null
   const client = advice.clientName
   const buys = advice.trades.filter((t) => t.action === 'buy' || t.action === 'increase')
   const sells = advice.trades.filter((t) => t.action === 'sell' || t.action === 'reduce')
@@ -182,8 +186,9 @@ export function ClientProposalDocument({
   const hasCurrent = !advice.isNewMoney && Object.keys(current).length > 0
   const gdAfter = growthDefensive(after)
   const gdNow = growthDefensive(current)
-  const riskAfter = portfolioRiskStats(after)
-  const riskNow = hasCurrent ? portfolioRiskStats(current) : null
+  // Franking is worked out from each portfolio's own holdings (yield x franked % x 30/70).
+  const riskAfter = portfolioRiskStats(after, advice.frankingBenefitByClass?.projected)
+  const riskNow = hasCurrent ? portfolioRiskStats(current, advice.frankingBenefitByClass?.current) : null
   const fees = estimateFees(advice)
   const total = advice.totalAfter
   const guide = PROFILE_GUIDE[advice.riskProfile]
@@ -584,8 +589,11 @@ export function ClientProposalDocument({
                   <Text style={[s.th, { width: '14%', textAlign: 'right' }]}>VALUE</Text>
                   <Text style={[s.th, { width: '12%', textAlign: 'right' }]}>UNITS</Text>
                 </View>
-                {group.rows.map((t) => (
-                  <View style={s.tr} key={`${t.code}-${t.action}`} wrap={false}>
+                {group.rows.map((t) => {
+                  const why = t.action === 'buy' || t.action === 'sell' ? note(t.code, t.action) : null
+                  return (
+                  <View key={`${t.code}-${t.action}`} wrap={false}>
+                  <View style={why ? [s.tr, { borderBottomWidth: 0 }] : s.tr}>
                     <Text style={[s.code, { width: '15%' }]}>{t.code}</Text>
                     <View style={{ width: '37%' }}>
                       <Text style={s.td}>{t.name}</Text>
@@ -602,7 +610,15 @@ export function ClientProposalDocument({
                       {t.units !== null ? Math.abs(t.units).toLocaleString('en-AU') : 'by value'}
                     </Text>
                   </View>
-                ))}
+                  {why ? (
+                    <View style={[s.tr, { paddingTop: 0 }]}>
+                      <Text style={{ width: '15%' }} />
+                      <Text style={[s.td, s.muted, { width: '85%', fontFamily: 'Helvetica-Oblique', lineHeight: 1.4 }]}>{why}</Text>
+                    </View>
+                  ) : null}
+                  </View>
+                  )
+                })}
               </View>
             </View>
           ))}
@@ -713,6 +729,35 @@ export function ClientProposalDocument({
               About {fmt(advice.cashDeployment.residualCash)} remains in cash after rounding to whole units.
             </Text>
           ) : null}
+          {(() => {
+            const funds = advice.resultingHoldings
+              .filter((h) => h.holdingType === 'listed_fund' || h.holdingType === 'unlisted_fund')
+              .map((h) => ({ h, line: note(h.code, 'exposure') }))
+              .filter((f): f is { h: typeof f.h; line: string } => !!f.line)
+            if (funds.length === 0) return null
+            return (
+              <View style={{ marginTop: 12 }}>
+                <Text style={s.h3} minPresenceAhead={40}>THE FUNDS IN YOUR PORTFOLIO</Text>
+                {(['listed_fund', 'unlisted_fund'] as const).map((type) => {
+                  const rows = funds.filter((f) => f.h.holdingType === type)
+                  if (rows.length === 0) return null
+                  return (
+                    <View key={type} style={{ marginBottom: 4 }}>
+                      <Text style={[s.td, s.bold, { color: OM.navy, marginBottom: 2 }]}>
+                        {type === 'listed_fund' ? 'Exchange-traded and listed funds' : 'Unlisted funds'}
+                      </Text>
+                      {rows.map(({ h, line }) => (
+                        <View key={h.code} style={{ flexDirection: 'row', marginBottom: 3 }} wrap={false}>
+                          <Text style={[s.code, { width: '16%' }]}>{h.code}</Text>
+                          <Text style={[s.td, { width: '84%', lineHeight: 1.4 }]}>{line}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )
+                })}
+              </View>
+            )
+          })()}
         </Page>
       ) : null}
 
@@ -1096,9 +1141,12 @@ export function ClientProposalDocument({
           ))}
         </View>
         <Text style={s.small}>
-          Long-term (10-year) nominal assumptions before fees and tax, as at {CMA_AS_AT}. Franking is the estimated
-          annual benefit of franking credits to an Australian investor able to use them in full; investors who cannot
-          (for example non-residents) should disregard it. Inflation is assumed at{' '}
+          Long-term (10-year) nominal assumptions before fees and tax, as at {CMA_AS_AT}. Franking is the annual
+          benefit of franking credits to an Australian investor able to use them in full; investors who cannot (for
+          example non-residents) should disregard it. A fully franked dividend carries a credit of 42.9% of the cash
+          dividend (the 30% company tax already paid), so the benefit is calculated from each recommended
+          holding&apos;s forecast yield and franking level; the figure shown above is used only where a yield is not
+          available. Inflation is assumed at{' '}
           {CPI_ASSUMPTION}% a year. Portfolio risk allows for diversification between asset classes. These assumptions
           are estimates, are reviewed periodically, and actual returns will differ.
         </Text>
