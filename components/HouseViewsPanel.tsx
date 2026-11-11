@@ -74,7 +74,7 @@ export function HouseViewsPanel() {
           <div style={columnsGrid}>
             {HOUSE_SOURCES.map((source) => {
               const sourceDocs = documents.filter(
-                (d) => d.source === source && !(d.documentType === 'Top Ideas' && !d.isCurrent),
+                (d) => d.source === source && !((d.documentType === 'Top Ideas' || d.documentType === 'Coverage Universe') && !d.isCurrent),
               );
               const topIdeas = sourceDocs.find((d) => d.documentType === 'Top Ideas');
               const otherDocs = sourceDocs.filter((d) => d.documentType !== 'Top Ideas');
@@ -127,7 +127,7 @@ export function HouseViewsPanel() {
                           {doc.summary && <p style={docSummary}>{doc.summary}</p>}
                           <div style={docMetaRow}>
                             {doc.tickers.length > 0 && (
-                              <span style={docTag}>{doc.tickers.join(', ')}</span>
+                              <span style={docTag}>{doc.tickers.length > 12 ? `${doc.tickers.slice(0, 12).join(', ')} +${doc.tickers.length - 12} more` : doc.tickers.join(', ')}</span>
                             )}
                             {doc.sectors.length > 0 && (
                               <span style={docTagMuted}>{doc.sectors.join(', ')}</span>

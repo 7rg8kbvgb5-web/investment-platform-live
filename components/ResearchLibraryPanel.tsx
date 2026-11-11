@@ -17,10 +17,12 @@ import {
 } from '../lib/engines/research-library';
 import { formatIsoTimestampDisplay } from '../lib/format-timestamp';
 import StatusBox from './dashboard/StatusBox';
+import { csvToRows, parseUniverseRows } from '../lib/research/universe-import';
 
 const SOURCES: ResearchDocumentSource[] = ['Ord Minnett', 'Barrenjoey', 'Other'];
 const DOCUMENT_TYPES: ResearchDocumentType[] = [
   'Top Ideas',
+  'Coverage Universe',
   'Research Note',
   'Sector Report',
   'Company Update',
@@ -67,6 +69,10 @@ export default function ResearchLibraryPanel() {
     setReadWarnings([]);
     setSubmitSuccess(false);
     if (!next) return;
+    if (/\.(xlsx|csv)$/i.test(next.name)) {
+      await readSpreadsheet(next);
+      return;
+    }
     if (next.type !== 'application/pdf') {
       setReadError('Only PDFs are read automatically — fill in the details below by hand for this file.');
       return;
@@ -96,6 +102,41 @@ export default function ResearchLibraryPanel() {
     } catch (error) {
       setReadError(
         `${error instanceof Error ? error.message : 'Failed to read the document.'} You can still fill in the details by hand and save.`,
+      );
+    } finally {
+      setReading(false);
+    }
+  }
+
+  // A coverage-universe spreadsheet is read in the browser - no AI involved,
+  // every rating comes straight from the file.
+  async function readSpreadsheet(next: File) {
+    setReading(true);
+    try {
+      let rows;
+      if (/\.csv$/i.test(next.name)) {
+        rows = csvToRows(await next.text());
+      } else {
+        const { readSheet } = await import('read-excel-file/browser');
+        rows = await readSheet(next);
+      }
+      const result = parseUniverseRows(rows as Parameters<typeof parseUniverseRows>[0]);
+      if (result.securities.length === 0) throw new Error('No securities with a rating were found in the file.');
+      const guessedSource: ResearchDocumentSource = /barrenjoey|\bbj\b/i.test(next.name) ? 'Barrenjoey' : 'Ord Minnett';
+      const asAt = result.latestDate
+        ? new Date(`${result.latestDate}T00:00:00Z`).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+        : null;
+      setSource(guessedSource);
+      setDocumentType('Coverage Universe');
+      setTitle(`${guessedSource} coverage universe${asAt ? ` — ${asAt}` : ''}`);
+      setSummary(`${result.securities.length} securities with ${guessedSource}'s recommendation, risk rating and price target.`);
+      setPublishedAt(result.latestDate);
+      setSecurities(result.securities);
+      setTickersInput(result.securities.map((sec) => sec.code).join(', '));
+      setReadWarnings(result.warnings);
+    } catch (error) {
+      setReadError(
+        `${error instanceof Error ? error.message : 'Could not read the spreadsheet.'} Check it has Security and Recommendation columns.`,
       );
     } finally {
       setReading(false);
@@ -200,8 +241,9 @@ export default function ResearchLibraryPanel() {
       <h2 style={heading}>Ord Minnett &amp; Barrenjoey Research</h2>
       <p style={description}>
         Choose a research PDF and it&apos;s read automatically: source, document type, and every security
-        it covers with its rating, price target, and whether it&apos;s a Top Idea. Check the details, then
-        save. Ratings feed conviction scores, and Top Ideas are compared against the model.
+        it covers with its rating, price target, and whether it&apos;s a Top Idea. A coverage universe
+        spreadsheet (.xlsx or .csv) is read row by row and replaces the previous one from that source.
+        Check the details, then save. Ratings feed conviction scores, and Top Ideas are compared against the model.
       </p>
 
       <form onSubmit={handleSubmit} style={form}>
@@ -210,7 +252,7 @@ export default function ResearchLibraryPanel() {
           <input
             style={fileInput}
             type="file"
-            accept=".pdf,.doc,.docx"
+            accept=".pdf,.doc,.docx,.xlsx,.csv"
             onChange={(event) => chooseFile(event.target.files?.[0] ?? null)}
           />
         </label>
@@ -291,9 +333,9 @@ export default function ResearchLibraryPanel() {
         </div>
 
         {securities.length > 0 ? (
-          <div style={tableWrap}>
+          <div style={securities.length > 25 ? { ...tableWrap, maxHeight: '460px', overflowY: 'auto' as const } : tableWrap}>
             <p style={subheading}>
-              Securities read from the document ({securities.length}) — edit anything that&apos;s wrong
+              Securities read from the {documentType === 'Coverage Universe' ? 'spreadsheet' : 'document'} ({securities.length}) — edit anything that&apos;s wrong
             </p>
             <table style={table}>
               <thead>
@@ -302,6 +344,7 @@ export default function ResearchLibraryPanel() {
                   <th style={th}>Name</th>
                   <th style={th}>Rating</th>
                   <th style={th}>Price target</th>
+                  {documentType === 'Coverage Universe' ? <th style={th}>Risk · updated</th> : null}
                   <th style={th}>Top Idea</th>
                   <th style={th}></th>
                 </tr>
@@ -335,6 +378,7 @@ export default function ResearchLibraryPanel() {
                         }
                       />
                     </td>
+                    {documentType === 'Coverage Universe' ? <td style={td}>{sec.note ?? '—'}</td> : null}
                     <td style={td}>
                       <input
                         type="checkbox"
@@ -433,11 +477,11 @@ export default function ResearchLibraryPanel() {
                     <td style={td}>{document.houseViewRating ?? '—'}</td>
                     <td style={td}>
                       {document.documentType}
-                      {document.documentType === 'Top Ideas' && !document.isCurrent && (
+                      {(document.documentType === 'Top Ideas' || document.documentType === 'Coverage Universe') && !document.isCurrent && (
                         <span style={supersededTag}>Superseded</span>
                       )}
                     </td>
-                    <td style={td}>{document.tickers.join(', ') || '—'}</td>
+                    <td style={td}>{tickerList(document.tickers)}</td>
                     <td style={td}>{document.sectors.join(', ') || '—'}</td>
                     <td style={td}>
                       {formatIsoTimestampDisplay(document.createdAt)}
@@ -614,3 +658,9 @@ const linkButton = {
   cursor: 'pointer',
   padding: 0,
 };
+
+function tickerList(tickers: string[]): string {
+  if (tickers.length === 0) return '—';
+  if (tickers.length <= 12) return tickers.join(', ');
+  return `${tickers.slice(0, 12).join(', ')} +${tickers.length - 12} more`;
+}

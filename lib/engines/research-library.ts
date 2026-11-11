@@ -81,6 +81,10 @@ export type ExtractedSecurity = {
   priceTarget: number | null;
   isTopIdea: boolean;
   note: string | null;
+  /** Coverage universe imports: the broker's risk rating (e.g. "Higher"). */
+  risk?: string | null;
+  /** Coverage universe imports: when the broker last updated this rating (YYYY-MM-DD). */
+  ratingDate?: string | null;
 };
 
 /** Puts a file in research storage ahead of reading it; returns its path. */
@@ -129,18 +133,25 @@ export async function uploadResearchDocument(
 
   // Every security the document gives a view on, with that view.
   if (input.securities && input.securities.length > 0) {
-    const { error: securitiesError } = await supabase.from(SECURITIES_TABLE).insert(
-      input.securities.map((s) => ({
-        document_id: data.id,
-        code: s.code.toUpperCase(),
-        name: s.name,
-        rating: s.rating,
-        recommendation: s.recommendation,
-        price_target: s.priceTarget,
-        is_top_idea: s.isTopIdea,
-        note: s.note,
-      }))
-    );
+    const rows = input.securities.map((s) => ({
+      document_id: data.id,
+      code: s.code.toUpperCase(),
+      name: s.name,
+      rating: s.rating,
+      recommendation: s.recommendation,
+      price_target: s.priceTarget,
+      is_top_idea: s.isTopIdea,
+      note: s.note,
+      ...(s.risk !== undefined ? { risk: s.risk } : {}),
+      ...(s.ratingDate !== undefined ? { rating_date: s.ratingDate } : {}),
+    }));
+    let { error: securitiesError } = await supabase.from(SECURITIES_TABLE).insert(rows);
+    if (securitiesError && /risk|rating_date/.test(securitiesError.message)) {
+      // Before migration 0030: save without the risk/date columns (both are also in the note).
+      ({ error: securitiesError } = await supabase
+        .from(SECURITIES_TABLE)
+        .insert(rows.map(({ risk: _r, rating_date: _d, ...rest }: Record<string, unknown>) => (void _r, void _d, rest))));
+    }
     if (securitiesError) {
       console.error("Failed to save the document's securities:", securitiesError.message);
     }
@@ -151,12 +162,14 @@ export async function uploadResearchDocument(
   // list marked current once a fresh one has replaced it. Older uploads
   // aren't deleted, just no longer flagged current, so they stay
   // available in the library's full history if ever needed.
-  if (input.documentType === "Top Ideas") {
+  // A coverage universe export works the same way: the newest one from a
+  // source is the full current set of ratings.
+  if (input.documentType === "Top Ideas" || input.documentType === "Coverage Universe") {
     const { error: supersedeError } = await supabase
       .from(TABLE)
       .update({ is_current: false })
       .eq("source", input.source)
-      .eq("document_type", "Top Ideas")
+      .eq("document_type", input.documentType)
       .neq("id", data.id);
 
     if (supersedeError) {
@@ -232,18 +245,26 @@ export async function fetchLatestHouseViewRating(
   const ticker = code.toUpperCase();
 
   // Newest per-security rating read from an uploaded document (0022)...
+  // A superseded coverage universe no longer speaks for the source: a stock
+  // dropped from the latest export shouldn't keep its old rating.
   let extracted: { rating: string; at: string } | null = null;
   const { data: secRows, error: secError } = await supabase
     .from(SECURITIES_TABLE)
-    .select("rating, created_at, research_documents!inner(source, published_at, created_at)")
+    .select("rating, created_at, research_documents!inner(source, published_at, created_at, document_type, is_current)")
     .eq("code", ticker)
     .eq("research_documents.source", source)
     .not("rating", "is", null)
     .order("created_at", { ascending: false })
-    .limit(1);
+    .limit(10);
   if (!secError && secRows && secRows.length > 0) {
-    const row = secRows[0] as unknown as { rating: string; created_at: string };
-    extracted = { rating: row.rating, at: row.created_at };
+    const live = (secRows as unknown as {
+      rating: string;
+      created_at: string;
+      research_documents: { document_type: string; is_current: boolean | null } | null;
+    }[]).find(
+      (row) => !(row.research_documents?.document_type === "Coverage Universe" && row.research_documents?.is_current === false)
+    );
+    if (live) extracted = { rating: live.rating, at: live.created_at };
   }
 
   // ...versus a rating typed in by hand on an older upload. Newest wins.
