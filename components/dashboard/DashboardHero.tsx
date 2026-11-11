@@ -1,20 +1,30 @@
 import { LiveClock } from './LiveClock';
+import { getSignedInAdviser } from '../../lib/adviser-identity';
+import { SetNameInline } from './SetNameInline';
 
 function timeOfDayGreeting(): string {
-  const hour = new Date().getHours();
+  // The server runs on UTC - the greeting follows Sydney time.
+  const hour = Number(
+    new Intl.DateTimeFormat('en-AU', { hour: 'numeric', hourCycle: 'h23', timeZone: 'Australia/Sydney' }).format(new Date()),
+  );
   if (hour < 12) return 'Good morning';
   if (hour < 17) return 'Good afternoon';
   return 'Good evening';
 }
 
-export default function DashboardHero() {
+export default async function DashboardHero() {
+  const adviser = await getSignedInAdviser();
   return (
     <section style={hero}>
       <div style={heroTop}>
         <p style={eyebrow}>Adviser Command Centre</p>
         <LiveClock />
       </div>
-      <h1 style={title}>{timeOfDayGreeting()}, Sean</h1>
+      <h1 style={title}>
+        {timeOfDayGreeting()}
+        {adviser.firstName ? `, ${adviser.firstName}` : ''}
+      </h1>
+      {!adviser.firstName && adviser.email ? <SetNameInline /> : null}
       <p style={subtitle}>
         A quick read on what&apos;s worth a look today — the live signals below come straight
         from each area of the platform. Click any card to go straight to it.
