@@ -53,10 +53,23 @@ begin
   loop
     execute format('alter table public.risk_profile_asset_class_weights drop constraint %I', c.conname);
   end loop;
+  -- Standalone unique indexes on risk_profile without model_id (checked by
+  -- indexed column, never the primary key or an index backing a constraint).
   for i in
-    select indexname from pg_indexes
-    where schemaname = 'public' and tablename = 'risk_profile_asset_class_weights'
-      and indexdef ilike '%unique%' and indexdef ilike '%risk_profile%' and indexdef not ilike '%model_id%'
+    select ic.relname as indexname
+    from pg_index ix
+    join pg_class ic on ic.oid = ix.indexrelid
+    where ix.indrelid = 'public.risk_profile_asset_class_weights'::regclass
+      and ix.indisunique and not ix.indisprimary
+      and not exists (select 1 from pg_constraint pc where pc.conindid = ix.indexrelid)
+      and exists (
+        select 1 from pg_attribute a
+        where a.attrelid = ix.indrelid and a.attnum = any (ix.indkey) and a.attname = 'risk_profile'
+      )
+      and not exists (
+        select 1 from pg_attribute a
+        where a.attrelid = ix.indrelid and a.attnum = any (ix.indkey) and a.attname = 'model_id'
+      )
   loop
     execute format('drop index if exists public.%I', i.indexname);
   end loop;
