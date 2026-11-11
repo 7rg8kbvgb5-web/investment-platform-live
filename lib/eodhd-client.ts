@@ -84,6 +84,27 @@ export async function getHistoricalEod(
   return eodhdFetch<EodhdEodBar[]>(`/eod/${eodhdTicker}`, { from, to, period: 'd' });
 }
 
+export type EodhdBulkRow = {
+  code: string;
+  date: string;
+  close: number;
+  volume: number;
+  type?: string;
+  prev_close?: number;
+  change?: number;
+  ema_50?: number;
+};
+
+/**
+ * End-of-day closes for every security on an exchange for one day
+ * (latest day if no date). Needs a paid EODHD plan; the free plan refuses it.
+ */
+export async function getBulkEod(exchange: string, date?: string): Promise<EodhdBulkRow[]> {
+  const params: Record<string, string> = { filter: 'extended' };
+  if (date) params.date = date;
+  return eodhdFetch<EodhdBulkRow[]>(`/eod-bulk-last-day/${exchange}`, params);
+}
+
 /** Delayed real-time quote for a single ASX-listed ticker (e.g. "CBA.AU"). */
 export async function getQuote(eodhdTicker: string): Promise<EodhdQuote> {
   return eodhdFetch<EodhdQuote>(`/real-time/${eodhdTicker}`);

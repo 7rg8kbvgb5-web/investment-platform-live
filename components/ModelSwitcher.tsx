@@ -93,7 +93,7 @@ export default function ModelSwitcher() {
   }
 
   if (models.length === 0) return null
-  const viewingOther = own && selected !== own.id
+  const viewingOther = (own && selected !== own.id) || (!own && models.length > 0 && !!me.email)
 
   return (
     <div style={wrap}>
@@ -110,7 +110,13 @@ export default function ModelSwitcher() {
         {!own ? <option value={CREATE}>+ Create my own model</option> : null}
       </select>
       {busy ? <p style={note}>Creating your model…</p> : null}
-      {viewingOther ? <p style={note}>Viewing another adviser&apos;s model</p> : null}
+      {viewingOther ? (
+        <p style={note}>
+          {own
+            ? 'Viewing another adviser’s model'
+            : 'Viewing another adviser’s model – choose “+ Create my own model” to start yours'}
+        </p>
+      ) : null}
       {error ? <p style={{ ...note, color: '#f87171' }}>{error}</p> : null}
     </div>
   )

@@ -61,6 +61,17 @@ const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
+    href: '/market-tracker',
+    label: 'Market Tracker',
+    description: 'Small caps, breadth, short interest',
+    icon: (
+      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <path d="M3 15l4-5 3 3 7-8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M3 17h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
     href: '/fund-reviews',
     label: 'Fund Reviews',
     description: 'Fund manager and structure checks',
