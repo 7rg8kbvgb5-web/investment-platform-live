@@ -27,6 +27,9 @@ import {
   holdingMetricInput,
 } from './ui/HoldingMetricGrid';
 import Panel from './ui/Panel';
+import HouseViewLine from './HouseViewLine';
+import HouseViewAlternatives from './HouseViewAlternatives';
+import { fetchHouseViews, type HouseViewEntry } from '../lib/engines/house-view';
 import StatusBox from './dashboard/StatusBox';
 import AllocationPieChart from './AllocationPieChart';
 
@@ -46,6 +49,7 @@ export function ModelPortfolioSecuritiesPanel() {
   const [savingCount, setSavingCount] = useState(0);
   const [convictions, setConvictions] = useState<Record<string, ConvictionRating>>({});
   const [convictionsLoading, setConvictionsLoading] = useState(true);
+  const [houseViews, setHouseViews] = useState<Map<string, HouseViewEntry>>(new Map());
   const [universe, setUniverse] = useState<SecurityUniverseEntry[]>([]);
   const [tacticalView, setTacticalView] = useState<TacticalAssetClassView | null>(null);
   const [tacticalScanning, setTacticalScanning] = useState(false);
@@ -117,6 +121,19 @@ export function ModelPortfolioSecuritiesPanel() {
     buildSecurityUniverse().then((map) => {
       if (!cancelled) setUniverse(Array.from(map.values()));
     });
+    return () => {
+      cancelled = true;
+    };
+  }, [securities]);
+
+  useEffect(() => {
+    if (securities.length === 0) return;
+    let cancelled = false;
+    fetchHouseViews(securities.map((s) => s.code))
+      .then((views) => {
+        if (!cancelled) setHouseViews(views);
+      })
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
@@ -692,6 +709,7 @@ export function ModelPortfolioSecuritiesPanel() {
                         </span>
                       </HoldingMetricCell>
                     </HoldingMetricGrid>
+                    <HouseViewLine view={houseViews.get(holding.code.trim().toUpperCase())} />
                   </li>
                   );
                 })}
@@ -805,6 +823,8 @@ export function ModelPortfolioSecuritiesPanel() {
           );
         })}
       </div>
+
+      <HouseViewAlternatives />
     </Panel>
   );
 }

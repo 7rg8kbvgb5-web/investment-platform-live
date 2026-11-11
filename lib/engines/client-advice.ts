@@ -16,6 +16,7 @@ import type { ClientPortfolioReview } from './client-portfolio-reviews'
 import type { CommitteeDecision } from './investment-committee-decisions'
 import { normaliseCode } from './codes'
 import { frankingCredit } from './yield-aggregation'
+import { fetchHouseViews, houseViewSentence } from './house-view'
 
 // One engine that turns a saved client review into advice. Used by the
 // Client Advice tab, the client register (drift), and the proposal PDF,
@@ -248,6 +249,31 @@ export async function buildClientAdvice(
         treatment: r.treatment,
         statementCode: r.statementCode,
       }))
+  }
+
+  // Ord Minnett's house view, where it supports a trade, goes into that
+  // trade's reasoning in the proposal. Where a trade cuts against it, the
+  // adviser is warned instead - the client document stays consistent.
+  try {
+    const views = await fetchHouseViews(
+      trades.map((t) => t.code),
+      'Ord Minnett',
+      context.prices ?? undefined,
+    )
+    for (const t of trades) {
+      const v = views.get(normaliseCode(t.code))
+      if (!v) continue
+      const buying = t.action === 'buy' || t.action === 'increase'
+      if ((buying && v.lean === 'bullish') || (!buying && v.lean !== 'bullish')) {
+        t.rationale = `${t.rationale.trim()} ${houseViewSentence(v)}.`.trim()
+      } else if (t.action === 'sell' && v.lean === 'bullish') {
+        warnings.push(`${t.code}: proposed sale, but Ord Minnett rates it ${v.rating}. Consider retaining, or document why it's being sold.`)
+      } else if (buying && v.lean === 'bearish') {
+        warnings.push(`${t.code}: proposed purchase, but Ord Minnett rates it ${v.rating}. Check the model holding with the Investment Committee.`)
+      }
+    }
+  } catch {
+    // House views are supporting detail - never block the advice over them.
   }
 
   // The portfolio as it stands once the advice is implemented - every

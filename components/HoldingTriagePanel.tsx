@@ -5,6 +5,7 @@ import { ASSET_CLASSES } from '../lib/engines/model-portfolio-core'
 import type { MappedHolding } from '../lib/engines/client-holdings-mapping'
 import type { HoldingRecommendation } from '../lib/engines/portfolio-review-comparison'
 import { suggestAssetClass, TREATMENT_LABELS, type HoldingTreatment } from '../lib/engines/holding-triage'
+import { fetchHouseViews, type HouseViewEntry } from '../lib/engines/house-view'
 
 /**
  * Construction triage: makes sure every holding on the statement ends up in
@@ -29,6 +30,22 @@ export function HoldingTriagePanel({
   onTreatment: (code: string, treatment: HoldingTreatment, reason: string) => void
   classifyError?: string | null
 }) {
+  // Ord Minnett's view on holdings outside the model - informs sell vs retain.
+  const [views, setViews] = useState<Map<string, HouseViewEntry>>(new Map())
+  const outsideCodes = outsideModel.map((r) => r.code).join(',')
+  useEffect(() => {
+    if (!outsideCodes) return
+    let cancelled = false
+    fetchHouseViews(outsideCodes.split(','))
+      .then((v) => {
+        if (!cancelled) setViews(v)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [outsideCodes])
+
   const unclassifiedWeight = round2(unclassified.reduce((sum, h) => sum + h.weight, 0))
   const suggestions = unclassified
     .map((h) => ({ code: h.code, assetClass: suggestAssetClass(h.code, h.name) }))
@@ -126,7 +143,7 @@ export function HoldingTriagePanel({
               </thead>
               <tbody>
                 {outsideModel.map((rec) => (
-                  <TreatmentRow key={rec.code} rec={rec} onTreatment={onTreatment} onClassify={onClassify} />
+                  <TreatmentRow key={rec.code} rec={rec} view={views.get(rec.code.trim().toUpperCase())} onTreatment={onTreatment} onClassify={onClassify} />
                 ))}
               </tbody>
             </table>
@@ -139,10 +156,12 @@ export function HoldingTriagePanel({
 
 function TreatmentRow({
   rec,
+  view,
   onTreatment,
   onClassify,
 }: {
   rec: HoldingRecommendation
+  view?: HouseViewEntry
   onTreatment: (code: string, treatment: HoldingTreatment, reason: string) => void
   onClassify: (changes: { code: string; assetClass: string }[]) => void
 }) {
@@ -155,7 +174,18 @@ function TreatmentRow({
   return (
     <tr>
       <td style={{ ...td, color: '#38bdf8', fontWeight: 600 }}>{rec.code}</td>
-      <td style={td}>{rec.name}</td>
+      <td style={td}>
+        {rec.name}
+        {view ? (
+          <div
+            style={{ fontSize: '11px', marginTop: '3px', color: view.lean === 'bearish' ? '#f87171' : view.lean === 'bullish' ? '#4ade80' : '#94a3b8' }}
+            title={view.flags.join(' · ') || undefined}
+          >
+            Ord Minnett: {view.rating}
+            {view.upside !== null ? ` (${view.upside >= 0 ? '+' : ''}${(view.upside * 100).toFixed(0)}% to target)` : ''}
+          </div>
+        ) : null}
+      </td>
       <td style={tdMuted}>
         {rec.classifiedByAdviser ? (
           <select
