@@ -1,6 +1,7 @@
 import { listApprovedSecurities } from "./approved-list";
 import { normaliseCode } from "./codes";
 import { fetchCoreSecurities, ASSET_CLASSES } from "./model-portfolio-core";
+import { listSecurityClassifications } from "./security-classifications";
 
 export type SecurityUniverseEntry = {
   code: string;
@@ -14,6 +15,8 @@ export type SecurityUniverseEntry = {
   inModelUniverse: boolean;
   /** Wholesale bonds: ISIN, recorded in the rationale when added via bond lookup. Lets statements that list bonds by ISIN match. */
   isin?: string;
+  /** True when the only thing the platform knows is the adviser's remembered classification (migration 0026). */
+  adviserClassified?: boolean;
 };
 
 /**
@@ -81,6 +84,26 @@ export async function buildSecurityUniverse(): Promise<Map<string, SecurityUnive
       inSecurityMaster: security.status === "approved",
       inModelUniverse: existing?.inModelUniverse ?? false,
       isin: existing?.isin,
+    });
+  }
+
+  // Lowest priority: classifications advisers have made on the Construction
+  // tab, remembered so the same security is recognised on future statements.
+  const remembered = await listSecurityClassifications();
+  for (const c of remembered) {
+    const code = normaliseCode(c.code);
+    if (universe.has(code)) continue;
+    const assetClassMeta = ASSET_CLASSES.find((ac) => ac.name === c.assetClass);
+    if (!assetClassMeta) continue;
+    universe.set(code, {
+      code,
+      name: c.name ?? code,
+      sector: "Classified by adviser",
+      assetClass: assetClassMeta.name,
+      assetClassType: assetClassMeta.type,
+      inSecurityMaster: false,
+      inModelUniverse: false,
+      adviserClassified: true,
     });
   }
 

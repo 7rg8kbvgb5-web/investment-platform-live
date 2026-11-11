@@ -57,6 +57,8 @@ export type HoldingRecommendation = {
   treatmentReason?: string
   /** Code as printed on the client's statement, where it differs from the model code (e.g. a bond ISIN). */
   statementCode?: string
+  /** True when the asset class came from an adviser classification (editable on Construction). */
+  classifiedByAdviser?: boolean
 }
 
 export type PortfolioReviewComparison = {
@@ -357,6 +359,7 @@ export function compareClientPortfolioToModel(
         treatmentIsDefault: !holding.treatment,
         treatmentReason: reason,
         statementCode: holding.statementCode,
+        classifiedByAdviser: holding.matchedBy === 'adviser',
       })
       continue
     }
@@ -387,6 +390,7 @@ export function compareClientPortfolioToModel(
       treatmentIsDefault: !holding.treatment,
       treatmentReason: reason,
       statementCode: holding.statementCode,
+      classifiedByAdviser: holding.matchedBy === 'adviser',
     })
   }
 

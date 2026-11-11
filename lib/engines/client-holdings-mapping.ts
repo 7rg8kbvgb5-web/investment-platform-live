@@ -81,7 +81,7 @@ export async function mapClientHoldings(
   function recognise(holding: UploadedHolding): { entry: SecurityUniverseEntry; matchedBy: MappedHolding['matchedBy'] } | null {
     const code = normaliseCode(holding.code)
     const direct = universe.get(code)
-    if (direct) return { entry: direct, matchedBy: 'code' }
+    if (direct) return { entry: direct, matchedBy: direct.adviserClassified ? 'adviser' : 'code' }
     if (isIsin(code) && byIsin.has(code)) return { entry: byIsin.get(code)!, matchedBy: 'isin' }
     if (holding.name) {
       const byName = byBondName.get(normaliseBondName(holding.name)) ?? universe.get(normaliseCode(holding.name))

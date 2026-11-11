@@ -1,5 +1,6 @@
 'use client'
 import { HoldingTriagePanel } from './HoldingTriagePanel'
+import { rememberSecurityClassifications } from '../lib/engines/security-classifications'
 import type { HoldingTreatment } from '../lib/engines/holding-triage'
 import { uploadToPrivateStorage } from '../lib/storage-upload'
 
@@ -688,9 +689,46 @@ export default function ClientPortfolioUploadPanel() {
     return map
   }, [mappingResult.mappedHoldings])
 
-  /** Adviser classification of holdings the platform couldn't recognise (saved on the review's holdings). */
-  function classifyHoldings(changes: { code: string; assetClass: string }[]) {
+  const [classifyError, setClassifyError] = useState<string | null>(null)
+
+  // Backfill: classifications saved on a review before they were remembered
+  // platform-wide get added to the shared list (never overwriting one that's
+  // already there), so reopening an older review teaches the platform too.
+  const backfilledCodes = useRef(new Set<string>())
+  useEffect(() => {
+    const pending = holdings.filter(
+      (h) => h.assetClass && !backfilledCodes.current.has(normaliseCode(h.code)),
+    )
+    if (pending.length === 0) return
+    for (const h of pending) backfilledCodes.current.add(normaliseCode(h.code))
+    rememberSecurityClassifications(
+      pending.map((h) => ({ code: h.code, name: h.name ?? null, assetClass: h.assetClass as string })),
+      { onlyIfNew: true },
+    ).catch(() => undefined)
+  }, [holdings])
+
+  /**
+   * Adviser classification of holdings the platform couldn't recognise.
+   * Remembered platform-wide first (so every future statement with the same
+   * code is recognised), then saved on this review's holdings too - so the
+   * review still works even if the remembered save fails.
+   */
+  async function classifyHoldings(changes: { code: string; assetClass: string }[]) {
     const byCode = new Map(changes.map((c) => [normaliseCode(c.code), c.assetClass]))
+    setClassifyError(null)
+    try {
+      await rememberSecurityClassifications(
+        changes.map((c) => ({
+          code: c.code,
+          assetClass: c.assetClass,
+          name: holdings.find((h) => normaliseCode(h.code) === normaliseCode(c.code))?.name ?? null,
+        })),
+      )
+    } catch (error) {
+      setClassifyError(
+        `${error instanceof Error ? error.message : 'Save failed.'} Applied to this review only.`,
+      )
+    }
     setHoldings((prev) =>
       prev.map((h) => {
         const assetClass = byCode.get(normaliseCode(h.code))
@@ -1627,6 +1665,7 @@ export default function ClientPortfolioUploadPanel() {
             outsideModel={comparison.holdingRecommendations.filter((r) => r.treatment !== undefined)}
             onClassify={classifyHoldings}
             onTreatment={setHoldingTreatment}
+            classifyError={classifyError}
           />
         </>
       ) : null}

@@ -21,11 +21,13 @@ export function HoldingTriagePanel({
   outsideModel,
   onClassify,
   onTreatment,
+  classifyError,
 }: {
   unclassified: MappedHolding[]
   outsideModel: HoldingRecommendation[]
   onClassify: (changes: { code: string; assetClass: string }[]) => void
   onTreatment: (code: string, treatment: HoldingTreatment, reason: string) => void
+  classifyError?: string | null
 }) {
   const unclassifiedWeight = round2(unclassified.reduce((sum, h) => sum + h.weight, 0))
   const suggestions = unclassified
@@ -40,8 +42,10 @@ export function HoldingTriagePanel({
       <p style={bodyText}>
         Every holding on the statement needs to be in the proposal. Classify anything the platform didn&apos;t
         recognise, then decide how each holding outside the model is treated. Listed securities default to a sale;
-        bonds, unlisted funds and alternatives default to a staged exit; cash defaults to retained.
+        bonds, unlisted funds and alternatives default to a staged exit; cash defaults to retained. Classifications
+        are remembered, so the same securities are recognised automatically on every future statement.
       </p>
+      {classifyError ? <p style={errorText}>{classifyError}</p> : null}
 
       {unclassified.length > 0 ? (
         <>
@@ -122,7 +126,7 @@ export function HoldingTriagePanel({
               </thead>
               <tbody>
                 {outsideModel.map((rec) => (
-                  <TreatmentRow key={rec.code} rec={rec} onTreatment={onTreatment} />
+                  <TreatmentRow key={rec.code} rec={rec} onTreatment={onTreatment} onClassify={onClassify} />
                 ))}
               </tbody>
             </table>
@@ -136,9 +140,11 @@ export function HoldingTriagePanel({
 function TreatmentRow({
   rec,
   onTreatment,
+  onClassify,
 }: {
   rec: HoldingRecommendation
   onTreatment: (code: string, treatment: HoldingTreatment, reason: string) => void
+  onClassify: (changes: { code: string; assetClass: string }[]) => void
 }) {
   const treatment = rec.treatment ?? 'sell'
   const [reason, setReason] = useState(rec.treatmentReason ?? '')
@@ -150,7 +156,25 @@ function TreatmentRow({
     <tr>
       <td style={{ ...td, color: '#38bdf8', fontWeight: 600 }}>{rec.code}</td>
       <td style={td}>{rec.name}</td>
-      <td style={tdMuted}>{rec.assetClass}</td>
+      <td style={tdMuted}>
+        {rec.classifiedByAdviser ? (
+          <select
+            style={select}
+            value={rec.assetClass}
+            onChange={(e) => onClassify([{ code, assetClass: e.target.value }])}
+            aria-label={`Asset class for ${rec.code}`}
+            title="Classified by an adviser - changing it updates it for all future statements"
+          >
+            {ASSET_CLASSES.map((ac) => (
+              <option key={ac.name} value={ac.name}>
+                {ac.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          rec.assetClass
+        )}
+      </td>
       <td style={{ ...td, textAlign: 'right' }}>{rec.currentWeight}%</td>
       <td style={td}>
         <select
@@ -257,3 +281,4 @@ const textInput = {
   fontSize: '12px',
 }
 const defaultNote = { fontSize: '10px', color: '#64748b', marginTop: '2px' }
+const errorText = { fontSize: '12px', color: '#f87171', margin: '6px 0' }
