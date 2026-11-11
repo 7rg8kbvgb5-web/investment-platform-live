@@ -1,4 +1,5 @@
 'use client'
+import { ObjectivesEditor, IncomeComparison, ProposalHistory } from './ClientAdviceExtras'
 
 import { useCallback, useEffect, useState } from 'react'
 import Panel from './ui/Panel'
@@ -49,6 +50,7 @@ export default function ClientAdvicePanel() {
   const [savedNote, setSavedNote] = useState<string | null>(null)
   // Printed on the PDF only - sent with the download, never saved.
   const [pdfClientName, setPdfClientName] = useState('')
+  const [pdfCount, setPdfCount] = useState(0)
   const [cgt, setCgt] = useState<CgtResult | null>(null)
 
   useEffect(() => {
@@ -177,7 +179,10 @@ export default function ClientAdvicePanel() {
                   )
                 ) {
                   e.preventDefault()
+                  return
                 }
+                // The record is written while the PDF renders; refresh the list shortly after.
+                setTimeout(() => setPdfCount((n) => n + 1), 8000)
               }}
             >
               <input type="hidden" name="review" value={review?.id ?? ''} />
@@ -311,6 +316,28 @@ export default function ClientAdvicePanel() {
             </div>
           ) : null}
 
+          {review ? (
+            <>
+              <h3 style={sectionTitle}>
+                Client objectives <span style={sectionSub}>Opens the proposal - goals, income need, timeframe</span>
+              </h3>
+              <ObjectivesEditor
+                reviewId={review.id}
+                initial={review.objectives}
+                onSaved={(objectives) => setReview({ ...review, objectives })}
+              />
+            </>
+          ) : null}
+
+          {!advice.isNewMoney ? (
+            <>
+              <h3 style={sectionTitle}>
+                Income today vs recommended <span style={sectionSub}>Shown in the proposal&apos;s income section</span>
+              </h3>
+              <IncomeComparison advice={advice} onLookedUp={() => review && compute(review.id, approach)} />
+            </>
+          ) : null}
+
           <h3 style={sectionTitle}>Asset allocation</h3>
           <div className="ui-table-wrap">
             <table className="ui-table">
@@ -442,6 +469,15 @@ export default function ClientAdvicePanel() {
           <button type="button" style={secondaryButton} onClick={saveNotes} disabled={saving}>
             {saving ? 'Saving…' : 'Save notes'}
           </button>
+
+          {review ? (
+            <>
+              <h3 style={sectionTitle}>
+                Proposals issued <span style={sectionSub}>Every PDF downloaded, kept under the review reference</span>
+              </h3>
+              <ProposalHistory reviewId={review.id} refreshKey={pdfCount} />
+            </>
+          ) : null}
         </>
       ) : null}
     </Panel>

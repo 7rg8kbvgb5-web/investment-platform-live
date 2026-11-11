@@ -1,6 +1,7 @@
 import { ASSET_CLASSES, fetchAllRiskProfileWeights, computeGrowthDefensiveByProfile, fetchModelPortfolio } from './model-portfolio-core';
 import { dedupeHoldings, isQuotableCode } from './market-data';
 import { getHistoricalEod, toEodhdTicker, isEodhdConfigured } from '../eodhd-client';
+import { supabase } from '../supabase';
 import type { ModelHolding } from './model-portfolios';
 import { classifyPortfolioRiskProfile } from './portfolio-risk-classification';
 import { applyClientWeightOverrides } from './client-weight-overrides';
@@ -32,8 +33,15 @@ export type AssetClassRiskReturn = {
   sharpeRatio: number;
 };
 
+export type PriceSource = 'live' | 'stale' | 'modelled';
+
 export type PortfolioAnalytics = {
   connected: boolean;
+  /** Where each holding's price history came from: fetched today, an older cached copy, or a modelled stand-in. */
+  priceSources: Record<string, PriceSource>;
+  /** Holdings using a modelled stand-in series - their figures are not real. */
+  modelledCodes: string[];
+  staleCodes: string[];
   holdings: HoldingRiskProfile[];
   holdingCorrelation: { codes: string[]; matrix: number[][] };
   assetClassCorrelation: { codes: string[]; matrix: number[][] };
@@ -91,7 +99,27 @@ function mockReturns(code: string, assetClass: string, defensiveOrGrowth: 'Growt
   return commonSeries.map((c, i) => drift + commonBeta * c + classBeta * classSeries[i] + (idio() - 0.5) * idioVol);
 }
 
-async function realReturns(code: string): Promise<number[] | null> {
+const CACHE_TABLE = 'price_history_cache';
+const FRESH_HOURS = 20;
+
+/**
+ * 12 months of daily returns for a security, from a daily cache (migration
+ * 0027) so each security is fetched from EODHD at most once a day - the
+ * price plan's daily call limit is no longer burnt on page views. If a
+ * fresh fetch fails, an older cached copy is used and reported as stale.
+ */
+async function realReturns(code: string): Promise<{ returns: number[]; source: PriceSource } | null> {
+  let cached: { closes: number[]; fetched_at: string } | null = null;
+  try {
+    const { data } = await supabase.from(CACHE_TABLE).select('closes, fetched_at').eq('code', code).maybeSingle();
+    if (data && Array.isArray(data.closes)) cached = data as { closes: number[]; fetched_at: string };
+  } catch {
+    cached = null;
+  }
+  if (cached && Date.now() - new Date(cached.fetched_at).getTime() < FRESH_HOURS * 3600_000 && cached.closes.length > 20) {
+    return { returns: dailyReturns(cached.closes), source: 'live' };
+  }
+
   try {
     const to = new Date().toISOString().slice(0, 10);
     const fromDate = new Date();
@@ -99,11 +127,25 @@ async function realReturns(code: string): Promise<number[] | null> {
     const from = fromDate.toISOString().slice(0, 10);
 
     const bars = await getHistoricalEod(toEodhdTicker(code), from, to);
-    const closes = bars.map((b) => b.adjusted_close ?? b.close);
-    return dailyReturns(closes);
+    const closes = bars.map((b) => b.adjusted_close ?? b.close).filter((v): v is number => typeof v === 'number');
+    if (closes.length > 20) {
+      await supabase
+        .from(CACHE_TABLE)
+        .upsert({
+          code,
+          closes,
+          first_date: bars[0]?.date ?? null,
+          last_date: bars[bars.length - 1]?.date ?? null,
+          fetched_at: new Date().toISOString(),
+        })
+        .then(() => undefined, () => undefined);
+      return { returns: dailyReturns(closes), source: 'live' };
+    }
   } catch {
-    return null;
+    // fall through to the stale copy
   }
+  if (cached && cached.closes.length > 20) return { returns: dailyReturns(cached.closes), source: 'stale' };
+  return null;
 }
 
 export async function getPortfolioAnalytics(customHoldings?: ModelHolding[]): Promise<PortfolioAnalytics> {
@@ -112,6 +154,7 @@ export async function getPortfolioAnalytics(customHoldings?: ModelHolding[]): Pr
   const connected = isEodhdConfigured();
 
   const returnsByCode: Record<string, number[]> = {};
+  const priceSources: Record<string, PriceSource> = {};
   const holdingProfiles: HoldingRiskProfile[] = [];
 
   for (const holding of holdings) {
@@ -120,10 +163,15 @@ export async function getPortfolioAnalytics(customHoldings?: ModelHolding[]): Pr
 
     let returns: number[] | null = null;
     if (connected) {
-      returns = await realReturns(holding.code);
+      const real = await realReturns(holding.code);
+      if (real) {
+        returns = real.returns;
+        priceSources[holding.code] = real.source;
+      }
     }
     if (!returns) {
       returns = mockReturns(holding.code, holding.sector ?? 'Australian Equities', assetClassType);
+      priceSources[holding.code] = 'modelled';
     }
 
     returnsByCode[holding.code] = returns;
@@ -191,6 +239,9 @@ export async function getPortfolioAnalytics(customHoldings?: ModelHolding[]): Pr
 
   return {
     connected,
+    priceSources,
+    modelledCodes: Object.keys(priceSources).filter((c) => priceSources[c] === 'modelled').sort(),
+    staleCodes: Object.keys(priceSources).filter((c) => priceSources[c] === 'stale').sort(),
     holdings: holdingProfiles,
     holdingCorrelation,
     assetClassCorrelation,

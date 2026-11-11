@@ -16,10 +16,14 @@ export default async function PortfolioAnalyticsPanel() {
 
   return (
     <>
-      <StatusBox variant={analytics.connected ? 'success' : 'warning'}>
-        {analytics.connected
-          ? 'Live — correlation, volatility and Sharpe ratios computed from EODHD historical prices (last 12 months).'
-          : 'Illustrative — EODHD isn\u2019t connected yet, so these are modelled placeholder series (same asset-class structure real data would show), not real returns. Add EODHD_API_KEY to make this live.'}
+      <StatusBox
+        variant={analytics.connected && analytics.modelledCodes.length === 0 ? 'success' : 'warning'}
+      >
+        {!analytics.connected
+          ? 'Illustrative — EODHD isn\u2019t connected, so every figure below uses modelled placeholder series, not real returns. Add EODHD_API_KEY to make this live.'
+          : analytics.modelledCodes.length === 0
+            ? `Live — every holding uses real EODHD price history (last 12 months, refreshed daily)${analytics.staleCodes.length ? `; ${analytics.staleCodes.join(', ')} from an earlier day's prices` : ''}.`
+            : `Partly live — ${Object.keys(analytics.priceSources).length - analytics.modelledCodes.length} of ${Object.keys(analytics.priceSources).length} holdings use real EODHD price history. No price history was available for ${analytics.modelledCodes.join(', ')}, so their figures are modelled, not real${analytics.staleCodes.length ? `; ${analytics.staleCodes.join(', ')} use an earlier day\u2019s prices` : ''}. Price history is cached daily, so coverage fills in over the next few days on the free plan, or at once on the paid plan.`}
       </StatusBox>
 
       <Panel eyebrow="Diversification" title="Correlation Dispersion">

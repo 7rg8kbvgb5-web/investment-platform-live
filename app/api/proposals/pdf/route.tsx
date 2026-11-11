@@ -8,6 +8,9 @@ import { getQuotesForCodes } from '../../../../lib/engines/market-data'
 import { ClientProposalDocument } from '../../../../lib/pdf/ClientProposalDocument'
 import { cgtForReview } from '../../../../lib/tax/cgt-for-review'
 import { getTaxReference } from '../../../../lib/tax/tax-reference'
+import { recordProposal } from '../../../../lib/engines/proposal-records'
+import { getSignedInAdviser } from '../../../../lib/adviser-identity'
+import { CAPITAL_MARKET_ASSUMPTIONS, CMA_AS_AT, CPI_ASSUMPTION, estimateFees } from '../../../../lib/pdf/proposal/insights'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -69,14 +72,47 @@ async function buildPdf(reviewId: string | null, approachParam: string | null, c
 
     const clientName = clientNameInput?.trim().slice(0, 120) || null
     const displayName = clientName ?? review.clientName
-    const buffer = await renderToBuffer(
-      <ClientProposalDocument
-        advice={{ ...advice, clientName: displayName }}
-        adviserNotes={review.adviserNotes}
-        preparedOn={preparedOn}
-        capitalGains={capitalGains}
-      />,
-    )
+    const render = (name: string) =>
+      renderToBuffer(
+        <ClientProposalDocument
+          advice={{ ...advice, clientName: name }}
+          adviserNotes={review.adviserNotes}
+          objectives={review.objectives}
+          preparedOn={preparedOn}
+          capitalGains={capitalGains}
+        />,
+      )
+    const buffer = await render(displayName)
+
+    // The advice file: keep a copy under the review reference (the typed
+    // client name is never stored) with a snapshot of what it was based on.
+    // Best effort - a failed record never blocks the download.
+    try {
+      const archive = clientName ? await render(review.clientName) : buffer
+      const adviser = await getSignedInAdviser()
+      await recordProposal({
+        reviewId: review.id,
+        reviewReference: review.clientName,
+        riskProfile: advice.riskProfile,
+        modelVersion: advice.currentModelVersion,
+        approach: advice.approach,
+        totalValue: advice.totalAfter,
+        pdf: new Uint8Array(archive),
+        generatedBy: adviser.email,
+        snapshot: {
+          preparedOn,
+          advice: { ...advice, clientName: review.clientName },
+          adviserNotes: review.adviserNotes,
+          objectives: review.objectives,
+          capitalGainsIncluded: !!capitalGains,
+          capitalGains: capitalGains?.result ?? null,
+          assumptions: { capitalMarket: CAPITAL_MARKET_ASSUMPTIONS, asAt: CMA_AS_AT, cpi: CPI_ASSUMPTION },
+          fees: estimateFees(advice),
+        },
+      })
+    } catch (recordError) {
+      console.error('Proposal generated but not recorded:', recordError)
+    }
     const filename = `Investment Proposal - ${displayName.replace(/[^\w\s-]/g, '')}.pdf`
     return new Response(new Uint8Array(buffer), {
       headers: {

@@ -507,9 +507,13 @@ export function ModelPortfolioSecuritiesPanel() {
       <div style={correlationBox}>
         <div style={correlationBoxHeader}>
           <span style={statLabel}>Model Portfolio Correlation Rating</span>
-          {analytics && !analytics.connected && (
+          {analytics && !analytics.connected ? (
             <span style={illustrativeTag}>Illustrative — connect EODHD for live data</span>
-          )}
+          ) : analytics && (analytics.modelledCodes?.length ?? 0) > 0 ? (
+            <span style={illustrativeTag} title={`Modelled: ${analytics.modelledCodes.join(', ')}`}>
+              Partly modelled — {analytics.modelledCodes.length} holding{analytics.modelledCodes.length === 1 ? '' : 's'} without price history
+            </span>
+          ) : null}
         </div>
         {analyticsLoading ? (
           <p style={emptyText}>Loading correlation data…</p>

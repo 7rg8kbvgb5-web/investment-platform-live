@@ -43,6 +43,32 @@ export async function saveCgtSettings(id: string, settings: CgtSettings): Promis
   }
 }
 
+/**
+ * What the client wants the portfolio to do - set on the Client Advice tab,
+ * opens the proposal (migration 0027). No personal details.
+ */
+export type ClientObjectives = {
+  primaryGoal: 'growth' | 'income' | 'balanced' | 'preservation' | null
+  /** Annual income the client wants from the portfolio, $ - null if none. */
+  incomeNeed: number | null
+  timeframeYears: number | null
+  /** Free text: ethical exclusions, liquidity needs, holdings to keep, etc. */
+  constraints: string
+}
+
+export const EMPTY_OBJECTIVES: ClientObjectives = { primaryGoal: null, incomeNeed: null, timeframeYears: null, constraints: '' }
+
+export async function saveClientObjectives(id: string, objectives: ClientObjectives): Promise<void> {
+  const { error } = await supabase.from(TABLE).update({ objectives }).eq('id', id)
+  if (error) {
+    throw new Error(
+      error.message.includes('objectives')
+        ? 'Run migration 0027 in Supabase to save client objectives.'
+        : `Failed to save objectives: ${error.message}`,
+    )
+  }
+}
+
 export type ClientPortfolioReview = {
   id: string
   clientName: string
@@ -55,6 +81,7 @@ export type ClientPortfolioReview = {
   proposedAt: string | null
   implementedAt: string | null
   cgtSettings: CgtSettings | null
+  objectives: ClientObjectives | null
 }
 
 type ReviewRow = {
@@ -76,6 +103,7 @@ type ReviewRow = {
   proposed_at?: string | null
   implemented_at?: string | null
   cgt_settings?: CgtSettings | null
+  objectives?: ClientObjectives | null
   updated_at: string
 }
 
@@ -102,6 +130,7 @@ function mapRow(row: ReviewRow): ClientPortfolioReview {
     proposedAt: row.proposed_at ?? null,
     implementedAt: row.implemented_at ?? null,
     cgtSettings: row.cgt_settings ?? null,
+    objectives: row.objectives ?? null,
   }
 }
 

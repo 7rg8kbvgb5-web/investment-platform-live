@@ -5,6 +5,7 @@ import { DRIFT_TOLERANCE_PP } from '../engines/client-advice'
 import { ASSET_CLASSES, RISK_PROFILES } from '../engines/model-portfolio-core'
 import { CGT_DISCLAIMERS, ENTITY_LABELS, type CgtResult } from '../tax/cgt'
 import type { TaxReference } from '../tax/tax-reference'
+import type { ClientObjectives } from '../engines/client-portfolio-reviews'
 import {
   OM,
   colourFor,
@@ -149,14 +150,23 @@ function growthDefensive(weights: Record<string, number>) {
   return { growth: (g / t) * 100, defensive: (d / t) * 100 }
 }
 
+const GOAL_LABEL: Record<NonNullable<ClientObjectives['primaryGoal']>, string> = {
+  growth: 'Long-term growth',
+  balanced: 'Growth and income',
+  income: 'Reliable income',
+  preservation: 'Capital preservation',
+}
+
 export function ClientProposalDocument({
   advice,
   adviserNotes,
+  objectives,
   preparedOn,
   capitalGains,
 }: {
   advice: ClientAdvice
   adviserNotes: string
+  objectives?: ClientObjectives | null
   preparedOn: string
   capitalGains?: { result: CgtResult; reference: TaxReference } | null
 }) {
@@ -189,6 +199,12 @@ export function ClientProposalDocument({
 
   // Income
   const yieldPct = advice.projectedYieldPct ?? 0
+  const showIncomeToday =
+    !advice.isNewMoney && advice.currentIncome !== null && advice.projectedIncome !== null && advice.currentIncomeCoveragePct >= 80
+  const incomeChange = showIncomeToday ? (advice.projectedIncome as number) - (advice.currentIncome as number) : null
+  const incomeNeed = objectives?.incomeNeed ?? null
+  const hasObjectives =
+    !!objectives && (!!objectives.primaryGoal || !!objectives.incomeNeed || !!objectives.timeframeYears || !!objectives.constraints?.trim())
   const incomeByClass = ASSET_CLASSES.map((ac) => ({
     label: ac.name,
     colour: colourFor(ac.name),
@@ -240,7 +256,9 @@ export function ClientProposalDocument({
     keyChanges.push(`${advice.retainedHoldings.length} holding${advice.retainedHoldings.length === 1 ? ' is' : 's are'} retained outside the model for the reasons set out under Recommended changes.`)
   if (advice.projectedIncome !== null)
     keyChanges.push(
-      `Estimated income of ${fmt(advice.projectedIncome)} a year${advice.projectedFrankingCredits ? `, plus about ${fmt(advice.projectedFrankingCredits)} in franking credits` : ''}.`,
+      showIncomeToday && incomeChange !== null
+        ? `Estimated income ${incomeChange >= 0 ? 'rises' : 'changes'} from ${fmt(advice.currentIncome as number)} to ${fmt(advice.projectedIncome)} a year${advice.projectedFrankingCredits ? `, plus about ${fmt(advice.projectedFrankingCredits)} in franking credits` : ''}.`
+        : `Estimated income of ${fmt(advice.projectedIncome)} a year${advice.projectedFrankingCredits ? `, plus about ${fmt(advice.projectedFrankingCredits)} in franking credits` : ''}.`,
     )
 
   const recommendation = advice.isNewMoney
@@ -279,6 +297,33 @@ export function ClientProposalDocument({
       <Page size="A4" style={s.page}>
         <Chrome client={client} />
         <SectionTitle n={next()} eyebrow="Executive summary" title="Our recommendation" />
+        {hasObjectives && objectives ? (
+          <View style={[s.card, { marginBottom: 10 }]} wrap={false}>
+            <Text style={[s.h3, { color: OM.red }]}>YOUR OBJECTIVES</Text>
+            <View style={s.row}>
+              {objectives.primaryGoal ? (
+                <View style={[s.col, { marginRight: 10 }]}>
+                  <Text style={s.tileLabel}>PRIMARY GOAL</Text>
+                  <Text style={[s.p, s.bold, { color: OM.navy, marginBottom: 0 }]}>{GOAL_LABEL[objectives.primaryGoal]}</Text>
+                </View>
+              ) : null}
+              {objectives.incomeNeed ? (
+                <View style={[s.col, { marginRight: 10 }]}>
+                  <Text style={s.tileLabel}>INCOME REQUIRED</Text>
+                  <Text style={[s.p, s.bold, { color: OM.navy, marginBottom: 0 }]}>{fmt(objectives.incomeNeed)} a year</Text>
+                </View>
+              ) : null}
+              {objectives.timeframeYears ? (
+                <View style={s.col}>
+                  <Text style={s.tileLabel}>TIMEFRAME</Text>
+                  <Text style={[s.p, s.bold, { color: OM.navy, marginBottom: 0 }]}>{objectives.timeframeYears} years</Text>
+                </View>
+              ) : null}
+            </View>
+            {objectives.constraints?.trim() ? <Text style={[s.small, { marginTop: 6, marginBottom: 0 }]}>{objectives.constraints.trim()}</Text> : null}
+          </View>
+        ) : null}
+
         <Text style={s.lead}>{recommendation}</Text>
 
         <View style={s.tiles}>
@@ -691,6 +736,45 @@ export function ClientProposalDocument({
               last
             />
           </View>
+
+          {showIncomeToday && incomeChange !== null ? (
+            <View style={[s.callout, { flexDirection: 'row', alignItems: 'center' }]} wrap={false}>
+              <View style={{ flexGrow: 1, flexBasis: 0 }}>
+                <Text style={s.tileLabel}>YOUR INCOME TODAY</Text>
+                <Text style={s.tileValue}>{fmt(advice.currentIncome as number)}</Text>
+              </View>
+              <View style={{ flexGrow: 1, flexBasis: 0 }}>
+                <Text style={s.tileLabel}>RECOMMENDED</Text>
+                <Text style={s.tileValue}>{fmt(advice.projectedIncome as number)}</Text>
+              </View>
+              <View style={{ flexGrow: 1, flexBasis: 0 }}>
+                <Text style={s.tileLabel}>CHANGE PER YEAR</Text>
+                <Text style={[s.tileValue, { color: incomeChange >= 0 ? OM.navy : OM.red }]}>
+                  {incomeChange >= 0 ? '+' : '-'}
+                  {fmt(Math.abs(incomeChange))}
+                </Text>
+              </View>
+            </View>
+          ) : null}
+
+          {incomeNeed ? (
+            <Text style={[s.p, { marginBottom: 10 }]}>
+              {(advice.projectedIncome as number) >= incomeNeed ? (
+                <>
+                  The estimated income of <Text style={s.bold}>{fmt(advice.projectedIncome as number)}</Text> covers your
+                  stated requirement of {fmt(incomeNeed)} a year
+                  {advice.projectedFrankingCredits ? ', before counting franking credits' : ''}.
+                </>
+              ) : (
+                <>
+                  The estimated income of <Text style={s.bold}>{fmt(advice.projectedIncome as number)}</Text> is below your
+                  stated requirement of {fmt(incomeNeed)} a year. The difference of{' '}
+                  {fmt(incomeNeed - (advice.projectedIncome as number))} would be met from capital or cash reserves, which
+                  we will monitor at each review.
+                </>
+              )}
+            </Text>
+          ) : null}
 
           {incomeByClass.length > 0 ? (
             <View wrap={false}>

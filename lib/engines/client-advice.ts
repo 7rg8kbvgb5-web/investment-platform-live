@@ -1,3 +1,4 @@
+import { getSecurityIncome, isIncomeStale } from './security-income'
 import { sortSecurities } from './security-order'
 import type { HoldingTreatment } from './holding-triage'
 import type { ModelPortfolio, RiskProfile } from './model-portfolios'
@@ -94,6 +95,14 @@ export type ClientAdvice = {
   cashDeployment: CashDeploymentResult | null
   holdingsOutsideModel: number
   unmappedHoldings: { code: string; name?: string; weight: number }[]
+  /** Income the client's portfolio produces today (before the advice), where yields are known. */
+  currentIncome: number | null
+  currentYieldPct: number | null
+  currentFrankingCredits: number | null
+  /** % of today's portfolio (by value) with a known yield. */
+  currentIncomeCoveragePct: number
+  /** Current holdings with no known yield yet - can be looked up from Client Advice. */
+  incomeLookupNeeded: { code: string; name: string }[]
   /** % of the existing portfolio still unclassified - excluded from this proposal until classified. */
   unclassifiedWeightPct: number
   retainedHoldings: RetainedHolding[]
@@ -295,6 +304,39 @@ export async function buildClientAdvice(
     }
   }
 
+  // Income today, on the client's current holdings: model yields where the
+  // holding is in the model, otherwise remembered lookups (security_income).
+  let currentIncome: number | null = null
+  let currentCredits = 0
+  let currentCovered = 0
+  let currentTotal = 0
+  const incomeLookupNeeded: { code: string; name: string }[] = []
+  if (!isNewMoney && mapped.length > 0) {
+    const remembered = await getSecurityIncome(mapped.map((h) => h.statementCode ?? h.code))
+    currentIncome = 0
+    for (const h of mapped) {
+      const value = h.value ?? (existingValue ? (h.weight / 100) * existingValue : null)
+      if (value === null) continue
+      currentTotal += value
+      const key = normaliseCode(h.code)
+      const fromModel = yieldByCode.get(key)
+      const fromLookup = remembered[normaliseCode(h.statementCode ?? h.code)]
+      const y = fromModel ?? fromLookup?.yield ?? null
+      const f = fromModel !== undefined ? frankingByCode.get(key) ?? 0 : fromLookup?.frankingPct ?? 0
+      if (typeof y === 'number') {
+        const income = (value * y) / 100
+        currentIncome += income
+        currentCredits += frankingCredit(income, f)
+        currentCovered += value
+      } else if (!fromLookup || isIncomeStale(fromLookup)) {
+        incomeLookupNeeded.push({ code: h.statementCode ?? h.code, name: h.name ?? h.code })
+      }
+    }
+    if (currentCovered === 0) currentIncome = null
+  }
+  const currentIncomeCoveragePct = currentTotal > 0 ? Math.round((currentCovered / currentTotal) * 100) : 0
+  const currentYieldPct = currentIncome !== null && currentCovered > 0 ? round2((currentIncome / currentCovered) * 100) : null
+
   // Projected income on the resulting portfolio.
   let projectedIncome: number | null = null
   let credits = 0
@@ -380,6 +422,11 @@ export async function buildClientAdvice(
     unclassifiedWeightPct,
     retainedHoldings,
     resultingHoldings: sortSecurities(resultingHoldings),
+    currentIncome: currentIncome !== null ? Math.round(currentIncome) : null,
+    currentYieldPct,
+    currentFrankingCredits: currentIncome !== null ? Math.round(currentCredits) : null,
+    currentIncomeCoveragePct,
+    incomeLookupNeeded,
     projectedIncome,
     projectedYieldPct,
     yieldCoveragePct,
