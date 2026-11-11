@@ -2,18 +2,18 @@ import type { HoldingMarketData } from '../lib/engines/market-data';
 import Panel from './ui/Panel';
 import StatusBox from './dashboard/StatusBox';
 
-function formatCurrency(value: number | undefined): string {
-  if (value === undefined) return '—';
+function formatCurrency(value: unknown): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
   return `$${value.toFixed(2)}`;
 }
 
-function formatPercent(value: number | undefined): string {
-  if (value === undefined) return '—';
+function formatPercent(value: unknown): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
   return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
 }
 
-function formatMarketCap(value: number | undefined): string {
-  if (!value) return '—';
+function formatMarketCap(value: unknown): string {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return '—';
   if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(1)}B`;
   if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
   return `$${value.toLocaleString()}`;
@@ -61,9 +61,9 @@ export default function MarketDataTable({
                 <td>{holding.sector ?? '—'}</td>
                 <td>{formatCurrency(holding.quote?.close)}</td>
                 <td>{formatPercent(holding.quote?.change_p)}</td>
-                <td>{holding.fundamentals?.Highlights?.PERatio?.toFixed(1) ?? '—'}</td>
+                <td>{typeof holding.fundamentals?.Highlights?.PERatio === 'number' ? holding.fundamentals.Highlights.PERatio.toFixed(1) : '—'}</td>
                 <td>
-                  {holding.fundamentals?.Highlights?.DividendYield
+                  {typeof holding.fundamentals?.Highlights?.DividendYield === 'number' && holding.fundamentals.Highlights.DividendYield > 0
                     ? `${(holding.fundamentals.Highlights.DividendYield * 100).toFixed(2)}%`
                     : '—'}
                 </td>

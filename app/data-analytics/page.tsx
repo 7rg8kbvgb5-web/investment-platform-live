@@ -11,7 +11,15 @@ export const dynamic = 'force-dynamic';
 
 export default async function DataAnalyticsPage() {
   const connected = isEodhdConfigured();
-  const holdings = await getModelPortfolioMarketData(await selectedModelIdFromCookies());
+  // A market-data failure should never take the whole page down.
+  let holdings: Awaited<ReturnType<typeof getModelPortfolioMarketData>> = [];
+  let marketDataError: string | null = null;
+  try {
+    holdings = await getModelPortfolioMarketData(await selectedModelIdFromCookies());
+  } catch (error) {
+    console.error('Market data failed:', error);
+    marketDataError = error instanceof Error ? error.message : 'Market data could not be loaded.';
+  }
 
   return (
     <PageContent
@@ -28,7 +36,11 @@ export default async function DataAnalyticsPage() {
 
       <PortfolioAnalyticsPanel />
 
-      <MarketDataTable holdings={holdings} connected={connected} />
+      {marketDataError ? (
+        <StatusBox variant="warning">Holdings market data couldn&apos;t load: {marketDataError}</StatusBox>
+      ) : (
+        <MarketDataTable holdings={holdings} connected={connected} />
+      )}
     </PageContent>
   );
 }

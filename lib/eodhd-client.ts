@@ -105,9 +105,31 @@ export async function getBulkEod(exchange: string, date?: string): Promise<Eodhd
   return eodhdFetch<EodhdBulkRow[]>(`/eod-bulk-last-day/${exchange}`, params);
 }
 
-/** Delayed real-time quote for a single ASX-listed ticker (e.g. "CBA.AU"). */
+/**
+ * Delayed real-time quote for a single ASX-listed ticker (e.g. "CBA.AU").
+ * EODHD sends "NA" (or null) for fields it has no value for; those are
+ * normalised here so callers only ever see real numbers. A quote with no
+ * usable price is treated as a failure.
+ */
 export async function getQuote(eodhdTicker: string): Promise<EodhdQuote> {
-  return eodhdFetch<EodhdQuote>(`/real-time/${eodhdTicker}`);
+  const raw = await eodhdFetch<Record<string, unknown>>(`/real-time/${eodhdTicker}`);
+  const close = toNumber(raw.close) ?? toNumber(raw.previousClose);
+  if (close === undefined || close <= 0) {
+    throw new Error(`No current price from EODHD for ${eodhdTicker}`);
+  }
+  return {
+    code: String(raw.code ?? eodhdTicker),
+    close,
+    change: toNumber(raw.change) ?? 0,
+    change_p: toNumber(raw.change_p) ?? 0,
+    volume: toNumber(raw.volume) ?? 0,
+    timestamp: toNumber(raw.timestamp) ?? 0,
+  };
+}
+
+function toNumber(value: unknown): number | undefined {
+  const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+  return Number.isFinite(n) ? n : undefined;
 }
 
 /** Fundamentals snapshot for a single ASX-listed ticker (e.g. "CBA.AU"). */
