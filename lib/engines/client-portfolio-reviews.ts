@@ -1,3 +1,4 @@
+import type { ExclusionCheck } from './exclusions-check'
 import { DEFAULT_MODEL_ID, isMissingModelColumn } from '../model-context'
 import { supabase } from '../supabase'
 import type { UploadedHolding } from './client-portfolio-upload'
@@ -55,6 +56,8 @@ export type ClientObjectives = {
   timeframeYears: number | null
   /** Free text: ethical exclusions, liquidity needs, holdings to keep, etc. */
   constraints: string
+  /** Last exclusions check of the recommended holdings against the constraints (lib/engines/exclusions-check.ts). */
+  exclusionCheck?: ExclusionCheck | null
 }
 
 export const EMPTY_OBJECTIVES: ClientObjectives = { primaryGoal: null, incomeNeed: null, timeframeYears: null, constraints: '' }

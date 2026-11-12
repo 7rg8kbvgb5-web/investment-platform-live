@@ -7,6 +7,9 @@ import { CGT_DISCLAIMERS, ENTITY_LABELS, type CgtResult } from '../tax/cgt'
 import type { TaxReference } from '../tax/tax-reference'
 import type { ClientObjectives } from '../engines/client-portfolio-reviews'
 import { buildScorecard } from './proposal/scorecard'
+import { runStressTest, STRESS_INDEX_NOTE } from '../engines/stress-test'
+import { exclusionStatus } from '../engines/exclusions-check'
+import type { IncomeCalendar } from '../engines/income-calendar'
 import { ADVICE_TEAM } from './proposal/team'
 import {
   OM,
@@ -167,6 +170,7 @@ export function ClientProposalDocument({
   capitalGains,
   commentary = {},
   research = {},
+  incomeCalendar = null,
 }: {
   advice: ClientAdvice
   adviserNotes: string
@@ -177,6 +181,8 @@ export function ClientProposalDocument({
   commentary?: Record<string, string>
   /** Ord Minnett research view per holding code: rating, price target, upside to target. */
   research?: Record<string, { rating: string; lean: 'bullish' | 'neutral' | 'bearish'; priceTarget: number | null; upside: number | null }>
+  /** Month-by-month income on the recommended portfolio (lib/engines/income-calendar.ts). */
+  incomeCalendar?: IncomeCalendar | null
 }) {
   const note = (code: string, kind: 'buy' | 'sell' | 'exposure') => commentary[`${code.trim().toUpperCase()}:${kind}`] ?? null
   const client = advice.clientName
@@ -274,6 +280,15 @@ export function ClientProposalDocument({
   const low = scenarios?.find((x) => x.key === 'low')
   const high = scenarios?.find((x) => x.key === 'high')
 
+  // Stress test: past market shocks applied to each allocation.
+  const stressAfter = runStressTest(after, total)
+  const stressNow = hasCurrent ? runStressTest(current, advice.existingValue) : null
+  const worst = stressAfter.reduce((a, b) => (b.returnPct < a.returnPct ? b : a), stressAfter[0])
+  const stressMax = Math.max(1, ...stressAfter.map((r) => Math.abs(r.returnPct)), ...(stressNow ?? []).map((r) => Math.abs(r.returnPct)))
+
+  // Exclusions: only stated in the proposal once a check has passed on these exact holdings.
+  const exclusions = exclusionStatus(objectives?.constraints, objectives?.exclusionCheck, advice.resultingHoldings.map((h) => h.code))
+
   // Net flow per asset class
   const flows = ASSET_CLASSES.map((ac) => ({
     label: ac.name,
@@ -370,6 +385,12 @@ export function ClientProposalDocument({
               ) : null}
             </View>
             {objectives.constraints?.trim() ? <Text style={[s.small, { marginTop: 6, marginBottom: 0 }]}>{objectives.constraints.trim()}</Text> : null}
+            {exclusions.state === 'clear' ? (
+              <Text style={[s.small, { marginTop: 4, marginBottom: 0, color: OM.navy }]}>
+                Every recommended holding has been checked against your exclusions ({exclusions.check.exclusions.join(', ')}) and none
+                conflict.
+              </Text>
+            ) : null}
           </View>
         ) : null}
 
@@ -976,6 +997,25 @@ export function ClientProposalDocument({
             </View>
           ) : null}
 
+          {incomeCalendar && incomeCalendar.totalIncome > 0 ? (
+            <View wrap={false} style={{ marginTop: 6 }}>
+              <Text style={s.h3}>WHEN YOUR INCOME IS PAID</Text>
+              <BarChart
+                width={495}
+                height={120}
+                yFormat={shortMoney}
+                bars={incomeCalendar.months.map((m) => ({ label: m.label, value: m.total }))}
+              />
+              <Text style={s.small}>
+                Estimated income by month across a financial year, from each holding&apos;s recent payment history
+                {incomeCalendar.knownTimingPct < 100
+                  ? `; timing for ${100 - incomeCalendar.knownTimingPct}% of the income (holdings without a payment history, such as unlisted funds and bonds) is assumed to be quarterly`
+                  : ''}
+                . Actual payment dates and amounts are set by each company or fund.
+              </Text>
+            </View>
+          ) : null}
+
           {scenarios && base && low && high ? (
             <View wrap={false}>
               <Text style={s.h2}>Income over the next 10 years</Text>
@@ -1074,6 +1114,100 @@ export function ClientProposalDocument({
             points a year. &ldquo;In today&apos;s dollars&rdquo; adjusts the year-10 value for
             inflation of {CPI_ASSUMPTION}% a year. Projections are illustrations, not forecasts or guarantees, and do not
             allow for tax, transaction costs or changes to the portfolio.
+          </Text>
+        </Page>
+      ) : null}
+
+      {/* ---------- Stress test ---------- */}
+      {stressAfter.some((r) => r.returnPct !== 0) ? (
+        <Page size="A4" style={s.page}>
+          <Chrome client={client} />
+          <SectionTitle n={next()} eyebrow="Stress test" title="How your portfolio might hold up in a downturn" />
+          <Text style={s.p}>
+            Markets do not rise in a straight line. To show what a severe setback could look like, we have applied three
+            real market events to {hasCurrent ? 'your current portfolio and to the recommended portfolio' : 'the recommended portfolio'}, using
+            how each asset class performed at the time.
+          </Text>
+          {hasCurrent ? (
+            <View style={[s.row, { marginBottom: 8 }]}>
+              <View style={{ marginRight: 14, flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{ width: 12, height: 6, backgroundColor: OM.white, borderWidth: 0.7, borderColor: OM.silver, marginRight: 4 }} />
+                <Text style={{ fontSize: 7.5, color: OM.slate }}>Current portfolio</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{ width: 12, height: 6, backgroundColor: OM.red, marginRight: 4 }} />
+                <Text style={{ fontSize: 7.5, color: OM.slate }}>Recommended portfolio</Text>
+              </View>
+            </View>
+          ) : null}
+          {stressAfter.map((r, i) => {
+            const nowR = stressNow?.[i] ?? null
+            const bar = (v: number, filled: boolean) => (
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 3 }}>
+                <View style={{ width: '50%', flexDirection: 'row', justifyContent: 'flex-end' }}>
+                  {v < 0 ? (
+                    <View
+                      style={{
+                        height: 9,
+                        width: `${(Math.abs(v) / stressMax) * 100}%`,
+                        backgroundColor: filled ? OM.red : OM.white,
+                        borderWidth: filled ? 0 : 0.7,
+                        borderColor: OM.silver,
+                      }}
+                    />
+                  ) : null}
+                </View>
+                <View style={{ width: 1, height: 12, backgroundColor: OM.silver }} />
+                <View style={{ width: '30%' }}>
+                  {v > 0 ? (
+                    <View style={{ height: 9, width: `${(v / stressMax) * 100}%`, backgroundColor: filled ? OM.navy : OM.white, borderWidth: filled ? 0 : 0.7, borderColor: OM.silver }} />
+                  ) : null}
+                </View>
+                <Text style={{ width: '20%', fontSize: 8, textAlign: 'right', fontFamily: filled ? 'Helvetica-Bold' : 'Helvetica', color: v < 0 ? OM.red : OM.navy }}>
+                  {v > 0 ? '+' : ''}
+                  {v.toFixed(1)}%
+                </Text>
+              </View>
+            )
+            return (
+              <View key={r.key} style={[s.row, { borderTopWidth: 0.6, borderTopColor: OM.paleSilver, paddingVertical: 10 }]} wrap={false}>
+                <View style={{ width: '42%', paddingRight: 12 }}>
+                  <Text style={[s.td, s.bold, { color: OM.navy }]}>{r.name}</Text>
+                  <Text style={{ fontSize: 7, color: OM.slate, marginBottom: 3 }}>{r.period}</Text>
+                  <Text style={{ fontSize: 7.5, lineHeight: 1.4, color: OM.ink }}>{r.summary}</Text>
+                </View>
+                <View style={{ width: '58%', justifyContent: 'center' }}>
+                  {nowR ? bar(nowR.returnPct, false) : null}
+                  {bar(r.returnPct, true)}
+                  {r.change !== null ? (
+                    <Text style={{ fontSize: 7, color: OM.slate, textAlign: 'right' }}>
+                      {r.change < 0 ? 'A fall' : 'A rise'} of about {fmt(Math.abs(r.change))} on {fmt(total ?? 0)}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+            )
+          })}
+          {worst && worst.returnPct < 0 ? (
+            <View style={s.callout} wrap={false}>
+              <Text style={[s.p, { marginBottom: 0 }]}>
+                In the most severe of these events ({worst.name}, {worst.period}), the recommended portfolio would have fallen by about <Text style={s.bold}>{pct(Math.abs(worst.returnPct))}</Text>
+                {worst.change !== null ? <> ({fmt(Math.abs(worst.change))})</> : null}
+                {stressNow ? (
+                  <>
+                    , compared with {pct(Math.abs(stressNow.find((x) => x.key === worst.key)?.returnPct ?? 0))} for your current portfolio
+                  </>
+                ) : null}
+                . Markets have recovered from each of these falls, though recovery from the Global Financial Crisis took
+                several years. Holding defensive assets alongside growth assets is what cushions a portfolio, and staying
+                invested through a downturn has historically mattered more than timing it.
+              </Text>
+            </View>
+          ) : null}
+          <Text style={s.small}>
+            Results apply each asset class&apos;s approximate return over the period to the portfolio&apos;s asset-class mix.
+            An actual portfolio holds specific investments and would have performed differently. Past events are not a
+            guide to future returns, and a future downturn could be larger or smaller. {STRESS_INDEX_NOTE}
           </Text>
         </Page>
       ) : null}

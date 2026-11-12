@@ -15,4 +15,5 @@ export const SEARCH_LIMITS = {
   deepDive: 10,
   securityLookup: 3,
   taxReference: 5,
+  exclusions: 4,
 } as const

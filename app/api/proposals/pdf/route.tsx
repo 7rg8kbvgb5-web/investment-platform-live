@@ -11,6 +11,7 @@ import { getTaxReference } from '../../../../lib/tax/tax-reference'
 import { recordProposal } from '../../../../lib/engines/proposal-records'
 import { fetchHouseViews } from '../../../../lib/engines/house-view'
 import { commentaryItemsFor, commentaryKey, defaultCommentarySelection, fetchCommentary } from '../../../../lib/engines/security-commentary'
+import { buildIncomeCalendar, fetchPaymentPatterns, type IncomeCalendar } from '../../../../lib/engines/income-calendar'
 import { getSignedInAdviser } from '../../../../lib/adviser-identity'
 import { CAPITAL_MARKET_ASSUMPTIONS, CMA_AS_AT, CPI_ASSUMPTION, estimateFees } from '../../../../lib/pdf/proposal/insights'
 
@@ -92,6 +93,25 @@ async function buildPdf(reviewId: string | null, approachParam: string | null, c
       // Research is supporting detail - the proposal still renders without it.
     }
 
+    // When the recommended portfolio's income is paid, from each holding's payment history.
+    let incomeCalendar: IncomeCalendar | null = null
+    try {
+      const total = advice.totalAfter ?? 0
+      const holdings = advice.resultingHoldings
+        .filter((h) => typeof h.yield === 'number')
+        .map((h) => ({
+          code: h.code,
+          holdingType: h.holdingType ?? (h.assetClass === 'Cash' ? 'cash' : null),
+          income: ((h.value ?? (h.weight / 100) * total) * (h.yield as number)) / 100,
+        }))
+      if (holdings.length > 0) {
+        const patterns = await fetchPaymentPatterns(holdings.filter((h) => h.holdingType !== 'cash').map((h) => h.code))
+        incomeCalendar = buildIncomeCalendar(holdings, patterns)
+      }
+    } catch {
+      // Supporting detail - the proposal renders without the calendar.
+    }
+
     const clientName = clientNameInput?.trim().slice(0, 120) || null
     const displayName = clientName ?? review.clientName
     const render = (name: string) =>
@@ -104,6 +124,7 @@ async function buildPdf(reviewId: string | null, approachParam: string | null, c
           capitalGains={capitalGains}
           commentary={commentary}
           research={research}
+          incomeCalendar={incomeCalendar}
         />,
       )
     const buffer = await render(displayName)

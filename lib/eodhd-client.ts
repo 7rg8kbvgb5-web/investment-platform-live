@@ -132,6 +132,39 @@ function toNumber(value: unknown): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+export type EodhdDividend = {
+  date: string;
+  paymentDate?: string | null;
+  value: number;
+  currency?: string;
+};
+
+/**
+ * Dividend / distribution history for a ticker from the given date
+ * (YYYY-MM-DD). Included in the EOD Historical Data plan. Cached for a day:
+ * payment patterns barely change.
+ */
+export async function getDividends(eodhdTicker: string, from: string): Promise<EodhdDividend[]> {
+  const apiKey = process.env.EODHD_API_KEY;
+  if (!apiKey) throw new Error('EODHD_API_KEY is not configured.');
+  const url = new URL(`${EODHD_BASE_URL}/div/${eodhdTicker}`);
+  url.searchParams.set('api_token', apiKey);
+  url.searchParams.set('fmt', 'json');
+  url.searchParams.set('from', from);
+  const response = await fetch(url.toString(), { next: { revalidate: 86_400 } });
+  if (!response.ok) throw new Error(`EODHD request failed (${response.status}): /div/${eodhdTicker}`);
+  const raw = (await response.json()) as unknown;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((r: Record<string, unknown>) => ({
+      date: String(r.date ?? ''),
+      paymentDate: typeof r.paymentDate === 'string' ? r.paymentDate : null,
+      value: toNumber(r.value) ?? 0,
+      currency: typeof r.currency === 'string' ? r.currency : undefined,
+    }))
+    .filter((d) => d.date && d.value > 0);
+}
+
 /** Fundamentals snapshot for a single ASX-listed ticker (e.g. "CBA.AU"). */
 export async function getFundamentals(eodhdTicker: string): Promise<EodhdFundamentals> {
   return eodhdFetch<EodhdFundamentals>(`/fundamentals/${eodhdTicker}`);

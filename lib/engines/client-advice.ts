@@ -17,6 +17,7 @@ import type { CommitteeDecision } from './investment-committee-decisions'
 import { normaliseCode } from './codes'
 import { frankingCredit } from './yield-aggregation'
 import { fetchHouseViews, houseViewSentence } from './house-view'
+import { exclusionStatus, exclusionWarning } from './exclusions-check'
 
 // One engine that turns a saved client review into advice. Used by the
 // Client Advice tab, the client register (drift), and the proposal PDF,
@@ -448,6 +449,12 @@ export async function buildClientAdvice(
   if (undocumented.length > 0) {
     warnings.push(`${undocumented.length} retained holding(s) have no documented reason: ${undocumented.map((h) => h.code).join(', ')}.`)
   }
+
+  // Client exclusions: warn until the recommended holdings have been checked against them.
+  const exclusion = exclusionWarning(
+    exclusionStatus(review.objectives?.constraints, review.objectives?.exclusionCheck, resultingHoldings.map((h) => h.code)),
+  )
+  if (exclusion) warnings.push(exclusion)
 
   return {
     reviewId: review.id,

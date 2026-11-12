@@ -2,6 +2,7 @@
 import { resolveModelId } from '../lib/model-context'
 import ProposalCommentaryEditor from './ProposalCommentaryEditor'
 import { ObjectivesEditor, IncomeComparison, ProposalHistory } from './ClientAdviceExtras'
+import { ExclusionsCheckPanel, StressTestTable } from './ClientAdviceChecks'
 
 import { useCallback, useEffect, useState } from 'react'
 import Panel from './ui/Panel'
@@ -347,6 +348,15 @@ export default function ClientAdvicePanel() {
                 initial={review.objectives}
                 onSaved={(objectives) => setReview({ ...review, objectives })}
               />
+              <h3 style={sectionTitle}>
+                Exclusions check <span style={sectionSub}>Recommended holdings vs the client&apos;s stated exclusions</span>
+              </h3>
+              <ExclusionsCheckPanel
+                reviewId={review.id}
+                advice={advice}
+                objectives={review.objectives}
+                onSaved={() => compute(review.id, approach)}
+              />
             </>
           ) : null}
 
@@ -358,6 +368,11 @@ export default function ClientAdvicePanel() {
               <IncomeComparison advice={advice} onLookedUp={() => review && compute(review.id, approach)} />
             </>
           ) : null}
+
+          <h3 style={sectionTitle}>
+            Stress test <span style={sectionSub}>Past market shocks applied to the allocation - shown in the proposal</span>
+          </h3>
+          <StressTestTable advice={advice} />
 
           <h3 style={sectionTitle}>Asset allocation</h3>
           <div className="ui-table-wrap">
