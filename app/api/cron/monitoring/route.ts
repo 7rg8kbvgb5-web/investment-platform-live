@@ -5,6 +5,7 @@ import { runFundReviewScan } from '../../../../lib/engines/fund-review'
 import { runTacticalAssetClassScan } from '../../../../lib/engines/tactical-asset-view'
 import { runSectorHealthScan } from '../../../../lib/engines/sector-health-live'
 import { syncProposals } from '../../../../lib/engines/investment-committee-decisions'
+import { recordJobRun } from '../../../../lib/engines/system-health'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -54,6 +55,8 @@ export async function GET(request: NextRequest) {
   if (rotation) await step(rotation.name, rotation.run)
 
   await step('investment-committee-sync', () => syncProposals())
+
+  await recordJobRun('daily-scans', results)
 
   const ok = Object.values(results).every((r) => r === 'ok')
   return Response.json({ ok, results }, { status: ok ? 200 : 207 })

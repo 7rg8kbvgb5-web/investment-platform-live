@@ -84,6 +84,17 @@ const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
+    href: '/market-view',
+    label: 'Market View',
+    description: 'Our current read on markets',
+    icon: (
+      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <circle cx="10" cy="10" r="7" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M3 10h14M10 3c2 2.2 2.8 4.5 2.8 7s-.8 4.8-2.8 7c-2-2.2-2.8-4.5-2.8-7S8 5.2 10 3z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
     href: '/market-tracker',
     label: 'Market Tracker',
     description: 'Small caps, breadth, short interest',
