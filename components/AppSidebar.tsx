@@ -61,17 +61,6 @@ const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
-    href: '/market-tracker',
-    label: 'Market Tracker',
-    description: 'Small caps, breadth, short interest',
-    icon: (
-      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-        <path d="M3 15l4-5 3 3 7-8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M3 17h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-  {
     href: '/fund-reviews',
     label: 'Fund Reviews',
     description: 'Fund manager and structure checks',
@@ -91,6 +80,17 @@ const NAV_ITEMS: NavItem[] = [
         <circle cx="7" cy="7" r="2.5" stroke="currentColor" strokeWidth="1.5" />
         <circle cx="13" cy="7" r="2.5" stroke="currentColor" strokeWidth="1.5" />
         <path d="M3.5 16c.8-2.2 2.4-3.5 3.5-3.5S9.7 13.8 10.5 16M10.5 16c.8-2.2 2.4-3.5 3.5-3.5s2.7 1.3 3.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    href: '/market-tracker',
+    label: 'Market Tracker',
+    description: 'Small caps, breadth, short interest',
+    icon: (
+      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <path d="M3 15l4-5 3 3 7-8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M3 17h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       </svg>
     ),
   },
