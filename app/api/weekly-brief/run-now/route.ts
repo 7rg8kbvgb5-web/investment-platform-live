@@ -2,7 +2,7 @@ import { describeAiError } from '../../../../lib/ai-errors'
 import { generateWeeklyBrief } from "../../../../lib/engines/weekly-brief";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 /**
  * Manual trigger for the "Run Now" button in the app. Unlike

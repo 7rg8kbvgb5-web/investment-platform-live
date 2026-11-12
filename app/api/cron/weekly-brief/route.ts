@@ -4,7 +4,7 @@ import { generateWeeklyBrief } from "../../../../lib/engines/weekly-brief";
 import { recordJobRun } from "../../../../lib/engines/system-health";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 export async function GET(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
