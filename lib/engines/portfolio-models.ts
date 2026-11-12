@@ -93,6 +93,18 @@ export async function createModelFromCopy(input: {
     if (error) throw new Error(`Couldn't copy the asset allocation: ${error.message}`)
   }
 
+  // Strategic allocation (migration 0033) - best effort, skipped if not yet run.
+  const strategicRes = await supabase.from('risk_profile_strategic_weights').select('*').eq('model_id', input.sourceModelId)
+  if (!strategicRes.error && (strategicRes.data ?? []).length > 0) {
+    await supabase
+      .from('risk_profile_strategic_weights')
+      .insert((strategicRes.data ?? []).map((row) => {
+        const { updated_at: _u, ...rest } = row as Record<string, unknown>
+        void _u
+        return { ...rest, model_id: id }
+      }))
+  }
+
   const { publishModelVersion } = await import('./model-versioning')
   await publishModelVersion({
     modelId: id,

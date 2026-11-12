@@ -18,6 +18,8 @@ export type ModelChangeType =
   | 'yield'
   | 'holding_type'
   | 'franking'
+  | 'strategic_allocation_saved'
+  | 'strategic_allocation_reset'
 
 export type ModelChange = {
   id: string

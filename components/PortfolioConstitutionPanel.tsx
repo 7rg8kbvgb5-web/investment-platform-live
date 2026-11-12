@@ -6,8 +6,16 @@ import {
   ASSET_CLASSES,
   fetchCoreSecurities,
   fetchRiskProfileWeights,
+  fetchAllRiskProfileWeights,
+  fetchStrategicAllocations,
+  saveStrategicAllocation,
+  resetToStrategicAllocation,
+  sumProfileWeights,
+  isFullyInvested,
   updateRiskProfileAssetClassWeight,
+  RISK_PROFILES,
   type CoreSecurity,
+  type StrategicAllocations,
 } from '../lib/engines/model-portfolio-core';
 import { computePortfolioYield } from '../lib/engines/yield-aggregation';
 import { computeConvictionRating, type ConvictionRating } from '../lib/engines/conviction-rating';
@@ -26,9 +34,10 @@ import { HoldingMetricGrid, HoldingMetricCell } from './ui/HoldingMetricGrid';
 // holding's weight within its asset class (in-class weight is shared
 // across all five profiles by design - only the asset-class-level weight
 // varies - so editing it here changes it everywhere, same as before).
-// Every edit saves to Supabase immediately - there is no separate
-// "model" to reset to, because this IS the model. Client-specific
-// bespoke adjustments happen later, in Construction.
+// Every edit saves to Supabase immediately. Each profile also has a saved
+// strategic allocation (migration 0033) - the approved weights it can be
+// reset to in one click. Client-specific bespoke adjustments happen later,
+// in Construction, and never touch these.
 
 function round1(value: number): number {
   return Math.round(value * 10) / 10;
@@ -48,7 +57,7 @@ const OBJECTIVES: Record<string, string> = {
 };
 
 export function PortfolioConstitutionPanel() {
-  const { selectedRiskProfile } = useClientAdvice();
+  const { selectedRiskProfile, setSelectedRiskProfile } = useClientAdvice();
 
   const [securities, setSecurities] = useState<CoreSecurity[]>([]);
   const [weights, setWeights] = useState<Record<string, number>>({});
@@ -58,17 +67,26 @@ export function PortfolioConstitutionPanel() {
   const [savingCount, setSavingCount] = useState(0);
   const [convictions, setConvictions] = useState<Record<string, ConvictionRating>>({});
   const [convictionsLoading, setConvictionsLoading] = useState(true);
+  const [allWeights, setAllWeights] = useState<Partial<Record<RiskProfile, Record<string, number>>>>({});
+  const [strategic, setStrategic] = useState<StrategicAllocations>({ available: true, byProfile: {} });
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [allocationBusy, setAllocationBusy] = useState(false);
+  const [allocationNotice, setAllocationNotice] = useState<string | null>(null);
 
   const load = useCallback(async (profile: string) => {
     setLoading(true);
     setLoadError(null);
     try {
-      const [secs, w] = await Promise.all([
+      const [secs, w, all, strat] = await Promise.all([
         fetchCoreSecurities(),
         fetchRiskProfileWeights(profile as RiskProfile),
+        fetchAllRiskProfileWeights(),
+        fetchStrategicAllocations().catch(() => ({ available: false, byProfile: {} }) as StrategicAllocations),
       ]);
       setSecurities(secs);
       setWeights(w);
+      setAllWeights(all);
+      setStrategic(strat);
     } catch (err) {
       setLoadError(
         err instanceof Error ? err.message : 'Failed to load the model portfolio.'
@@ -79,6 +97,8 @@ export function PortfolioConstitutionPanel() {
   }, []);
 
   useEffect(() => {
+    setConfirmReset(false);
+    setAllocationNotice(null);
     load(selectedRiskProfile);
   }, [selectedRiskProfile, load]);
 
@@ -127,6 +147,43 @@ export function PortfolioConstitutionPanel() {
     await withSaving(() =>
       updateRiskProfileAssetClassWeight(selectedRiskProfile as RiskProfile, assetClassName, value)
     );
+    setAllWeights((prev) => ({
+      ...prev,
+      [selectedRiskProfile]: { ...(prev[selectedRiskProfile as RiskProfile] ?? {}), [assetClassName]: value },
+    }));
+    setAllocationNotice(null);
+  }
+
+  async function handleReset() {
+    setAllocationBusy(true);
+    setSaveError(null);
+    try {
+      const restored = await resetToStrategicAllocation(selectedRiskProfile as RiskProfile);
+      setWeights(restored);
+      setAllWeights((prev) => ({ ...prev, [selectedRiskProfile]: restored }));
+      setAllocationNotice(`${selectedRiskProfile} reset to its strategic allocation.`);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Reset failed.');
+    } finally {
+      setAllocationBusy(false);
+      setConfirmReset(false);
+    }
+  }
+
+  async function handleSaveStrategic() {
+    setAllocationBusy(true);
+    setSaveError(null);
+    try {
+      await saveStrategicAllocation(selectedRiskProfile as RiskProfile, weights);
+      const saved: Record<string, number> = {};
+      for (const ac of ASSET_CLASSES) saved[ac.name] = Number.isFinite(weights[ac.name]) ? weights[ac.name] : 0;
+      setStrategic((prev) => ({ ...prev, byProfile: { ...prev.byProfile, [selectedRiskProfile]: saved } }));
+      setAllocationNotice(`Current ${selectedRiskProfile} weights saved as its strategic allocation.`);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Save failed.');
+    } finally {
+      setAllocationBusy(false);
+    }
   }
 
   const assetClasses = ASSET_CLASSES.map((meta) => ({
@@ -141,6 +198,14 @@ export function PortfolioConstitutionPanel() {
     assetClasses.reduce((total, ac) => total + ac.targetWeight, 0)
   );
   const portfolioOk = Math.abs(portfolioTotal - 100) < 0.15;
+
+  const strategicWeights = strategic.byProfile[selectedRiskProfile as RiskProfile];
+  const driftedClasses = strategicWeights
+    ? ASSET_CLASSES.filter(
+        (ac) => Math.abs((weights[ac.name] ?? 0) - (strategicWeights[ac.name] ?? 0)) >= 0.05
+      )
+    : [];
+  const atStrategic = !!strategicWeights && driftedClasses.length === 0;
 
   // Weight-based yield rollup for the model itself - no dollar figures
   // here since this view isn't tied to any one client's portfolio value
@@ -248,6 +313,93 @@ export function PortfolioConstitutionPanel() {
         </StatusBox>
       )}
 
+      <div style={checkStrip}>
+        <span style={checkStripLabel}>Allocation check</span>
+        <div style={checkChips}>
+          {RISK_PROFILES.map((profile) => {
+            const total = sumProfileWeights(allWeights[profile] ?? {});
+            const ok = isFullyInvested(total);
+            const diff = round1(total - 100);
+            const selected = profile === selectedRiskProfile;
+            return (
+              <button
+                key={profile}
+                type="button"
+                onClick={() => setSelectedRiskProfile(profile)}
+                title={ok ? 'Fully invested' : diff > 0 ? `Over invested by ${diff}%` : `Under invested by ${Math.abs(diff)}%`}
+                style={{
+                  ...checkChip,
+                  borderColor: selected ? '#38bdf8' : ok ? '#1f5f45' : '#7f1d1d',
+                  background: ok ? '#0f2a22' : '#2a1215',
+                }}
+              >
+                <span style={checkChipName}>{profile}</span>
+                <span style={{ ...checkChipValue, color: ok ? '#86efac' : '#fca5a5' }}>
+                  {ok ? '100% ✓' : `${total}% (${diff > 0 ? '+' : ''}${diff})`}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {!portfolioOk && (
+        <StatusBox variant="error" display="inline">
+          {selectedRiskProfile} is {portfolioTotal > 100 ? 'over' : 'under'} invested by{' '}
+          {round1(Math.abs(portfolioTotal - 100))}% — its asset classes total {portfolioTotal}%, not 100%.
+          {strategicWeights
+            ? ' Reset it to the strategic allocation below, or adjust the weights so they total 100%.'
+            : ' Adjust the weights so they total 100%, then save them as the strategic allocation.'}
+        </StatusBox>
+      )}
+
+      <div style={strategicBar}>
+        <div style={strategicBarText}>
+          <span style={strategicBarTitle}>Strategic allocation</span>
+          <span style={strategicBarStatus}>
+            {!strategic.available
+              ? 'Run migration 0033 in Supabase to enable.'
+              : !strategicWeights
+                ? `None saved for ${selectedRiskProfile} yet.`
+                : atStrategic
+                  ? `${selectedRiskProfile} is at its strategic allocation.`
+                  : `${driftedClasses.length} asset class${driftedClasses.length === 1 ? ' has' : 'es have'} moved from strategic: ${driftedClasses
+                      .map((ac) => `${ac.name} ${weights[ac.name] ?? 0}% vs ${strategicWeights[ac.name] ?? 0}%`)
+                      .join(' · ')}`}
+          </span>
+          {allocationNotice && <span style={strategicBarNotice}>{allocationNotice}</span>}
+        </div>
+        <div style={strategicBarActions}>
+          {strategic.available && strategicWeights && !atStrategic && !confirmReset && (
+            <button type="button" style={resetStrategicButton} disabled={allocationBusy} onClick={() => setConfirmReset(true)}>
+              Reset to strategic allocation
+            </button>
+          )}
+          {confirmReset && (
+            <>
+              <span style={confirmText}>Overwrite {selectedRiskProfile}&apos;s current weights?</span>
+              <button type="button" style={resetStrategicButton} disabled={allocationBusy} onClick={handleReset}>
+                {allocationBusy ? 'Resetting…' : 'Yes, reset'}
+              </button>
+              <button type="button" style={secondaryButton} disabled={allocationBusy} onClick={() => setConfirmReset(false)}>
+                Cancel
+              </button>
+            </>
+          )}
+          {strategic.available && !atStrategic && !confirmReset && (
+            <button
+              type="button"
+              style={{ ...secondaryButton, opacity: portfolioOk ? 1 : 0.45, cursor: portfolioOk ? 'pointer' : 'not-allowed' }}
+              disabled={!portfolioOk || allocationBusy}
+              title={portfolioOk ? 'Record these weights as the approved strategic allocation' : 'The profile must total 100% first'}
+              onClick={handleSaveStrategic}
+            >
+              Save as strategic allocation
+            </button>
+          )}
+        </div>
+      </div>
+
       <div style={overviewRow}>
         <div style={overviewTableCol}>
           <div style={portfolioTotalRow}>
@@ -304,6 +456,10 @@ export function PortfolioConstitutionPanel() {
                   aria-label={`${assetClass.name} weight of overall portfolio for ${selectedRiskProfile}`}
                 />
                 <span style={weightPercentSign}>% of portfolio ({selectedRiskProfile})</span>
+                {strategicWeights &&
+                  Math.abs(assetClass.targetWeight - (strategicWeights[assetClass.name] ?? 0)) >= 0.05 && (
+                    <span style={strategicHint}>Strategic {strategicWeights[assetClass.name] ?? 0}%</span>
+                  )}
               </div>
             </div>
             <p style={assetClassDescription}>{assetClass.description}</p>
@@ -393,6 +549,130 @@ const savedIndicator = {
   background: '#0f3d2e',
   border: '1px solid #10b981',
   color: '#86efac',
+};
+
+const checkStrip = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '12px',
+  flexWrap: 'wrap' as const,
+  margin: '12px 0 8px',
+};
+
+const checkStripLabel = {
+  fontSize: '12px',
+  fontWeight: 600,
+  color: '#94a3b8',
+  textTransform: 'uppercase' as const,
+  letterSpacing: '0.04em',
+};
+
+const checkChips = {
+  display: 'flex',
+  gap: '8px',
+  flexWrap: 'wrap' as const,
+};
+
+const checkChip = {
+  display: 'flex',
+  flexDirection: 'column' as const,
+  alignItems: 'flex-start',
+  gap: '2px',
+  padding: '6px 12px',
+  borderRadius: '8px',
+  border: '1px solid',
+  cursor: 'pointer',
+  font: 'inherit',
+};
+
+const checkChipName = {
+  fontSize: '12px',
+  fontWeight: 600,
+  color: '#e2e8f0',
+};
+
+const checkChipValue = {
+  fontSize: '12px',
+  fontWeight: 700,
+};
+
+const strategicBar = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  gap: '16px',
+  flexWrap: 'wrap' as const,
+  padding: '10px 14px',
+  margin: '8px 0 4px',
+  background: '#0b2342',
+  borderRadius: '8px',
+  border: '1px solid #2d4a6b',
+};
+
+const strategicBarText = {
+  display: 'flex',
+  flexDirection: 'column' as const,
+  gap: '3px',
+  minWidth: 0,
+  flex: '1 1 320px',
+};
+
+const strategicBarTitle = {
+  fontSize: '13px',
+  fontWeight: 700,
+  color: '#e2e8f0',
+};
+
+const strategicBarStatus = {
+  fontSize: '12px',
+  color: '#94a3b8',
+  lineHeight: 1.5,
+};
+
+const strategicBarNotice = {
+  fontSize: '12px',
+  color: '#86efac',
+};
+
+const strategicBarActions = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  flexWrap: 'wrap' as const,
+};
+
+const resetStrategicButton = {
+  padding: '7px 14px',
+  borderRadius: '8px',
+  border: '1px solid #38bdf8',
+  background: '#0c3a5c',
+  color: '#e0f2fe',
+  fontSize: '12px',
+  fontWeight: 600,
+  cursor: 'pointer',
+};
+
+const secondaryButton = {
+  padding: '7px 14px',
+  borderRadius: '8px',
+  border: '1px solid #2d4a6b',
+  background: 'transparent',
+  color: '#cbd5e1',
+  fontSize: '12px',
+  fontWeight: 600,
+  cursor: 'pointer',
+};
+
+const confirmText = {
+  fontSize: '12px',
+  color: '#fbbf24',
+};
+
+const strategicHint = {
+  fontSize: '11px',
+  fontWeight: 600,
+  color: '#fbbf24',
+  marginLeft: '8px',
 };
 
 const portfolioTotalRow = {

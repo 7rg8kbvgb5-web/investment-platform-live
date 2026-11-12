@@ -575,3 +575,136 @@ export async function updateRiskProfileAssetClassWeight(
     });
   }
 }
+
+// ─── Strategic asset allocation (migration 0033) ──────────────────────────
+// The approved, "correct" asset-class weights per risk profile, held apart
+// from the live working weights above. Saving records the live weights as
+// strategic (only when they total 100%); resetting copies the strategic
+// weights back over the live ones.
+
+const STRATEGIC_TABLE = 'risk_profile_strategic_weights';
+
+/** Within 0.05 of 100% counts as fully invested (allows for one-decimal rounding). */
+export function isFullyInvested(total: number): boolean {
+  return Math.abs(total - 100) < 0.05;
+}
+
+export function sumProfileWeights(weights: Record<string, number>): number {
+  return round2(
+    ASSET_CLASSES.reduce((sum, ac) => sum + (Number.isFinite(weights[ac.name]) ? weights[ac.name] : 0), 0)
+  );
+}
+
+function strategicTableMissing(error: { message?: string } | null | undefined): boolean {
+  return !!error?.message && /risk_profile_strategic_weights/.test(error.message);
+}
+
+export type StrategicAllocations = {
+  /** False until migration 0033 has been run in Supabase. */
+  available: boolean;
+  /** Per profile; a profile missing here has no strategic allocation saved yet. */
+  byProfile: Partial<Record<RiskProfile, Record<string, number>>>;
+};
+
+export async function fetchStrategicAllocations(modelId?: string | null): Promise<StrategicAllocations> {
+  const model = resolveModelId(modelId);
+  const { data, error } = await supabase
+    .from(STRATEGIC_TABLE)
+    .select('risk_profile, asset_class, target_weight')
+    .eq('model_id', model);
+  if (error) {
+    if (strategicTableMissing(error)) return { available: false, byProfile: {} };
+    throw new Error(`Failed to load the strategic asset allocation: ${error.message}`);
+  }
+  const byProfile: Partial<Record<RiskProfile, Record<string, number>>> = {};
+  for (const row of (data ?? []) as { risk_profile: RiskProfile; asset_class: string; target_weight: number }[]) {
+    (byProfile[row.risk_profile] ??= {})[row.asset_class] = Number(row.target_weight);
+  }
+  return { available: true, byProfile };
+}
+
+/** Records this profile's live weights as its strategic allocation. Refuses unless they total 100%. */
+export async function saveStrategicAllocation(
+  riskProfile: RiskProfile,
+  weights: Record<string, number>,
+  modelId?: string | null
+): Promise<void> {
+  const model = resolveModelId(modelId);
+  const total = sumProfileWeights(weights);
+  if (!isFullyInvested(total)) {
+    throw new Error(`${riskProfile} totals ${total}% - it must total 100% before it can be saved as the strategic allocation.`);
+  }
+  const now = new Date().toISOString();
+  const { currentUserEmail } = await import('./model-versioning');
+  const savedBy = await currentUserEmail();
+  const { error } = await supabase.from(STRATEGIC_TABLE).upsert(
+    ASSET_CLASSES.map((ac) => ({
+      model_id: model,
+      risk_profile: riskProfile,
+      asset_class: ac.name,
+      target_weight: Number.isFinite(weights[ac.name]) ? weights[ac.name] : 0,
+      saved_by: savedBy,
+      updated_at: now,
+    })),
+    { onConflict: 'model_id,risk_profile,asset_class' }
+  );
+  if (error) {
+    if (strategicTableMissing(error)) throw new Error('Run migration 0033 in Supabase to enable the strategic allocation.');
+    throw new Error(`Failed to save the ${riskProfile} strategic allocation: ${error.message}`);
+  }
+  await logModelChange({
+    modelId: model,
+    changeType: 'strategic_allocation_saved',
+    riskProfile,
+    after: weights,
+    description: `${riskProfile}: current asset allocation saved as the strategic allocation`,
+  });
+}
+
+/**
+ * Puts this profile's live weights back to its saved strategic allocation.
+ * Returns the restored weights. Every asset class is written, so a class
+ * that had drifted from 0% is put back to 0% too.
+ */
+export async function resetToStrategicAllocation(
+  riskProfile: RiskProfile,
+  modelId?: string | null
+): Promise<Record<string, number>> {
+  const model = resolveModelId(modelId);
+  const { available, byProfile } = await fetchStrategicAllocations(model);
+  if (!available) throw new Error('Run migration 0033 in Supabase to enable the strategic allocation.');
+  const strategic = byProfile[riskProfile];
+  if (!strategic) throw new Error(`No strategic allocation has been saved for ${riskProfile} yet.`);
+
+  const before = await fetchRiskProfileWeights(riskProfile, model);
+  const restored: Record<string, number> = {};
+  for (const ac of ASSET_CLASSES) restored[ac.name] = strategic[ac.name] ?? 0;
+
+  const now = new Date().toISOString();
+  const { error } = await supabase.from(WEIGHTS_TABLE).upsert(
+    ASSET_CLASSES.map((ac) => ({
+      model_id: model,
+      risk_profile: riskProfile,
+      asset_class: ac.name,
+      target_weight: restored[ac.name],
+      updated_at: now,
+    })),
+    { onConflict: 'model_id,risk_profile,asset_class' }
+  );
+  if (error) throw new Error(`Failed to reset ${riskProfile}: ${error.message}`);
+
+  const changed = ASSET_CLASSES.filter((ac) => (before[ac.name] ?? 0) !== restored[ac.name]);
+  if (changed.length > 0) {
+    await logModelChange({
+      modelId: model,
+      changeType: 'strategic_allocation_reset',
+      riskProfile,
+      before,
+      after: restored,
+      description: `${riskProfile}: reset to strategic allocation (${changed
+        .map((ac) => `${ac.name} ${before[ac.name] ?? 0}% → ${restored[ac.name]}%`)
+        .join(', ')})`,
+    });
+  }
+  return restored;
+}
