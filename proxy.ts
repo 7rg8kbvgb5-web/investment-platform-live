@@ -49,6 +49,8 @@ export async function proxy(request: NextRequest) {
     }
     const loginUrl = new URL('/login', request.url)
     if (pathname !== '/') loginUrl.searchParams.set('next', pathname)
+    // Signed in, but not on the approved list - say so rather than bouncing silently.
+    if (user) loginUrl.searchParams.set('denied', '1')
     return NextResponse.redirect(loginUrl)
   }
 

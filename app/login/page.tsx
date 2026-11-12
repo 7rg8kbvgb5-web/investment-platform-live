@@ -8,7 +8,11 @@ function LoginForm() {
   const params = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(
+    params.get('denied')
+      ? 'Your password was accepted, but this email is not on the approved list. Check that ALLOWED_EMAILS in Vercel matches your sign-in email exactly.'
+      : null,
+  )
   const [busy, setBusy] = useState(false)
 
   async function signIn(e: React.FormEvent) {
