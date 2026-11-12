@@ -1,14 +1,26 @@
 // Historical stress test: what three real market shocks would have done to
-// a portfolio, given its asset-class mix. Each shock is the approximate
-// return of a broad index for each asset class over the period (rounded,
-// including income, in Australian dollars). Applied to the client's
-// current and recommended allocations so the proposal can show both.
+// a portfolio, given its asset-class mix. Each shock is the widely published
+// consensus return of the standard benchmark for each asset class over the
+// period (rounded to whole percentages, including income, in Australian
+// dollars unless noted). Applied to the client's current and recommended
+// allocations so the proposal can show both.
 //
 // These are illustrations of past events, not forecasts. A real portfolio
 // holds specific securities, so its result would differ from the index.
-// CHECK BEFORE CHANGING: the figures below are rounded index-level
-// approximations - review them against the house data provider if they
-// are ever used beyond the proposal's illustrative page.
+//
+// Sources (reviewed Nov 2026, adviser-approved as consensus figures):
+//  GFC - S&P/ASX 200 total return fell ~50% peak to trough (price index -54%);
+//    S&P/ASX 300 A-REIT fell ~76-80%, global listed infrastructure far less,
+//    so the 50/50 blend is ~-55%; AusBond Composite +15% and Global Aggregate
+//    (AUD hedged) +9% in calendar 2008; HFRI Fund Weighted Composite ~-20%
+//    peak to trough (USD); MSCI World ex Australia ~-40% in AUD, the falling
+//    dollar cushioning a ~-55% local-currency fall.
+//  COVID - S&P/ASX 200 fell 37% (20 Feb - 23 Mar 2020); HFRI FWC ~-11%
+//    over Feb-Mar 2020; S&P 500 -34% in USD, ~-22% for MSCI World ex
+//    Australia in AUD after the dollar's fall.
+//  2022 - calendar-year index returns: S&P/ASX 200 TR -1.1%, MSCI World ex
+//    Australia NR AUD ~-12.5%, S&P/ASX 200 A-REIT -20%, AusBond Composite
+//    -9.7%, Global Aggregate (hedged) ~-12%, HFRI FWC -4.2%, cash +1.3%.
 
 export type StressScenario = {
   key: 'gfc' | 'covid' | 'rates2022'
@@ -24,28 +36,28 @@ export const STRESS_SCENARIOS: StressScenario[] = [
   {
     key: 'gfc',
     name: 'Global Financial Crisis',
-    period: 'Nov 2007 – Feb 2009',
+    period: 'Nov 2007 – Mar 2009',
     summary: 'A banking crisis triggered the deepest share market fall in decades; bonds and cash rose as interest rates were cut.',
     returns: {
       'Australian Equities': -50,
       'International Equities': -40,
       'Listed Property / Infrastructure': -55,
-      Alternatives: -15,
-      'Australian Fixed Interest': 10,
-      'Global Fixed Interest': 8,
+      Alternatives: -20,
+      'Australian Fixed Interest': 15,
+      'Global Fixed Interest': 9,
       Cash: 7,
     },
   },
   {
     key: 'covid',
     name: 'COVID-19 crash',
-    period: 'Feb – Mar 2020',
+    period: '20 Feb – 23 Mar 2020',
     summary: 'Share markets fell sharply in five weeks as economies shut down, then recovered within the year.',
     returns: {
-      'Australian Equities': -36,
+      'Australian Equities': -37,
       'International Equities': -22,
       'Listed Property / Infrastructure': -40,
-      Alternatives: -8,
+      Alternatives: -11,
       'Australian Fixed Interest': -1,
       'Global Fixed Interest': -2,
       Cash: 0,
@@ -60,16 +72,16 @@ export const STRESS_SCENARIOS: StressScenario[] = [
       'Australian Equities': -1,
       'International Equities': -12,
       'Listed Property / Infrastructure': -15,
-      Alternatives: -2,
+      Alternatives: -4,
       'Australian Fixed Interest': -10,
-      'Global Fixed Interest': -11,
+      'Global Fixed Interest': -12,
       Cash: 1,
     },
   },
 ]
 
 export const STRESS_INDEX_NOTE =
-  'Approximate, rounded index returns including income, in Australian dollars: S&P/ASX 200 Accumulation (Australian equities), MSCI World ex Australia unhedged (international equities), a blend of S&P/ASX 200 A-REIT and global listed infrastructure (listed property / infrastructure), broad hedge fund indices (alternatives), Bloomberg AusBond Composite (Australian fixed interest), Bloomberg Global Aggregate hedged to AUD (global fixed interest) and the cash rate (cash).'
+  'Widely published benchmark returns for each period, rounded, including income and in Australian dollars unless noted: S&P/ASX 200 Accumulation (Australian equities), MSCI World ex Australia unhedged (international equities), a blend of S&P/ASX 200 A-REIT and global listed infrastructure (listed property / infrastructure), HFRI Fund Weighted Composite in US dollars (alternatives), Bloomberg AusBond Composite (Australian fixed interest), Bloomberg Global Aggregate hedged to AUD (global fixed interest) and bank bills (cash). Share market figures are peak-to-trough falls; past performance is not a reliable indicator of future performance.'
 
 export type StressResult = {
   key: StressScenario['key']
