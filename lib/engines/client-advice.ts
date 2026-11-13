@@ -10,6 +10,7 @@ import {
   compareClientPortfolioToModel,
   type AssetClassComparisonRow,
   type HoldingRecommendation,
+  UNIT_ROUNDING,
 } from './portfolio-review-comparison'
 import { deployCash, type CashDeploymentResult } from './cash-deployment'
 import type { ClientPortfolioReview } from './client-portfolio-reviews'
@@ -86,6 +87,8 @@ export type ClientAdvice = {
   riskProfileSource: 'agreed' | 'estimated'
   model: ModelPortfolio
   hasBespokeWeights: boolean
+  /** Units per step when trades are rounded for presentation (e.g. 10); null = whole units. */
+  unitRounding?: number | null
   isNewMoney: boolean
   existingValue: number | null
   newCash: number
@@ -191,12 +194,14 @@ export async function buildClientAdvice(
     Object.keys(state.holdingOverrides ?? {}).length > 0 ||
     Object.keys(state.tradeOverrides ?? {}).length > 0
 
+  const roundUnitsTo = state.roundUnits ? UNIT_ROUNDING : undefined
   const totalAfter = existingValue !== null ? existingValue + newCash : newCash > 0 ? newCash : null
   const comparison = compareClientPortfolioToModel(mapped, model, {
     totalPortfolioValue: totalAfter ?? undefined,
     currentPortfolioValue: existingValue ?? undefined,
     prices: context.prices,
     tradeOverrides: state.tradeOverrides ?? {},
+    roundUnitsTo,
   })
 
   const maxDriftPp = mapped.length
@@ -219,9 +224,9 @@ export async function buildClientAdvice(
   let cashDeployment: CashDeploymentResult | null = null
   if (approach === 'new-cash' && newCash > 0) {
     if (isNewMoney) {
-      cashDeployment = deployCash({ model, cashAmount: newCash, mappedHoldings: [], existingPortfolioValue: 0, prices: context.prices, tradeOverrides: state.tradeOverrides ?? {} })
+      cashDeployment = deployCash({ model, cashAmount: newCash, mappedHoldings: [], existingPortfolioValue: 0, prices: context.prices, tradeOverrides: state.tradeOverrides ?? {}, roundUnitsTo })
     } else if (existingValue !== null) {
-      cashDeployment = deployCash({ model, cashAmount: newCash, mappedHoldings: mapped, existingPortfolioValue: existingValue, prices: context.prices, tradeOverrides: state.tradeOverrides ?? {} })
+      cashDeployment = deployCash({ model, cashAmount: newCash, mappedHoldings: mapped, existingPortfolioValue: existingValue, prices: context.prices, tradeOverrides: state.tradeOverrides ?? {}, roundUnitsTo })
     } else {
       warnings.push('Enter the current portfolio value on the Construction tab to size the new-cash investment.')
     }
@@ -468,6 +473,7 @@ export async function buildClientAdvice(
     riskProfileSource,
     model,
     hasBespokeWeights,
+    unitRounding: roundUnitsTo ?? null,
     isNewMoney,
     existingValue,
     newCash,

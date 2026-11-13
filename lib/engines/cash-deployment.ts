@@ -88,6 +88,8 @@ export type CashDeploymentInput = {
   prices?: Record<string, number | null>
   /** Adviser-set units (or $ where unpriced) for specific lines; the rest keep their calculated size. */
   tradeOverrides?: TradeOverrides
+  /** Round each purchase down to a multiple of this many units (e.g. 10); the remainder stays in cash. */
+  roundUnitsTo?: number
 }
 
 export function deployCash(input: CashDeploymentInput): CashDeploymentResult {
@@ -200,6 +202,8 @@ export function deployCash(input: CashDeploymentInput): CashDeploymentResult {
       adjusted = true
     } else if (d.price && d.price > 0) {
       units = Math.floor(d.rawInvest / d.price)
+      const step = input.roundUnitsTo ? Math.round(input.roundUnitsTo) : 0
+      if (step > 1 && units >= step) units = Math.floor(units / step) * step
       investValue = units * d.price
     }
     investValue = round2(investValue)

@@ -795,8 +795,11 @@ export function ClientProposalDocument({
         ) : null}
 
         <Text style={[s.small, { marginTop: 8 }]}>
-          Values use market prices at the time of preparation and will move before transactions are placed. Unit
-          quantities are rounded down to whole units; investments without a listed price are transacted by value.
+          Values use market prices at the time of preparation and will move before transactions are placed.{' '}
+          {advice.unitRounding
+            ? `Unit quantities are rounded to the nearest ${advice.unitRounding} where practical, with the small difference held in cash; full sales are of the whole holding.`
+            : 'Unit quantities are rounded to whole units.'}{' '}
+          Investments without a listed price are transacted by value.
         </Text>
       </Page>
 

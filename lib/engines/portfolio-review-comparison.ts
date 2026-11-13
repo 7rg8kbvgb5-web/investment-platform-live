@@ -84,7 +84,12 @@ export type ComparisonContext = {
   prices?: Record<string, number | null>
   /** Adviser-adjusted trade sizes - see TradeOverrides. */
   tradeOverrides?: TradeOverrides
+  /** Round model-derived trades to this many units (e.g. 10) - presentation choice per client. */
+  roundUnitsTo?: number
 }
+
+/** Units per step when the adviser chooses round unit numbers for a client. */
+export const UNIT_ROUNDING = 10
 
 /** Within this band either side of the model weight, no change is recommended. */
 const NEUTRAL_BAND_PP = 1
@@ -394,12 +399,58 @@ export function compareClientPortfolioToModel(
     })
   }
 
+  if (context.roundUnitsTo && totalPortfolioValue) {
+    roundTradeUnits(holdingRecommendations, context.roundUnitsTo, totalPortfolioValue)
+  }
+
   const unclassifiedHoldings = mappedHoldings.filter((h) => !h.mapped)
 
   return {
     assetClassComparison,
     holdingRecommendations: sortSecurities(holdingRecommendations),
     unclassifiedHoldings,
+  }
+}
+
+/**
+ * Rounds model-derived trades to a whole multiple of `step` units (e.g. 10)
+ * so the proposal shows round numbers. Each rounded trade is re-valued at
+ * units x price, and the net difference is taken up by the model's Cash
+ * holding so the portfolio still adds to 100%. Left exactly as calculated:
+ * adviser-adjusted trades, full sales (the whole holding goes), trades
+ * smaller than one step, and anything without a live price.
+ */
+export function roundTradeUnits(recs: HoldingRecommendation[], step: number, totalPortfolioValue: number): void {
+  const n = Math.round(step)
+  if (n <= 1 || totalPortfolioValue <= 0) return
+  let difference = 0
+  for (const r of recs) {
+    if (r.adjusted || r.action === 'hold' || r.action === 'sell') continue
+    if (!r.price || r.units === null || Math.abs(r.units) < n || r.currentValue === null || r.changeValue === null) continue
+    const units = Math.round(r.units / n) * n
+    const changeValue = round2(units * r.price)
+    if (r.currentValue + changeValue < 0) continue
+    difference += changeValue - r.changeValue
+    r.units = units
+    r.changeValue = changeValue
+    r.targetValue = round2(r.currentValue + changeValue)
+    r.targetWeight = round2((r.targetValue / totalPortfolioValue) * 100)
+    r.changeWeight = round2(r.targetWeight - r.currentWeight)
+  }
+  if (Math.abs(difference) < 0.005) return
+  const cash = recs.find((r) => r.assetClass === 'Cash' && !r.adjusted && r.currentValue !== null && r.changeValue !== null)
+  if (!cash || cash.currentValue === null || cash.changeValue === null) return
+  cash.changeValue = round2(cash.changeValue - difference)
+  cash.targetValue = round2(cash.currentValue + cash.changeValue)
+  cash.targetWeight = round2((cash.targetValue / totalPortfolioValue) * 100)
+  cash.changeWeight = round2(cash.targetWeight - cash.currentWeight)
+  if (cash.action !== 'hold' || Math.abs(cash.changeWeight) > NEUTRAL_BAND_PP / 2) {
+    cash.action =
+      Math.abs(cash.changeValue) < 0.005
+        ? 'hold'
+        : cash.changeValue > 0
+          ? cash.currentValue > 0 ? 'increase' : 'buy'
+          : cash.targetValue <= 0 ? 'sell' : 'reduce'
   }
 }
 

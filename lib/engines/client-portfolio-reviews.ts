@@ -29,6 +29,8 @@ export type ClientPortfolioReviewState = {
   tradeOverrides?: TradeOverrides
   /** House model version this review was last saved against (migration 0019). */
   modelVersion?: number | null
+  /** Round proposed trades to the nearest 10 units (migration 0035). Written only once the adviser has toggled it. */
+  roundUnits?: boolean
 }
 
 export type ClientStatus = 'in_progress' | 'proposed' | 'implemented'
@@ -126,6 +128,7 @@ type ReviewRow = {
   objectives?: ClientObjectives | null
   commentary_selection?: string[] | null
   model_id?: string | null
+  round_units?: boolean | null
   updated_at: string
 }
 
@@ -145,6 +148,7 @@ function mapRow(row: ReviewRow): ClientPortfolioReview {
       entryMode: row.entry_mode === 'new-money' ? 'new-money' : 'portfolio',
       modelVersion: row.model_version ?? null,
       tradeOverrides: row.trade_overrides ?? {},
+      roundUnits: row.round_units ?? false,
     },
     status: row.status ?? 'in_progress',
     adviceApproach: row.advice_approach ?? null,
@@ -217,6 +221,12 @@ export async function fetchClientReview(id: string): Promise<ClientPortfolioRevi
  * from being safe - closing the tab and coming back tomorrow picks up
  * exactly where it left off, without touching the house model at all.
  */
+function saveErrorMessage(message: string): string {
+  return message.includes('round_units')
+    ? 'Run migration 0035 in Supabase to save the round-units setting.'
+    : `Failed to save client review: ${message}`
+}
+
 export async function saveClientReview(
   id: string | null,
   clientName: string,
@@ -239,6 +249,7 @@ export async function saveClientReview(
   if (state.entryMode === 'new-money') payload.entry_mode = 'new-money'
   if (typeof state.modelVersion === 'number') payload.model_version = state.modelVersion
   if (state.tradeOverrides !== undefined) payload.trade_overrides = state.tradeOverrides
+  if (state.roundUnits !== undefined) payload.round_units = state.roundUnits
 
   // Which adviser model the review is built against; a review keeps the model it was started on.
   if (modelId) payload.model_id = modelId
@@ -249,7 +260,7 @@ export async function saveClientReview(
       delete payload.model_id
       ;({ error } = await supabase.from(TABLE).update(payload).eq('id', id))
     }
-    if (error) throw new Error(`Failed to save client review: ${error.message}`)
+    if (error) throw new Error(saveErrorMessage(error.message))
     return id
   }
 

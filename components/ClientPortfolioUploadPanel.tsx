@@ -24,7 +24,7 @@ import {
   fetchAllRiskProfileWeights,
   computeGrowthDefensiveByProfile,
 } from '../lib/engines/model-portfolio-core'
-import { compareClientPortfolioToModel, type TradeOverrides } from '../lib/engines/portfolio-review-comparison'
+import { compareClientPortfolioToModel, UNIT_ROUNDING, type TradeOverrides } from '../lib/engines/portfolio-review-comparison'
 import { computePortfolioYield } from '../lib/engines/yield-aggregation'
 import {
   applyClientWeightOverrides,
@@ -320,6 +320,10 @@ export default function ClientPortfolioUploadPanel() {
   // the model. Saved with the review and carried into Client Advice.
   const [tradeOverrides, setTradeOverrides] = useState<TradeOverrides>({})
   const tradeOverridesTouched = useRef(false)
+  // Presentation choice per client: round proposed trades to the nearest 10 units.
+  const [roundUnits, setRoundUnits] = useState(false)
+  const roundUnitsTouched = useRef(false)
+  const roundUnitsTo = roundUnits ? UNIT_ROUNDING : undefined
 
   useEffect(() => {
     if (isHydrating.current) return
@@ -444,6 +448,7 @@ export default function ClientPortfolioUploadPanel() {
           entryMode: isNewMoney ? 'new-money' : 'portfolio',
           modelVersion: currentModelVersion,
           ...(tradeOverridesTouched.current ? { tradeOverrides } : {}),
+          ...(roundUnitsTouched.current ? { roundUnits } : {}),
         }, reviewModelId)
         setReviewModelVersion(currentModelVersion)
         setReviewId((prev) => prev ?? savedId)
@@ -461,7 +466,7 @@ export default function ClientPortfolioUploadPanel() {
     // change - editing it retriggers via the other dependencies changing
     // too, and including it directly would refire on every keystroke.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [holdings, meta, riskOverride, manualPortfolioValue, additionalCash, assetClassOverrides, holdingOverrides, clientReviewName, isNewMoney, tradeOverrides])
+  }, [holdings, meta, riskOverride, manualPortfolioValue, additionalCash, assetClassOverrides, holdingOverrides, clientReviewName, isNewMoney, tradeOverrides, roundUnits])
 
   async function openLoadPicker() {
     setShowLoadPicker(true)
@@ -494,6 +499,8 @@ export default function ClientPortfolioUploadPanel() {
       setHoldingOverrides(review.state.holdingOverrides)
       setTradeOverrides(review.state.tradeOverrides ?? {})
       tradeOverridesTouched.current = Object.keys(review.state.tradeOverrides ?? {}).length > 0
+      setRoundUnits(!!review.state.roundUnits)
+      roundUnitsTouched.current = !!review.state.roundUnits
       setMode(review.state.entryMode === 'new-money' ? 'new-money' : 'pdf')
       setReviewModelVersion(review.state.modelVersion ?? null)
       setReviewStatus('saved')
@@ -542,6 +549,8 @@ export default function ClientPortfolioUploadPanel() {
     setHoldingOverrides({})
     setTradeOverrides({})
     tradeOverridesTouched.current = false
+    setRoundUnits(false)
+    roundUnitsTouched.current = false
     setMode('pdf')
     setReviewModelVersion(null)
   }
@@ -624,9 +633,10 @@ export default function ClientPortfolioUploadPanel() {
             currentPortfolioValue: baseTotalPortfolioValue,
             prices,
             tradeOverrides,
+            roundUnitsTo,
           })
         : null,
-    [mappingResult.mappedHoldings, clientAdjustedModel, effectiveTotalPortfolioValue, baseTotalPortfolioValue, prices, tradeOverrides],
+    [mappingResult.mappedHoldings, clientAdjustedModel, effectiveTotalPortfolioValue, baseTotalPortfolioValue, prices, tradeOverrides, roundUnitsTo],
   )
 
   // New cash, invested without selling anything: either a lump sum into
@@ -643,6 +653,7 @@ export default function ClientPortfolioUploadPanel() {
         existingPortfolioValue: 0,
         prices,
         tradeOverrides,
+        roundUnitsTo,
       })
     }
     if (baseTotalPortfolioValue === undefined || mappingResult.mappedHoldings.length === 0) return null
@@ -653,8 +664,9 @@ export default function ClientPortfolioUploadPanel() {
       existingPortfolioValue: baseTotalPortfolioValue,
       prices,
       tradeOverrides,
+      roundUnitsTo,
     })
-  }, [clientAdjustedModel, additionalCashValue, isNewMoney, baseTotalPortfolioValue, mappingResult.mappedHoldings, prices, tradeOverrides])
+  }, [clientAdjustedModel, additionalCashValue, isNewMoney, baseTotalPortfolioValue, mappingResult.mappedHoldings, prices, tradeOverrides, roundUnitsTo])
 
   // Aggregate yield/income for the target (post-rebalance) portfolio, at
   // this client's actual dollar value where known. Uses clientAdjustedModel
@@ -1404,7 +1416,26 @@ export default function ClientPortfolioUploadPanel() {
               is accounted for, plus an option to add cash the client
               wants to inject from elsewhere. */}
           <div style={subPanel}>
-            <p style={subHeading}>Resulting Portfolio</p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+              <p style={subHeading}>Resulting Portfolio</p>
+              <button
+                type="button"
+                onClick={() => {
+                  roundUnitsTouched.current = true
+                  setRoundUnits((v) => !v)
+                }}
+                aria-pressed={roundUnits}
+                title="Rounds each proposed purchase and partial sale to the nearest 10 units, so the proposal shows round numbers. The small difference is held in cash. Full sales and trades you've adjusted by hand stay exact."
+                style={{
+                  ...resetAllButton,
+                  background: roundUnits ? '#1e3a5f' : 'transparent',
+                  color: roundUnits ? '#ffffff' : '#93c5fd',
+                  borderColor: roundUnits ? '#38bdf8' : '#2d4a6b',
+                }}
+              >
+                {roundUnits ? '✓ Units rounded to nearest 10' : 'Round units to nearest 10'}
+              </button>
+            </div>
             <HoldingAdjustmentChart recommendations={comparison.holdingRecommendations} />
 
             <div style={cashBar}>
