@@ -1416,26 +1416,7 @@ export default function ClientPortfolioUploadPanel() {
               is accounted for, plus an option to add cash the client
               wants to inject from elsewhere. */}
           <div style={subPanel}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-              <p style={subHeading}>Resulting Portfolio</p>
-              <button
-                type="button"
-                onClick={() => {
-                  roundUnitsTouched.current = true
-                  setRoundUnits((v) => !v)
-                }}
-                aria-pressed={roundUnits}
-                title="Rounds each proposed purchase and partial sale to the nearest 10 units, so the proposal shows round numbers. The small difference is held in cash. Full sales and trades you've adjusted by hand stay exact."
-                style={{
-                  ...resetAllButton,
-                  background: roundUnits ? '#1e3a5f' : 'transparent',
-                  color: roundUnits ? '#ffffff' : '#93c5fd',
-                  borderColor: roundUnits ? '#38bdf8' : '#2d4a6b',
-                }}
-              >
-                {roundUnits ? '✓ Units rounded to nearest 10' : 'Round units to nearest 10'}
-              </button>
-            </div>
+            <p style={subHeading}>Resulting Portfolio</p>
             <HoldingAdjustmentChart recommendations={comparison.holdingRecommendations} />
 
             <div style={cashBar}>
@@ -1569,7 +1550,26 @@ export default function ClientPortfolioUploadPanel() {
               </div>
 
               <div style={resultingColumn}>
-                <p style={resultingColumnTitle}>Recommended Adjustments</p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                  <p style={{ ...resultingColumnTitle, margin: 0 }}>Recommended Adjustments</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      roundUnitsTouched.current = true
+                      setRoundUnits((v) => !v)
+                    }}
+                    aria-pressed={roundUnits}
+                    title="Rounds each proposed purchase and partial sale to the nearest 10 units, so the proposal shows round numbers. The small difference is held in cash. Full sales and trades you've adjusted by hand stay exact."
+                    style={{
+                      ...resetAllButton,
+                      background: roundUnits ? '#1e3a5f' : 'transparent',
+                      color: roundUnits ? '#ffffff' : '#93c5fd',
+                      borderColor: roundUnits ? '#38bdf8' : '#2d4a6b',
+                    }}
+                  >
+                    {roundUnits ? '✓ Units rounded to nearest 10' : 'Round units to nearest 10'}
+                  </button>
+                </div>
                 <p style={tdMutedInline}>
                   Adjust any trade by changing its units (positive to buy, negative to sell), or its dollar
                   value where there&apos;s no live price. Target weight, residual cash and the proposal update
