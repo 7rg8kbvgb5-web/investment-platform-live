@@ -102,7 +102,7 @@ export function ObjectivesEditor({
           value={o.constraints}
           onChange={(e) => setO({ ...o, constraints: e.target.value })}
           placeholder="e.g. Keep $50k accessible in cash; prefers fully franked income; no thermal coal exposure."
-          style={{ ...input, minHeight: '60px', fontFamily: 'inherit' }}
+          style={{ ...input, height: 'auto', minHeight: '60px', fontFamily: 'inherit' }}
         />
       </label>
       <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '8px' }}>
@@ -398,6 +398,9 @@ const input = {
   color: '#e2e8f0',
   boxSizing: 'border-box' as const,
   width: '100%',
+  // Same height for text boxes and dropdowns so a row of fields lines up.
+  height: '38px',
+  lineHeight: '20px',
 }
 const button = {
   padding: '8px 14px',
