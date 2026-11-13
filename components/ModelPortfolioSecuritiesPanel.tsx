@@ -31,7 +31,7 @@ import HouseViewLine from './HouseViewLine';
 import HouseViewAlternatives from './HouseViewAlternatives';
 import { fetchHouseViews, type HouseViewEntry } from '../lib/engines/house-view';
 import StatusBox from './dashboard/StatusBox';
-import AllocationPieChart from './AllocationPieChart';
+import { normaliseSector } from '../lib/engines/sector-names';
 
 // This is the model portfolio itself - the one, static list of which
 // securities belong in which asset class. It holds true across every
@@ -57,6 +57,28 @@ export function ModelPortfolioSecuritiesPanel() {
   const [analytics, setAnalytics] = useState<PortfolioAnalytics | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
   const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+  const [classifying, setClassifying] = useState(false);
+  const [classifyMessage, setClassifyMessage] = useState<string | null>(null);
+
+  async function classifySectors() {
+    setClassifying(true);
+    setClassifyMessage(null);
+    try {
+      const res = await fetch('/api/model-portfolio/classify-sectors', { method: 'POST' });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || body.ok === false) throw new Error(body.error ?? 'Classification failed.');
+      setSecurities(await fetchCoreSecurities());
+      const unknown: string[] = body.unknown ?? [];
+      setClassifyMessage(
+        `${body.classified} holding${body.classified === 1 ? '' : 's'} classified.` +
+          (unknown.length > 0 ? ` Not recognised: ${unknown.join(', ')}.` : '')
+      );
+    } catch (err) {
+      setClassifyMessage(err instanceof Error ? err.message : 'Classification failed.');
+    } finally {
+      setClassifying(false);
+    }
+  }
 
   useEffect(() => {
     fetch('/api/analytics/portfolio')
@@ -245,7 +267,7 @@ export function ModelPortfolioSecuritiesPanel() {
   const [manualEntry, setManualEntry] = useState<
     Record<
       string,
-      { code: string; name: string; yield: string; franking: string; holdingType?: HoldingType | null; isin?: string | null }
+      { code: string; name: string; yield: string; franking: string; holdingType?: HoldingType | null; isin?: string | null; sector?: string | null }
     >
   >({});
   const [lookupState, setLookupState] = useState<
@@ -290,6 +312,7 @@ export function ModelPortfolioSecuritiesPanel() {
           code: data.result.code ?? code,
           holdingType: data.result.holdingType ?? null,
           isin: data.result.isin ?? null,
+          sector: data.result.sector ?? null,
           name: data.result.name ?? prev[assetClassName]?.name ?? '',
           yield:
             typeof data.result.yield === 'number'
@@ -343,6 +366,7 @@ export function ModelPortfolioSecuritiesPanel() {
           ? `Wholesale bond, ISIN ${entry.isin}. Added manually - not yet on the Approved List.`
           : 'Added manually - not yet on the Approved List.',
         inSecurityMaster: false,
+        sector: entry?.sector ?? undefined,
         holdingType: isBond ? 'direct_bond' : entry?.holdingType ?? undefined,
         yield: yieldValue ? parseFloat(yieldValue) : null,
         frankingPct: frankingValue ? parseFloat(frankingValue) : null,
@@ -385,15 +409,56 @@ export function ModelPortfolioSecuritiesPanel() {
     return Math.abs(total - 100) >= 0.15;
   }).length;
 
-  const sectorCounts = new Map<string, number>();
-  for (const sec of securities) {
-    const sector = sec.sector ?? 'Unclassified';
-    sectorCounts.set(sector, (sectorCounts.get(sector) ?? 0) + 1);
+  // --- Asset class scorecard: what each sleeve of the model actually looks
+  // like - concentration, income, house view and the tactical call. ---
+  const scorecard = assetClasses.map((ac) => {
+    const holdings = ac.holdings;
+    const weightTotal = round1(holdings.reduce((sum, h) => sum + h.inClassWeight, 0));
+    const byWeight = [...holdings].sort((a, b) => b.inClassWeight - a.inClassWeight);
+    const largest = byWeight[0] ?? null;
+    const top3 = round1(byWeight.slice(0, 3).reduce((sum, h) => sum + h.inClassWeight, 0));
+    const withYield = holdings.filter((h) => typeof h.yield === 'number');
+    const yieldWeight = withYield.reduce((sum, h) => sum + h.inClassWeight, 0);
+    const weightedYield =
+      yieldWeight > 0 ? round1(withYield.reduce((sum, h) => sum + (h.yield ?? 0) * h.inClassWeight, 0) / yieldWeight) : null;
+    const leans = { bullish: 0, neutral: 0, bearish: 0 };
+    let covered = 0;
+    for (const h of holdings) {
+      const hv = houseViews.get(h.code);
+      if (hv) {
+        leans[hv.lean]++;
+        covered++;
+      }
+    }
+    const stance = tacticalView?.calls.find((c) => c.assetClass === ac.name)?.stance ?? null;
+    return {
+      name: ac.name,
+      count: holdings.length,
+      weightOk: holdings.length === 0 || Math.abs(weightTotal - 100) < 0.15,
+      weightTotal,
+      largest,
+      top3,
+      weightedYield,
+      yieldCoverage: holdings.length > 0 ? Math.round((withYield.length / holdings.length) * 100) : 0,
+      leans,
+      covered,
+      stance,
+    };
+  });
+
+  // --- Australian equities by sector, weighted by each holding's weight in
+  // the sleeve - the real sector bets the model is making. ---
+  const ausEquities = assetClasses.find((ac) => ac.name === 'Australian Equities')?.holdings ?? [];
+  const ausSectorWeights = new Map<string, number>();
+  for (const h of ausEquities) {
+    const sector = normaliseSector(h.sector) ?? 'Unclassified';
+    ausSectorWeights.set(sector, (ausSectorWeights.get(sector) ?? 0) + h.inClassWeight);
   }
-  const sectorBreakdown = Array.from(sectorCounts.entries()).map(([sector, count]) => ({
-    asset_class: sector,
-    target_weight: count,
-  }));
+  const ausSectors = Array.from(ausSectorWeights.entries())
+    .map(([sector, weight]) => ({ sector, weight: round1(weight) }))
+    .sort((a, b) => (a.sector === 'Unclassified' ? 1 : b.sector === 'Unclassified' ? -1 : b.weight - a.weight));
+  const maxSectorWeight = Math.max(1, ...ausSectors.map((s) => s.weight));
+  const unclassifiedCount = securities.filter((sec) => !sec.sector || !sec.sector.trim()).length;
 
   if (loading) {
     return (
@@ -558,31 +623,114 @@ export function ModelPortfolioSecuritiesPanel() {
 
       <div style={overviewRow}>
         <div style={overviewTableCol}>
-          <table style={overviewTable}>
-            <thead>
-              <tr>
-                <th style={overviewTh}>Asset Class</th>
-                <th style={overviewThRight}>Securities</th>
-              </tr>
-            </thead>
-            <tbody>
-              {assetClasses.map((ac) => (
-                <tr key={ac.name}>
-                  <td style={overviewTd}>{ac.name}</td>
-                  <td style={overviewTdRight}>{ac.holdings.length}</td>
+          <p style={overviewHeading}>Asset class scorecard</p>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={overviewTable}>
+              <thead>
+                <tr>
+                  <th style={overviewTh}>Asset class</th>
+                  <th style={overviewThRight}>Holdings</th>
+                  <th style={overviewTh} title="Largest holding and its share of the asset class">Largest</th>
+                  <th style={overviewThRight} title="Share of the asset class held in its three largest holdings">Top 3</th>
+                  <th style={overviewThRight} title="Weighted forward yield across holdings with a yield entered">Yield</th>
+                  <th style={overviewTh} title="Ord Minnett / Barrenjoey ratings across the holdings: positive · neutral · negative">House view</th>
+                  <th style={overviewTh} title="Live tactical call for the asset class">Tactical</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {scorecard.map((row) => (
+                  <tr key={row.name}>
+                    <td style={overviewTdName}>
+                      {row.name}
+                      {!row.weightOk && (
+                        <span style={weightWarn} title="Holding weights in this asset class don't total 100%">
+                          {row.weightTotal}%
+                        </span>
+                      )}
+                    </td>
+                    <td style={overviewTdRight}>{row.count}</td>
+                    <td style={overviewTd}>
+                      {row.largest ? (
+                        <>
+                          <span style={codeAccent}>{row.largest.code}</span>{' '}
+                          <span style={mutedText}>{round1(row.largest.inClassWeight)}%</span>
+                        </>
+                      ) : (
+                        <span style={mutedText}>—</span>
+                      )}
+                    </td>
+                    <td style={overviewTdRight}>
+                      {row.count === 0 ? (
+                        <span style={mutedText}>—</span>
+                      ) : (
+                        <span style={{ color: row.count > 3 && row.top3 >= 60 ? '#fbbf24' : '#e2e8f0' }}>{row.top3}%</span>
+                      )}
+                    </td>
+                    <td style={overviewTdRight}>
+                      {row.weightedYield !== null ? (
+                        <span title={`${row.yieldCoverage}% of holdings have a yield entered`}>{row.weightedYield}%</span>
+                      ) : (
+                        <span style={mutedText}>—</span>
+                      )}
+                    </td>
+                    <td style={overviewTd}>
+                      {row.covered === 0 ? (
+                        <span style={mutedText}>{row.count === 0 ? '—' : 'Not covered'}</span>
+                      ) : (
+                        <span style={leanSummary} title={`${row.covered} of ${row.count} holdings rated`}>
+                          <span style={{ color: '#4ade80' }}>{row.leans.bullish}</span>
+                          <span style={mutedText}> · </span>
+                          <span style={{ color: '#cbd5e1' }}>{row.leans.neutral}</span>
+                          <span style={mutedText}> · </span>
+                          <span style={{ color: '#fca5a5' }}>{row.leans.bearish}</span>
+                        </span>
+                      )}
+                    </td>
+                    <td style={overviewTd}>
+                      {row.stance ? <span style={tacticalStanceTag(row.stance)}>{row.stance}</span> : <span style={mutedText}>—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p style={overviewFootnote}>
+            Top 3 is highlighted when three holdings carry 60% or more of a sleeve. House view counts holdings rated
+            positive · neutral · negative by Ord Minnett or Barrenjoey.
+          </p>
         </div>
+
         <div style={overviewChartCol}>
-          {sectorBreakdown.length > 0 ? (
-            <>
-              <p style={chartCaption}>Securities by sector</p>
-              <AllocationPieChart allocations={sectorBreakdown} />
-            </>
+          <div style={sectorHeader}>
+            <p style={overviewHeading}>Australian equities by sector</p>
+            {unclassifiedCount > 0 && (
+              <button type="button" onClick={classifySectors} disabled={classifying} style={classifyButton}>
+                {classifying ? 'Classifying…' : `Classify ${unclassifiedCount} holding${unclassifiedCount === 1 ? '' : 's'}`}
+              </button>
+            )}
+          </div>
+          <p style={overviewSubheading}>Share of the Australian equities sleeve, by holding weight</p>
+          {classifyMessage && <p style={classifyNote}>{classifyMessage}</p>}
+          {ausSectors.length === 0 ? (
+            <p style={emptyText}>Add Australian equities to see the sector mix.</p>
           ) : (
-            <p style={emptyText}>Add securities to see the sector breakdown.</p>
+            <div style={sectorBars}>
+              {ausSectors.map(({ sector, weight }) => (
+                <div key={sector} style={sectorBarRow}>
+                  <span style={{ ...sectorBarLabel, color: sector === 'Unclassified' ? '#64748b' : '#e2e8f0' }}>{sector}</span>
+                  <div style={sectorBarTrack}>
+                    <div
+                      style={{
+                        ...sectorBarFill,
+                        width: `${(weight / maxSectorWeight) * 100}%`,
+                        background: sector === 'Unclassified' ? '#334155' : '#38bdf8',
+                      }}
+                    />
+                  </div>
+                  <span style={sectorBarValue}>{weight}%</span>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>
@@ -1017,21 +1165,134 @@ const overviewRow = {
 };
 
 const overviewTableCol = {
-  flex: '1 1 260px',
-  minWidth: '240px',
+  flex: '3 1 560px',
+  minWidth: '0',
 };
 
 const overviewChartCol = {
-  flex: '1 1 320px',
-  minWidth: '300px',
+  flex: '2 1 320px',
+  minWidth: '280px',
 };
 
-const chartCaption = {
-  margin: '0 0 4px',
-  fontSize: '12px',
+const overviewHeading = {
+  margin: '0 0 8px',
+  fontSize: '11px',
+  fontWeight: 700,
   color: '#94a3b8',
-  textAlign: 'center' as const,
+  textTransform: 'uppercase' as const,
+  letterSpacing: '0.06em',
 };
+
+const overviewSubheading = {
+  margin: '0 0 12px',
+  fontSize: '12px',
+  color: '#64748b',
+};
+
+const overviewFootnote = {
+  margin: '10px 0 0',
+  fontSize: '11px',
+  color: '#64748b',
+  lineHeight: 1.5,
+};
+
+const overviewTdName = {
+  padding: '12px 10px',
+  borderBottom: '1px solid #1e293b',
+  color: '#e2e8f0',
+  fontSize: '13px',
+  fontWeight: 600,
+  whiteSpace: 'nowrap' as const,
+};
+
+const weightWarn = {
+  marginLeft: '8px',
+  padding: '1px 6px',
+  borderRadius: '6px',
+  background: '#2a1215',
+  color: '#fca5a5',
+  fontSize: '11px',
+  fontWeight: 700,
+};
+
+const codeAccent = {
+  color: '#38bdf8',
+  fontWeight: 700,
+};
+
+const mutedText = {
+  color: '#64748b',
+};
+
+const leanSummary = {
+  fontWeight: 700,
+  whiteSpace: 'nowrap' as const,
+};
+
+const sectorHeader = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  gap: '12px',
+};
+
+const classifyButton = {
+  padding: '5px 12px',
+  borderRadius: '8px',
+  border: '1px solid #38bdf8',
+  background: '#0c3a5c',
+  color: '#e0f2fe',
+  fontSize: '11px',
+  fontWeight: 600,
+  cursor: 'pointer',
+  marginBottom: '8px',
+};
+
+const classifyNote = {
+  margin: '0 0 10px',
+  fontSize: '12px',
+  color: '#86efac',
+};
+
+const sectorBars = {
+  display: 'flex',
+  flexDirection: 'column' as const,
+  gap: '9px',
+};
+
+const sectorBarRow = {
+  display: 'grid',
+  gridTemplateColumns: '160px 1fr 52px',
+  alignItems: 'center',
+  gap: '10px',
+};
+
+const sectorBarLabel = {
+  fontSize: '13px',
+  whiteSpace: 'nowrap' as const,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+};
+
+const sectorBarTrack = {
+  height: '10px',
+  borderRadius: '5px',
+  background: '#13233a',
+  overflow: 'hidden',
+};
+
+const sectorBarFill = {
+  height: '100%',
+  borderRadius: '5px',
+};
+
+const sectorBarValue = {
+  fontSize: '13px',
+  fontWeight: 700,
+  color: '#e2e8f0',
+  textAlign: 'right' as const,
+};
+
 
 const overviewTable = {
   width: '100%',
@@ -1055,7 +1316,7 @@ const overviewThRight = {
 };
 
 const overviewTd = {
-  padding: '15px 10px',
+  padding: '12px 10px',
   borderBottom: '1px solid #1e293b',
   color: '#e2e8f0',
   fontSize: '13px',
@@ -1064,7 +1325,7 @@ const overviewTd = {
 const overviewTdRight = {
   ...overviewTd,
   textAlign: 'right' as const,
-  fontWeight: 700,
+  fontWeight: 600,
 };
 
 const assetClassList = {
