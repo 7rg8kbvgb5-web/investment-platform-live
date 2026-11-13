@@ -84,6 +84,11 @@ Given a single ticker code (bare ASX codes have no suffix - e.g. "FMG" not "FMG.
 1. The company/fund's full legal or common trading name.
 2. Its primary GICS-style sector (e.g. "Financials", "Materials", "Consumer Staples").
 3. Its FORWARD (prospective/estimated) distribution or dividend yield for the current Australian financial year (FY2026/27, i.e. 1 July 2026 - 30 June 2027), as a percent. This must be forward-looking, not trailing/historical - advisers need what the investor is expected to earn over the year ahead, not what was paid last year. Prefer, in this order: (a) analyst consensus forward yield estimates for FY27 if available, (b) the company's own guidance on upcoming distributions/dividends for FY27, (c) if neither is available, the most recent trailing yield clearly flagged as such via yieldNote rather than presented as forward. Grossed-up/franked figures not required - use the plain (unfranked) forward yield most commonly quoted.
+   For ETFs and managed funds: give the ONGOING INCOME yield only. Exclude capital-gains distributions, special or
+   one-off distributions and year-end "realised gains" payouts - a fund's headline "distribution yield" often
+   includes these and badly overstates what an investor will earn. Where the fund's own figure mixes them in, use
+   the underlying portfolio's dividend/income yield instead (for broad global equity funds this is typically
+   about 1-3%), and say so in yieldNote.
 4. The expected FRANKING level of those distributions, as a percent from 0 to 100 (e.g. 100 for fully franked
    Australian bank dividends, 0 for unfranked REIT/infrastructure distributions or international securities,
    a partial figure where that's the stated or typical level). Base it on the company's or fund's most recent

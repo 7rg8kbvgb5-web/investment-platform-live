@@ -142,3 +142,25 @@ export async function saveCommentary(
     )
   }
 }
+
+/** Phrases that belong in adviser notes, not in client-facing commentary. */
+const INTERNAL_PHRASES: RegExp[] = [
+  /approved list/i,
+  /investment committee/i,
+  /before proceeding/i,
+  /review(ing)? this position/i,
+  /\bnote that\b/i,
+  /\bcheck (with|the)\b/i,
+  /\bcompliance\b/i,
+  /\bTBC\b|\bTODO\b/,
+]
+
+/** Returns the internal-looking phrases found in a brief (empty when it reads as client-ready). */
+export function internalWordingIssues(text: string): string[] {
+  const found: string[] = []
+  for (const re of INTERNAL_PHRASES) {
+    const m = re.exec(text)
+    if (m) found.push(m[0])
+  }
+  return found
+}

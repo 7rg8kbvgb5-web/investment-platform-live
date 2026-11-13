@@ -162,7 +162,7 @@ export const PROFILE_GUIDE: Record<RiskProfile, { timeframe: string; investor: s
     investor:
       'Your priority is building wealth over the long term. You are comfortable with noticeable falls in value along the way, knowing they are part of earning higher returns.',
     expect:
-      'Most of the portfolio is in Australian and international shares and real assets. Returns over time should be higher, but so will the swings, including falls of 15% or more in a severe year.',
+      'Most of the portfolio is in Australian and international shares and real assets. Returns over time should be higher, but so will the swings, including meaningful falls in a severe year, as set out below.',
   },
   'High Growth': {
     timeframe: '9 years or more',
@@ -221,7 +221,7 @@ export function estimateFees(advice: ClientAdvice): FeeEstimate | null {
   }
   const gst = feeExGst * GST_RATE
   const bondTrades = advice.trades.filter((t) => isBondCode(t.code, t.name))
-  const listedTrades = advice.trades.filter((t) => !isBondCode(t.code, t.name) && t.units !== null).length
+  const listedTrades = advice.trades.filter((t) => !isBondCode(t.code, t.name) && isListedCode(t.code, t.assetClass)).length
   const bondTradeValue = bondTrades.reduce((s, t) => s + Math.abs(t.value ?? 0), 0)
   const brokerageEstimate = listedTrades * BROKERAGE_CAP
   const bondCostEstimate = (bondTradeValue * BOND_TRANSACTION_RATE) / 100
@@ -237,6 +237,14 @@ export function estimateFees(advice: ClientAdvice): FeeEstimate | null {
     bondCostEstimate,
     totalTransactionCosts: brokerageEstimate + bondCostEstimate,
   }
+}
+
+/** An exchange-traded code (e.g. BHP, IVV, FIXD) - not an unlisted fund's APIR code, a fund name or cash. */
+function isListedCode(code: string, assetClass: string): boolean {
+  const c = code.trim().toUpperCase()
+  if (assetClass === 'Cash' || c === 'CASH') return false
+  if (/^[A-Z]{3}\d{4}[A-Z]{1,2}$/.test(c)) return false
+  return /^[A-Z0-9]{2,6}$/.test(c)
 }
 
 function isBondCode(code: string, name: string): boolean {

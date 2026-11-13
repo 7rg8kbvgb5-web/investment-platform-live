@@ -10,7 +10,9 @@ import type { TaxReference } from './tax-reference'
 
 export function salesFromAdvice(advice: ClientAdvice): CgtSaleInput[] {
   return advice.trades
+    // Cash isn't a CGT asset - drawing on it realises no gain or loss.
     .filter((t) => (t.action === 'sell' || t.action === 'reduce') && (t.value ?? 0) < 0)
+    .filter((t) => t.assetClass !== 'Cash' && normaliseCode(t.code) !== 'CASH')
     .map((t) => ({
       code: normaliseCode(t.code),
       name: t.name,

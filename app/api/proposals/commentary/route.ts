@@ -60,6 +60,7 @@ For each item write:
 Rules:
 - Use the facts provided. You may use web search to confirm what a fund or company does and what an ETF tracks; never invent figures, returns, fees or ratings.
 - If an Ord Minnett research view is provided, you may refer to it (e.g. "Ord Minnett rates it a Buy"). Don't quote price targets or percentages unless given.
+- This text goes to the client exactly as written. Never include internal or adviser-facing material: no mention of the Approved List, the Investment Committee's process, compliance or internal checks, data gaps, and no instructions or caveats to the adviser (e.g. "review this position before proceeding", "check with", "note that"). Never cast doubt on the recommendation you are explaining - if something looks inconsistent, simply leave it out.
 - Calm, confident, plain English. Australian spelling. No hype, no guarantees, no "we're excited". Don't start with the security name or code; don't repeat the word "recommend" in every line.
 - Write as the adviser team ("we").
 
@@ -71,7 +72,13 @@ async function draft(items: CommentaryItem[]): Promise<Record<string, string>> {
 
   const views = await fetchHouseViews(items.map((i) => i.code)).catch(() => new Map())
   const lines = items.map((i) => {
-    const v = views.get(i.code)
+    // Only pass the research view where it supports the recommendation; a contrary
+    // rating is the adviser's to raise, not something to write into client text.
+    const found = views.get(i.code)
+    const supports =
+      found &&
+      (i.kind === 'buy' ? found.lean === 'bullish' : i.kind === 'sell' ? found.lean !== 'bullish' : found.lean !== 'bearish')
+    const v = supports ? found : undefined
     return [
       `- ${i.code}:${i.kind} | ${i.name} | asset class: ${i.assetClass} | ${i.action}`,
       i.fundType ? ` | ${i.fundType}` : '',

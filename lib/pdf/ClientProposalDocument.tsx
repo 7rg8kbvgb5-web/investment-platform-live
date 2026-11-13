@@ -11,6 +11,7 @@ import { runStressTest, STRESS_INDEX_NOTE } from '../engines/stress-test'
 import { exclusionStatus } from '../engines/exclusions-check'
 import type { IncomeCalendar } from '../engines/income-calendar'
 import { ADVICE_TEAM } from './proposal/team'
+import { displayDate } from './proposal/names'
 import {
   OM,
   colourFor,
@@ -255,6 +256,14 @@ export function ClientProposalDocument({
   const showIncomeToday =
     !advice.isNewMoney && advice.currentIncome !== null && advice.projectedIncome !== null && advice.currentIncomeCoveragePct >= 80
   const incomeChange = showIncomeToday ? (advice.projectedIncome as number) - (advice.currentIncome as number) : null
+  const withFrankingNow =
+    showIncomeToday && advice.currentFrankingCredits !== null ? (advice.currentIncome as number) + advice.currentFrankingCredits : null
+  const withFrankingAfter =
+    advice.projectedIncome !== null && advice.projectedFrankingCredits !== null ? advice.projectedIncome + advice.projectedFrankingCredits : null
+  const nonCash = (h: { code: string; assetClass: string }) => h.assetClass !== 'Cash' && h.code.trim().toUpperCase() !== 'CASH'
+  const investmentsAfter = advice.resultingHoldings.filter((h) => h.weight > 0 && nonCash(h)).length
+  const investmentsNow = advice.currentHoldings.filter(nonCash).length
+  const diversifies = investmentsAfter >= investmentsNow
   const incomeNeed = objectives?.incomeNeed ?? null
   const hasObjectives =
     !!objectives && (!!objectives.primaryGoal || !!objectives.incomeNeed || !!objectives.timeframeYears || !!objectives.constraints?.trim())
@@ -273,7 +282,8 @@ export function ClientProposalDocument({
           // Headline return includes franking credits (assumed received and reinvested).
           expectedReturn: riskAfter.expectedReturnInclFranking,
           feePct: fees?.effectiveRatePct ?? 0,
-          yieldPct,
+          // Year-1 income must match the headline estimate, so use income / whole portfolio.
+          yieldPct: advice.projectedIncome !== null && total > 0 ? (advice.projectedIncome / total) * 100 : yieldPct,
         })
       : null
   const base = scenarios?.find((x) => x.key === 'base')
@@ -319,7 +329,15 @@ export function ClientProposalDocument({
   if (advice.projectedIncome !== null)
     keyChanges.push(
       showIncomeToday && incomeChange !== null
-        ? `Estimated income ${incomeChange >= 0 ? 'rises' : 'changes'} from ${fmt(advice.currentIncome as number)} to ${fmt(advice.projectedIncome)} a year${advice.projectedFrankingCredits ? `, plus about ${fmt(advice.projectedFrankingCredits)} in franking credits` : ''}.`
+        ? `Estimated income ${incomeChange >= 0 ? 'rises' : 'falls'} from ${fmt(advice.currentIncome as number)} to ${fmt(advice.projectedIncome)} a year.${
+            withFrankingNow !== null && withFrankingAfter !== null && advice.projectedFrankingCredits !== null
+              ? ` Including franking credits, from ${fmt(withFrankingNow)} to ${fmt(withFrankingAfter)}${
+                  (advice.currentFrankingCredits ?? 0) > advice.projectedFrankingCredits
+                    ? `, as franking credits fall from ${fmt(advice.currentFrankingCredits as number)} to ${fmt(advice.projectedFrankingCredits)}`
+                    : ''
+                }.`
+              : ''
+          }`
         : `Estimated income of ${fmt(advice.projectedIncome)} a year${advice.projectedFrankingCredits ? `, plus about ${fmt(advice.projectedFrankingCredits)} in franking credits` : ''}.`,
     )
 
@@ -327,7 +345,9 @@ export function ClientProposalDocument({
     ? `We recommend investing ${fmt(advice.newCash)} in a ${advice.riskProfile} portfolio built from the Ord Minnett house model: a diversified mix of quality Australian and international investments, matched to your objectives and your tolerance for risk.`
     : advice.approach === 'new-cash'
       ? `We recommend investing the new ${fmt(advice.newCash)} into the asset classes furthest below their targets, using the securities in our house model. No existing holdings are sold, so no capital gains are realised and turnover is kept to a minimum.`
-      : `We recommend repositioning your portfolio to the Ord Minnett ${advice.riskProfile} house model${advice.newCash > 0 ? `, including the new ${fmt(advice.newCash)}` : ''}. The changes align your investments with your risk profile, concentrate capital in our highest-conviction holdings and improve the reliability of your income.`
+      : `We recommend repositioning your portfolio to the Ord Minnett ${advice.riskProfile} house model${advice.newCash > 0 ? `, including the new ${fmt(advice.newCash)}` : ''}. The changes align your investments with your risk profile${
+          diversifies ? ', spread your wealth across a broader range of high-quality investments' : ', focus your capital on our highest-conviction holdings'
+        }${incomeChange !== null && incomeChange > 0 ? ' and lift the income your portfolio generates' : ''}.`
 
   let n = 0
   const next = () => ++n
@@ -703,7 +723,7 @@ export function ClientProposalDocument({
             <View style={s.tiles}>
               <Tile label="Purchases" value={buyTotal ? shortMoney(buyTotal) : String(buys.length)} note={`${buys.length} transaction${buys.length === 1 ? '' : 's'}`} />
               <Tile label="Sales" value={sellTotal ? shortMoney(sellTotal) : String(sells.length)} note={`${sells.length} transaction${sells.length === 1 ? '' : 's'}${stagedCount ? `, ${stagedCount} staged` : ''}`} />
-              <Tile label="Holdings after" value={String(advice.resultingHoldings.length || '—')} note="securities in the portfolio" last />
+              <Tile label="Investments after" value={String(investmentsAfter || '—')} note="plus cash" last />
             </View>
             {flows.length > 0 && flows.some((f) => f.value !== 0) ? (
               <View wrap={false} style={{ marginBottom: 6 }}>
@@ -920,9 +940,13 @@ export function ClientProposalDocument({
           </View>
           {advice.cashDeployment && advice.cashDeployment.residualCash > 1 ? (
             <Text style={s.small}>
-              About {fmt(advice.cashDeployment.residualCash)} remains in cash after rounding to whole units.
+              About {fmt(advice.cashDeployment.residualCash)} remains in cash after rounding unit quantities.
             </Text>
           ) : null}
+          <Text style={s.small}>
+            Franked: the expected franking level of each investment&apos;s income. A dash means the investment does not
+            pay franked income or its franking level is not available.
+          </Text>
           {hasResearch ? (
             <Text style={s.small}>
               Ord Minnett view: the research rating and 12-month price target published by Ord Minnett Research at the date
@@ -1534,7 +1558,7 @@ export function ClientProposalDocument({
           This proposal is based on the Ord Minnett {advice.riskProfile} house model
           {advice.currentModelVersion !== null ? ` (version ${advice.currentModelVersion})` : ''}
           {advice.hasBespokeWeights ? ', adjusted for your circumstances' : ''}
-          {advice.asAtDate ? `, your holdings as at ${advice.asAtDate}` : ''} and market prices at the time of preparation.
+          {advice.asAtDate ? `, your holdings as at ${displayDate(advice.asAtDate)}` : ''} and market prices at the time of preparation.
           It summarises our recommendations and should be read together with your Statement of Advice, which sets out
           the basis of our advice, its costs and any conflicts of interest.
         </Text>

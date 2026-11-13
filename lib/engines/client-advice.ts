@@ -32,6 +32,9 @@ export const DRIFT_TOLERANCE_PP = 5
 /** Drift beyond this (but within tolerance) is worth watching. */
 export const DRIFT_WATCH_PP = 2.5
 
+/** International equity yields above this are flagged for checking (likely capital-gains distributions). */
+const INTL_EQUITY_YIELD_CHECK_PCT = 4
+
 export type AdviceApproach = 'rebalance' | 'new-cash'
 
 export type DriftStatus = 'in-tolerance' | 'watch' | 'outside-tolerance' | 'no-holdings'
@@ -422,6 +425,26 @@ export async function buildClientAdvice(
     projectedIncome !== null && coveredWeight > 0 ? round2(((projectedIncome + credits) / coveredWeight) * 100) : null
   if (projectedIncome !== null) projectedIncome = Math.round(projectedIncome)
   if (projectedIncome === 0 && coveredWeight === 0) projectedIncome = null
+
+  // Data checks on the income inputs - a client document should never rest on a figure that looks wrong.
+  const highIntlYield = resultingHoldings.filter(
+    (h) => h.assetClass === 'International Equities' && typeof h.yield === 'number' && h.yield > INTL_EQUITY_YIELD_CHECK_PCT,
+  )
+  if (highIntlYield.length > 0) {
+    warnings.push(
+      `International equity yields look high and may include capital-gains distributions: ${highIntlYield
+        .map((h) => `${h.code} ${h.yield}%`)
+        .join(', ')}. Global equities typically yield about 1.5-2.5% - check and update on the Model Portfolio tab, as these drive the proposal's income figures.`,
+    )
+  }
+  const unknownFranking = resultingHoldings.filter(
+    (h) => h.assetClass === 'Australian Equities' && typeof h.yield === 'number' && h.yield > 0 && h.frankingPct === null,
+  )
+  if (unknownFranking.length > 0) {
+    warnings.push(
+      `Franking level not set for ${unknownFranking.map((h) => h.code).join(', ')} - counted as unfranked, which understates franking credits. Set it on the Model Portfolio tab.`,
+    )
+  }
 
   const heldCodes = new Set(mapped.map((h) => normaliseCode(h.code)))
   const relevantDecisions = (context.approvedDecisions ?? []).filter(

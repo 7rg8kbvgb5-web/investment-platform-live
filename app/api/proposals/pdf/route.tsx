@@ -13,6 +13,7 @@ import { fetchHouseViews } from '../../../../lib/engines/house-view'
 import { commentaryItemsFor, commentaryKey, defaultCommentarySelection, fetchCommentary } from '../../../../lib/engines/security-commentary'
 import { buildIncomeCalendar, fetchPaymentPatterns, type IncomeCalendar } from '../../../../lib/engines/income-calendar'
 import { getSignedInAdviser } from '../../../../lib/adviser-identity'
+import { displaySecurityName } from '../../../../lib/pdf/proposal/names'
 import { CAPITAL_MARKET_ASSUMPTIONS, CMA_AS_AT, CPI_ASSUMPTION, estimateFees } from '../../../../lib/pdf/proposal/insights'
 
 export const runtime = 'nodejs'
@@ -62,7 +63,16 @@ async function buildPdf(reviewId: string | null, approachParam: string | null, c
     } catch {
       prices = {}
     }
-    const advice = await buildClientAdvice(review, { ...context, prices }, approach ?? review.adviceApproach ?? undefined)
+    const built = await buildClientAdvice(review, { ...context, prices }, approach ?? review.adviceApproach ?? undefined)
+    // Tidy security names for the client document (non-breaking spaces, exchange boilerplate).
+    const tidy = <T extends { name: string }>(rows: T[]): T[] => rows.map((r) => ({ ...r, name: displaySecurityName(r.name) }))
+    const advice = {
+      ...built,
+      trades: tidy(built.trades),
+      resultingHoldings: tidy(built.resultingHoldings),
+      currentHoldings: tidy(built.currentHoldings),
+      retainedHoldings: tidy(built.retainedHoldings),
+    }
 
     const preparedOn = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Australia/Sydney' })
     // Capital gains page only when the adviser has chosen to include it.

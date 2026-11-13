@@ -110,10 +110,10 @@ export function GrowthDefensiveBar({ growth, defensive, label }: { growth: numbe
       {label ? <Text style={{ fontSize: 7.5, color: OM.slate, marginBottom: 3, letterSpacing: 0.5 }}>{label}</Text> : null}
       <View style={{ flexDirection: 'row', height: 16 }}>
         <View style={{ width: `${g}%`, backgroundColor: OM.navy, justifyContent: 'center', paddingLeft: 5 }}>
-          {g >= 14 ? <Text style={{ fontSize: 7.5, color: OM.white, fontFamily: 'Helvetica-Bold' }}>Growth {Math.round(g)}%</Text> : null}
+          {g >= 8 ? <Text style={{ fontSize: 7.5, color: OM.white, fontFamily: 'Helvetica-Bold' }}>{g >= 26 ? 'Growth ' : ''}{Math.round(g)}%</Text> : null}
         </View>
         <View style={{ width: `${100 - g}%`, backgroundColor: OM.paleSilver, justifyContent: 'center', paddingLeft: 5 }}>
-          {100 - g >= 14 ? <Text style={{ fontSize: 7.5, color: OM.navy, fontFamily: 'Helvetica-Bold' }}>Defensive {Math.round(100 - g)}%</Text> : null}
+          {100 - g >= 8 ? <Text style={{ fontSize: 7.5, color: OM.navy, fontFamily: 'Helvetica-Bold' }}>{100 - g >= 26 ? 'Defensive ' : ''}{Math.round(100 - g)}%</Text> : null}
         </View>
       </View>
     </View>

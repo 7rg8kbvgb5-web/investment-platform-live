@@ -9,6 +9,7 @@ import {
   commentaryItemsFor,
   commentaryKey,
   defaultCommentarySelection,
+  internalWordingIssues,
   type CommentaryItem,
 } from '../lib/engines/security-commentary'
 
@@ -197,6 +198,12 @@ export default function ProposalCommentaryEditor({
                         {drafting.has(k) ? '…' : text[k]?.trim() ? 'Redraft' : 'Draft'}
                       </button>
                     </div>
+                  ) : null}
+                  {on && internalWordingIssues(text[k] ?? '').length > 0 ? (
+                    <p style={{ margin: '6px 0 0', fontSize: '12px', color: '#fbbf24' }}>
+                      Reads like an internal note (&ldquo;{internalWordingIssues(text[k] ?? '').join('”, “')}&rdquo;) - this text
+                      goes to the client as written. Reword or redraft before saving.
+                    </p>
                   ) : null}
                 </div>
               )

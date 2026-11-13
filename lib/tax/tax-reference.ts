@@ -40,7 +40,7 @@ export const DEFAULT_TAX_REFERENCE: TaxReference = {
   smsfPensionRate: 0,
   cgtDiscount: { individual: 0.5, trust: 0.5, smsf: 1 / 3, company: 0 },
   reformNote:
-    'From 1 July 2027 the 50% CGT discount for resident individuals, trusts and partnerships is replaced by cost base indexation on gains accruing from that date, with a 30% minimum tax on those gains; gains accrued before 1 July 2027 keep the discount. These estimates use the rules for sales before 1 July 2027.',
+    'Under changes announced in the 2026-27 Federal Budget, from 1 July 2027 the 50% CGT discount for resident individuals, trusts and partnerships is replaced by cost base indexation on gains accruing from that date, with a 30% minimum tax on those gains; gains accrued before 1 July 2027 keep the discount. These estimates use the rules for sales before 1 July 2027.',
   sources: [
     { label: 'ATO – Tax rates: Australian residents', url: 'https://www.ato.gov.au/tax-rates-and-codes/tax-rates-australian-residents' },
     { label: 'ATO – CGT discount', url: 'https://www.ato.gov.au/individuals-and-families/investments-and-assets/capital-gains-tax/cgt-discount' },
@@ -63,7 +63,8 @@ export async function getTaxReference(): Promise<TaxReference> {
       .limit(1)
       .maybeSingle()
     if (error || !data) return DEFAULT_TAX_REFERENCE
-    return { ...DEFAULT_TAX_REFERENCE, ...(data.data as Partial<TaxReference>) }
+    // The reform note is explanatory wording maintained in code, not a saved rate.
+    return { ...DEFAULT_TAX_REFERENCE, ...(data.data as Partial<TaxReference>), reformNote: DEFAULT_TAX_REFERENCE.reformNote }
   } catch {
     return DEFAULT_TAX_REFERENCE
   }
