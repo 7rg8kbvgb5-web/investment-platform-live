@@ -8,7 +8,7 @@ import Panel from './ui/Panel';
 import StatusBox from './dashboard/StatusBox';
 
 // A dedicated, prominent view of the two house views specifically -
-// pulled from the same research library the upload form below writes
+// pulled from the same research library the upload form above writes
 // to, just filtered and grouped so Ord Minnett's and Barrenjoey's own
 // views are immediately visible rather than mixed into the general
 // document list.
@@ -48,7 +48,7 @@ export function HouseViewsPanel() {
   }
 
   return (
-    <Panel eyebrow="Uploaded via the Research Library below" title="House Views">
+    <Panel eyebrow="Uploaded via the Research Library above" title="House Views">
       <p style={intro}>
         Ord Minnett&apos;s and Barrenjoey&apos;s own house views, as uploaded — separated out here so
         they&apos;re immediately visible rather than mixed into the general document list. Uploading a
@@ -111,7 +111,7 @@ export function HouseViewsPanel() {
 
                   {otherDocs.length === 0 && !topIdeas ? (
                     <p style={emptyText}>
-                      No {source} house view uploaded yet — use the Research Library below.
+                      No {source} house view uploaded yet — use the Research Library above.
                     </p>
                   ) : otherDocs.length > 0 ? (
                     <ul style={docList}>

@@ -10,17 +10,18 @@ export default function ResearchPage() {
   return (
     <PageContent
       title="Research"
-      description="Consensus view, house views, research library, and the security master with a live conviction rating."
+      description="Consensus view, research uploads, house views, and the security master with a live conviction rating."
     >
       <ConsensusViewPanel />
+
+      {/* Upload Ord Minnett / Barrenjoey research (and the coverage universe) second, so it sits right under Consensus View. */}
+      <ResearchLibraryPanel />
 
       <HouseViewsPanel />
 
       <TopIdeasVsModelPanel />
 
       <WeeklyBriefPanel />
-
-      <ResearchLibraryPanel />
 
       <SecurityMasterPanel />
     </PageContent>

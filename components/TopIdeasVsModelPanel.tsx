@@ -40,7 +40,7 @@ export default function TopIdeasVsModelPanel() {
       {loading ? <p style={muted}>Loading…</p> : null}
       {!loading && lists.length === 0 && !error ? (
         <StatusBox variant="neutral">
-          No Top Ideas lists yet. Upload an Ord Minnett or Barrenjoey Top Ideas PDF in the Research Library below
+          No Top Ideas lists yet. Upload an Ord Minnett or Barrenjoey Top Ideas PDF in the Research Library above
           and it&apos;s read and compared here automatically.
         </StatusBox>
       ) : null}
