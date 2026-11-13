@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import type React from 'react'
 import { holdingMetricInput } from './HoldingMetricGrid'
 
 /**
@@ -13,7 +14,9 @@ export default function DraftNumberInput({
   integer,
   onCommit,
   ariaLabel,
+  style,
 }: {
+  style?: React.CSSProperties
   value: number
   step: number
   integer?: boolean
@@ -40,7 +43,7 @@ export default function DraftNumberInput({
     <input
       type="number"
       step={step}
-      style={holdingMetricInput}
+      style={style ?? holdingMetricInput}
       value={draft}
       onFocus={() => setEditing(true)}
       onChange={(e) => setDraft(e.target.value)}

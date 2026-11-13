@@ -32,8 +32,7 @@ import {
   type HoldingWeightOverrides,
 } from '../lib/engines/client-weight-overrides'
 import { normaliseCode } from '../lib/engines/security-universe'
-import { HoldingMetricGrid, HoldingMetricCell, holdingMetricInput } from './ui/HoldingMetricGrid'
-import DraftNumberInput from './ui/DraftNumberInput'
+import ResultingPortfolioTable from './ResultingPortfolioTable'
 import {
   saveClientReview,
   listClientReviews,
@@ -53,14 +52,6 @@ type ExtractionMeta = {
   clientName: string | null
   asAtDate: string | null
   totalPortfolioValue: number | null
-}
-
-const ACTION_STYLE: Record<string, { bg: string; fg: string }> = {
-  buy: { bg: '#0f3d2e', fg: '#4ade80' },
-  increase: { bg: '#0f3d2e', fg: '#4ade80' },
-  reduce: { bg: '#3f2b12', fg: '#facc15' },
-  sell: { bg: '#3f1620', fg: '#f87171' },
-  hold: { bg: '#0d2542', fg: '#94a3b8' },
 }
 
 const EXAMPLE_HOLDINGS: UploadedHolding[] = [
@@ -1526,224 +1517,37 @@ export default function ClientPortfolioUploadPanel() {
               )
             ) : null}
 
-            <div style={resultingPortfolioGrid}>
-              <div style={resultingColumn}>
-                <p style={resultingColumnTitle}>Current Portfolio</p>
-                <div style={assetClassList}>
-                  {clientAdjustedModel.assetClasses.map((assetClass) => {
-                    const classRecs = comparison.holdingRecommendations.filter(
-                      (rec) => rec.assetClass === assetClass.name && rec.currentWeight > 0,
-                    )
-                    if (classRecs.length === 0) return null
-
-                    return (
-                      <div key={assetClass.name} style={assetClassCard}>
-                        <div style={assetClassCardHeader}>
-                          <h4 style={assetClassCardTitle}>{assetClass.name}</h4>
-                          <span style={countBadgeSmall}>{classRecs.length} holdings</span>
-                        </div>
-                        <ul style={holdingCardList}>
-                          {classRecs.map((rec) => (
-                            <li key={rec.code} style={holdingCardRow}>
-                              <div style={holdingCardHeader}>
-                                <span style={holdingCardCode}>{rec.code}</span>
-                                <span style={holdingCardName}>{rec.name}</span>
-                              </div>
-                              <HoldingMetricGrid>
-                                <HoldingMetricCell label="Weight">{rec.currentWeight}%</HoldingMetricCell>
-                                <HoldingMetricCell label="Cost base">
-                                  {costBaseByCode.get(normaliseCode(rec.code)) !== undefined ? (
-                                    formatCurrency(costBaseByCode.get(normaliseCode(rec.code)) as number)
-                                  ) : (
-                                    <span style={tdMutedInline}>—</span>
-                                  )}
-                                </HoldingMetricCell>
-                                <HoldingMetricCell label="Value">
-                                  {rec.currentValue !== null ? (
-                                    formatCurrency(rec.currentValue)
-                                  ) : (
-                                    <span style={tdMutedInline}>—</span>
-                                  )}
-                                </HoldingMetricCell>
-                              </HoldingMetricGrid>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )
-                  })}
-                  {comparison.holdingRecommendations.every((rec) => rec.currentWeight === 0) && (
-                    <p style={loadPickerEmpty}>No current holdings mapped to the model&apos;s asset classes.</p>
-                  )}
-                </div>
-              </div>
-
-              <div style={resultingColumn}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
-                  <p style={{ ...resultingColumnTitle, margin: 0 }}>Recommended Adjustments</p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      roundUnitsTouched.current = true
-                      setRoundUnits((v) => !v)
-                    }}
-                    aria-pressed={roundUnits}
-                    title="Rounds each proposed purchase and partial sale to the nearest 10 units, so the proposal shows round numbers. The small difference is held in cash. Full sales and trades you've adjusted by hand stay exact."
-                    style={{
-                      ...toggleButton,
-                      background: roundUnits ? '#38bdf8' : 'rgba(56, 189, 248, 0.14)',
-                      color: roundUnits ? '#04142b' : '#7dd3fc',
-                      borderColor: '#38bdf8',
-                    }}
-                  >
-                    {roundUnits ? '✓ Units rounded to nearest 10' : 'Round units to nearest 10'}
-                  </button>
-                </div>
-                <p style={tdMutedInline}>
-                  Adjust any trade by changing its units (positive to buy, negative to sell), or its dollar
-                  value where there&apos;s no live price. Target weight, residual cash and the proposal update
-                  to match. ↺ Reset returns a trade to the model-derived size.
-                </p>
-                <div style={assetClassList}>
-                  {clientAdjustedModel.assetClasses.map((assetClass) => {
-                    const classRecs = comparison.holdingRecommendations.filter(
-                      (rec) => rec.assetClass === assetClass.name,
-                    )
-                    if (classRecs.length === 0) return null
-
-                    return (
-                      <div key={assetClass.name} style={assetClassCard}>
-                        <div style={assetClassCardHeader}>
-                          <h4 style={assetClassCardTitle}>{assetClass.name}</h4>
-                          <span style={typeBadgeSmall}>{assetClass.type}</span>
-                          <span style={countBadgeSmall}>{classRecs.length} holdings</span>
-                        </div>
-
-                        <ul style={holdingCardList}>
-                          {classRecs.map((rec) => (
-                            <li key={rec.code} style={holdingCardRow}>
-                              <div style={holdingCardHeader}>
-                                <span style={holdingCardCode}>{rec.code}</span>
-                                <span style={holdingCardName}>{rec.name}</span>
-                                <span style={holdingCardBadge}>
-                                  {rec.treatment === 'staged_exit' || rec.treatment === 'retain' ? (
-                                    <span style={treatmentTag}>
-                                      {rec.treatment === 'staged_exit' ? 'STAGED EXIT' : 'RETAINED'}
-                                    </span>
-                                  ) : null}
-                                  <ActionBadge action={rec.action} />
-                                </span>
-                              </div>
-
-                              <HoldingMetricGrid>
-                                <HoldingMetricCell
-                                  label="Target weight"
-                                  tone={
-                                    holdingOverrides[normaliseCode(rec.code)] !== undefined
-                                      ? 'accent'
-                                      : 'default'
-                                  }
-                                >
-                                  <input
-                                    type="number"
-                                    step={0.5}
-                                    style={holdingMetricInput}
-                                    value={rec.targetWeight}
-                                    onChange={(e) => {
-                                      const value = parseFloat(e.target.value)
-                                      if (!Number.isNaN(value)) setHoldingWeight(rec.code, value)
-                                    }}
-                                    aria-label={`${rec.name} target weight`}
-                                  />
-                                  <span>%</span>
-                                  {holdingOverrides[normaliseCode(rec.code)] !== undefined ? (
-                                    <button
-                                      style={resetWeightButton}
-                                      title="Reset to house model weight"
-                                      onClick={() => resetHoldingWeight(rec.code)}
-                                    >
-                                      ↺ Reset
-                                    </button>
-                                  ) : null}
-                                </HoldingMetricCell>
-                                <HoldingMetricCell label="Change">
-                                  {rec.changeWeight > 0 ? '+' : ''}
-                                  {rec.changeWeight}pp
-                                </HoldingMetricCell>
-                                <HoldingMetricCell
-                                  label={rec.price ? 'Trade value' : 'Trade value (edit)'}
-                                  tone={rec.adjusted && !rec.price ? 'accent' : 'default'}
-                                >
-                                  {rec.changeValue === null ? (
-                                    <span style={tdMutedInline}>—</span>
-                                  ) : rec.price ? (
-                                    <>
-                                      {rec.changeValue > 0 ? '+' : ''}
-                                      {formatCurrency(rec.changeValue)}
-                                    </>
-                                  ) : (
-                                    <>
-                                      <DraftNumberInput
-                                        value={Math.round(rec.changeValue)}
-                                        step={1000}
-                                        onCommit={(value) => setTradeValue(rec.code, value)}
-                                        ariaLabel={`${rec.name} trade value`}
-                                      />
-                                      {rec.adjusted ? (
-                                        <button
-                                          style={resetWeightButton}
-                                          title="Reset to the model-derived trade"
-                                          onClick={() => clearTradeOverride(rec.code)}
-                                        >
-                                          ↺ Reset
-                                        </button>
-                                      ) : null}
-                                    </>
-                                  )}
-                                </HoldingMetricCell>
-                                <HoldingMetricCell label="Units" tone={rec.adjusted && rec.price ? 'accent' : 'default'}>
-                                  {rec.units !== null && rec.price ? (
-                                    <>
-                                      <DraftNumberInput
-                                        value={rec.units}
-                                        step={1}
-                                        integer
-                                        onCommit={(value) => setTradeUnits(rec.code, value)}
-                                        ariaLabel={`${rec.name} units to trade (negative to sell)`}
-                                      />
-                                      {rec.adjusted ? (
-                                        <button
-                                          style={resetWeightButton}
-                                          title="Reset to the model-derived trade"
-                                          onClick={() => clearTradeOverride(rec.code)}
-                                        >
-                                          ↺ Reset
-                                        </button>
-                                      ) : null}
-                                    </>
-                                  ) : rec.units !== null ? (
-                                    <>
-                                      {rec.units > 0 ? '+' : ''}
-                                      {rec.units.toLocaleString()}
-                                    </>
-                                  ) : (
-                                    <span style={tdMutedInline}>
-                                      {rec.changeValue !== null ? 'by $ value' : '—'}
-                                    </span>
-                                  )}
-                                </HoldingMetricCell>
-                              </HoldingMetricGrid>
-
-                              <p style={holdingCardRationale}>{rec.rationale}</p>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            </div>
+            <p style={{ ...resultingColumnTitle, margin: '0 0 8px' }}>Today and recommended adjustments</p>
+            <ResultingPortfolioTable
+              assetClasses={clientAdjustedModel.assetClasses.map((ac) => ({ name: ac.name, type: ac.type }))}
+              recommendations={comparison.holdingRecommendations}
+              holdingOverrides={holdingOverrides}
+              costBaseByCode={costBaseByCode}
+              onTargetWeight={setHoldingWeight}
+              onResetWeight={resetHoldingWeight}
+              onUnits={setTradeUnits}
+              onValue={setTradeValue}
+              onResetTrade={clearTradeOverride}
+              headerAction={
+                <button
+                  type="button"
+                  onClick={() => {
+                    roundUnitsTouched.current = true
+                    setRoundUnits((v) => !v)
+                  }}
+                  aria-pressed={roundUnits}
+                  title="Rounds each proposed purchase and partial sale to the nearest 10 units, so the proposal shows round numbers. The small difference is held in cash. Full sales and trades you've adjusted by hand stay exact."
+                  style={{
+                    ...toggleButton,
+                    background: roundUnits ? '#38bdf8' : 'rgba(56, 189, 248, 0.14)',
+                    color: roundUnits ? '#04142b' : '#7dd3fc',
+                    borderColor: '#38bdf8',
+                  }}
+                >
+                  {roundUnits ? '✓ Units rounded to nearest 10' : 'Round units to nearest 10'}
+                </button>
+              }
+            />
           </div>
 
           {/* Every holding into the proposal: classify, then sell / staged exit / retain */}
@@ -1786,15 +1590,6 @@ function StatusPill({ status }: { status: 'in-line' | 'overweight' | 'underweigh
   const s = styleMap[status]
   return (
     <span style={{ ...pill, background: s.bg, color: s.fg }}>{s.label}</span>
-  )
-}
-
-function ActionBadge({ action }: { action: string }) {
-  const s = ACTION_STYLE[action] ?? ACTION_STYLE.hold
-  return (
-    <span style={{ ...pill, background: s.bg, color: s.fg }}>
-      {action.toUpperCase()}
-    </span>
   )
 }
 
@@ -2173,24 +1968,6 @@ const tdMuted = {
   color: '#94a3b8',
 }
 
-const tdWrap = {
-  ...td,
-  maxWidth: '280px',
-  color: '#94a3b8',
-  fontSize: '12px',
-}
-
-const titleCell = {
-  display: 'block',
-  fontWeight: 700,
-}
-
-const summaryCell = {
-  display: 'block',
-  fontSize: '11px',
-  color: '#64748b',
-}
-
 const pill = {
   display: 'inline-block',
   padding: '3px 10px',
@@ -2333,120 +2110,6 @@ const yieldOverviewValue = {
   marginTop: '2px',
 }
 
-const assetClassList = {
-  display: 'flex',
-  flexDirection: 'column' as const,
-  gap: '16px',
-  marginTop: '10px',
-}
-
-const assetClassCard = {
-  padding: '14px 16px',
-  borderRadius: '12px',
-  background: '#0d1f38',
-  border: '1px solid #1e3a5f',
-}
-
-const assetClassCardHeader = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '10px',
-  flexWrap: 'wrap' as const,
-  marginBottom: '10px',
-}
-
-const assetClassCardTitle = {
-  margin: 0,
-  fontSize: '14px',
-  fontWeight: 700,
-  color: '#e2e8f0',
-}
-
-const typeBadgeSmall = {
-  padding: '2px 8px',
-  borderRadius: '999px',
-  fontSize: '10px',
-  fontWeight: 700,
-  background: '#12345b',
-  color: '#93c5fd',
-}
-
-const countBadgeSmall = {
-  marginLeft: 'auto',
-  padding: '2px 8px',
-  borderRadius: '999px',
-  fontSize: '11px',
-  fontWeight: 600,
-  background: '#12203a',
-  color: '#94a3b8',
-}
-
-const holdingCardList = {
-  margin: 0,
-  padding: 0,
-  listStyle: 'none',
-  display: 'flex',
-  flexDirection: 'column' as const,
-  gap: '8px',
-}
-
-const holdingCardRow = {
-  padding: '10px 12px',
-  background: '#0b2342',
-  borderRadius: '8px',
-  border: '1px solid #1e3a5f',
-}
-
-const holdingCardHeader = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '8px',
-  flexWrap: 'wrap' as const,
-}
-
-const holdingCardCode = {
-  fontSize: '13px',
-  fontWeight: 700,
-  color: '#38bdf8',
-}
-
-const holdingCardName = {
-  fontSize: '13px',
-  color: '#cbd5e1',
-}
-
-const holdingCardBadge = {
-  marginLeft: 'auto',
-}
-
-const holdingCardFieldLabel = {
-  fontSize: '11px',
-  color: '#94a3b8',
-  marginRight: '2px',
-}
-
-const holdingCardChange = {
-  fontSize: '11px',
-  color: '#93c5fd',
-  fontWeight: 600,
-}
-
-const holdingCardValueRow = {
-  display: 'flex',
-  gap: '18px',
-  flexWrap: 'wrap' as const,
-  marginTop: '6px',
-  fontSize: '12px',
-  color: '#94a3b8',
-}
-
-const holdingCardRationale = {
-  margin: '6px 0 0',
-  fontSize: '12px',
-  color: '#94a3b8',
-  lineHeight: 1.4,
-}
-
 const newMoneyInputs = {
   display: 'flex',
   alignItems: 'center',
@@ -2540,17 +2203,6 @@ const addCashLabel = {
   color: '#4ade80',
 }
 
-const resultingPortfolioGrid = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-  gap: '20px',
-}
-
-const resultingColumn = {
-  display: 'flex',
-  flexDirection: 'column' as const,
-}
-
 const resultingColumnTitle = {
   margin: '0 0 10px',
   fontSize: '13px',
@@ -2590,13 +2242,3 @@ const coverageLink = {
   fontWeight: 700,
 }
 
-const treatmentTag = {
-  marginRight: '6px',
-  padding: '2px 8px',
-  borderRadius: '999px',
-  border: '1px solid #a16207',
-  color: '#fbbf24',
-  fontSize: '10px',
-  fontWeight: 700,
-  letterSpacing: '0.04em',
-}
