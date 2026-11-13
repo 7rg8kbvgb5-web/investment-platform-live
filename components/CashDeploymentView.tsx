@@ -1,7 +1,6 @@
 'use client'
 
 import type { CashDeploymentResult } from '../lib/engines/cash-deployment'
-import { HoldingMetricGrid, HoldingMetricCell } from './ui/HoldingMetricGrid'
 import DraftNumberInput from './ui/DraftNumberInput'
 
 // Presentational view of a cash deployment - shared by the "New money"
@@ -104,7 +103,7 @@ export default function CashDeploymentView({
       {editable ? (
         <p style={footnote}>
           Change any line&apos;s units (or the dollar amount where there&apos;s no live price) to depart from the
-          model. Residual cash updates to match; ↺ Reset returns a line to its calculated size.
+          model. Residual cash updates to match; ↺ returns a line to its calculated size.
         </p>
       ) : null}
       {result.residualCash < -1 ? (
@@ -116,62 +115,85 @@ export default function CashDeploymentView({
       {buys.length === 0 ? (
         <p style={emptyText}>Nothing to buy at this amount.</p>
       ) : (
-        <ul style={buyList}>
-          {buys.map((line) => (
-            <li key={line.code} style={buyRow}>
-              <div style={buyHeader}>
-                <span style={code}>{line.code}</span>
-                <span style={name}>{line.name}</span>
-                <span style={assetClassTag}>{line.assetClass}</span>
-              </div>
-              <HoldingMetricGrid>
-                {isTopUp ? (
-                  <HoldingMetricCell label="Held now">{formatCurrency(line.currentValue)}</HoldingMetricCell>
-                ) : null}
-                <HoldingMetricCell label="Invest" tone="accent">
-                  {editable && !line.price && onValueChange ? (
-                    <>
-                      <DraftNumberInput
-                        value={Math.round(line.investValue)}
-                        step={1000}
-                        onCommit={(v) => onValueChange(line.code, v)}
-                        ariaLabel={`${line.name} amount to invest`}
-                      />
-                      {line.adjusted && onReset ? <ResetButton onClick={() => onReset(line.code)} /> : null}
-                    </>
-                  ) : (
-                    formatCurrency(line.investValue)
-                  )}
-                </HoldingMetricCell>
-                <HoldingMetricCell label="Units" tone={line.adjusted ? 'accent' : 'default'}>
-                  {editable && line.price && line.units !== null ? (
-                    <>
-                      <DraftNumberInput
-                        value={line.units}
-                        step={1}
-                        integer
-                        onCommit={(v) => onUnitsChange!(line.code, v)}
-                        ariaLabel={`${line.name} units to buy`}
-                      />
-                      {line.adjusted && onReset ? <ResetButton onClick={() => onReset(line.code)} /> : null}
-                    </>
-                  ) : line.units !== null ? (
-                    line.units.toLocaleString()
-                  ) : (
-                    <span style={muted}>by $ amount</span>
-                  )}
-                </HoldingMetricCell>
-                <HoldingMetricCell label="Weight after">
-                  {line.resultingWeight}%<span style={muted}> / {line.targetWeight}%</span>
-                </HoldingMetricCell>
-              </HoldingMetricGrid>
-            </li>
-          ))}
-        </ul>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={buyTable}>
+            <colgroup>
+              <col style={{ width: '10%' }} />
+              <col style={{ width: isTopUp ? '28%' : '34%' }} />
+              <col style={{ width: '18%' }} />
+              {isTopUp ? <col style={{ width: '10%' }} /> : null}
+              <col style={{ width: '13%' }} />
+              <col style={{ width: '11%' }} />
+              <col style={{ width: isTopUp ? '10%' : '14%' }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th style={{ ...bth, textAlign: 'left' }}>Code</th>
+                <th style={{ ...bth, textAlign: 'left' }}>Security</th>
+                <th style={{ ...bth, textAlign: 'left' }}>Asset class</th>
+                {isTopUp ? <th style={bth}>Held now</th> : null}
+                <th style={bth}>Invest</th>
+                <th style={bth}>Units</th>
+                <th style={bth}>Weight after</th>
+              </tr>
+            </thead>
+            <tbody>
+              {buys.map((line) => (
+                <tr key={line.code} style={{ borderBottom: '1px solid #13294a' }}>
+                  <td style={{ ...btd, textAlign: 'left', color: '#38bdf8', fontWeight: 700 }} title={line.code}>
+                    {line.code}
+                  </td>
+                  <td style={{ ...btd, textAlign: 'left', whiteSpace: 'normal' }}>{line.name}</td>
+                  <td style={{ ...btd, textAlign: 'left', color: '#94a3b8', whiteSpace: 'normal' }}>{line.assetClass}</td>
+                  {isTopUp ? <td style={{ ...btd, color: '#94a3b8' }}>{line.currentValue > 0 ? formatCurrency(line.currentValue) : '—'}</td> : null}
+                  <td style={btd}>
+                    {editable && !line.price && onValueChange ? (
+                      <span style={inlineCell}>
+                        $
+                        <DraftNumberInput
+                          value={Math.round(line.investValue)}
+                          step={1000}
+                          onCommit={(v) => onValueChange(line.code, v)}
+                          ariaLabel={`${line.name} amount to invest`}
+                          style={line.adjusted ? { ...cellInputOverridden, width: '84px' } : { ...cellInput, width: '84px' }}
+                        />
+                        {line.adjusted && onReset ? <ResetButton onClick={() => onReset(line.code)} /> : null}
+                      </span>
+                    ) : (
+                      <span style={{ color: '#4ade80' }}>{formatCurrency(line.investValue)}</span>
+                    )}
+                  </td>
+                  <td style={btd}>
+                    {editable && line.price && line.units !== null ? (
+                      <span style={inlineCell}>
+                        <DraftNumberInput
+                          value={line.units}
+                          step={1}
+                          integer
+                          onCommit={(v) => onUnitsChange!(line.code, v)}
+                          ariaLabel={`${line.name} units to buy`}
+                          style={line.adjusted ? cellInputOverridden : cellInput}
+                        />
+                        {line.adjusted && onReset ? <ResetButton onClick={() => onReset(line.code)} /> : null}
+                      </span>
+                    ) : line.units !== null ? (
+                      line.units.toLocaleString('en-AU')
+                    ) : (
+                      <span style={muted}>by $</span>
+                    )}
+                  </td>
+                  <td style={btd}>
+                    {line.resultingWeight}%<span style={muted}> / {line.targetWeight}%</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
       {buys.some((l) => l.units === null) ? (
         <p style={footnote}>
-          Holdings marked &quot;by $ amount&quot; have no live price (typically unlisted funds) — invest the
+          Holdings marked &quot;by $&quot; have no live price (typically unlisted funds) — invest the
           dollar figure shown. Where no prices are connected at all, every line is sized in dollars.
         </p>
       ) : null}
@@ -192,13 +214,13 @@ function ResetButton({ onClick }: { onClick: () => void }) {
         cursor: 'pointer',
         fontSize: '12px',
         fontWeight: 700,
-        padding: '2px 8px',
+        padding: '1px 6px',
         borderRadius: '6px',
-        marginLeft: '6px',
+        marginLeft: '4px',
         whiteSpace: 'nowrap',
       }}
     >
-      ↺ Reset
+      ↺
     </button>
   )
 }
@@ -260,3 +282,36 @@ const name = { fontSize: '13px', color: '#e2e8f0' }
 const assetClassTag = { marginLeft: 'auto', fontSize: '11px', color: '#94a3b8' }
 const muted = { fontSize: '12px', color: '#94a3b8' }
 const footnote = { fontSize: '12px', color: '#94a3b8', lineHeight: 1.5, marginTop: '10px' }
+
+const buyTable = { width: '100%', minWidth: '720px', borderCollapse: 'collapse' as const, tableLayout: 'fixed' as const, fontSize: '13px' }
+const bth = {
+  textAlign: 'right' as const,
+  padding: '6px 8px',
+  fontSize: '11px',
+  fontWeight: 600,
+  color: '#94a3b8',
+  textTransform: 'uppercase' as const,
+  letterSpacing: '0.04em',
+  borderBottom: '1px solid #2d4a6b',
+}
+const btd = {
+  padding: '5px 8px',
+  textAlign: 'right' as const,
+  color: '#e2e8f0',
+  whiteSpace: 'nowrap' as const,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+}
+const inlineCell = { display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', color: '#94a3b8' }
+const cellInput = {
+  width: '76px',
+  padding: '3px 6px',
+  borderRadius: '6px',
+  border: '1px solid #2d4a6b',
+  background: '#04142b',
+  color: '#e2e8f0',
+  fontSize: '13px',
+  fontWeight: 600,
+  textAlign: 'right' as const,
+}
+const cellInputOverridden = { ...cellInput, border: '1px solid #f59e0b', color: '#fbbf24' }

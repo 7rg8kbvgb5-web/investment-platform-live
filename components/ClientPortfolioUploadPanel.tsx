@@ -314,6 +314,8 @@ export default function ClientPortfolioUploadPanel() {
   const [roundUnits, setRoundUnits] = useState(false)
   const roundUnitsTouched = useRef(false)
   const roundUnitsTo = roundUnits ? UNIT_ROUNDING : undefined
+  // The no-sells alternative is tucked away unless asked for (or already adjusted).
+  const [showNoSells, setShowNoSells] = useState(false)
 
   useEffect(() => {
     if (isHydrating.current) return
@@ -657,6 +659,7 @@ export default function ClientPortfolioUploadPanel() {
       roundUnitsTo,
     })
   }, [clientAdjustedModel, additionalCashValue, isNewMoney, baseTotalPortfolioValue, mappingResult.mappedHoldings, prices, tradeOverrides, roundUnitsTo])
+  const noSellsOpen = showNoSells || !!cashDeployment?.lines.some((l) => l.adjusted)
 
   // Aggregate yield/income for the target (post-rebalance) portfolio, at
   // this client's actual dollar value where known. Uses clientAdjustedModel
@@ -1493,7 +1496,25 @@ export default function ClientPortfolioUploadPanel() {
             {additionalCashValue > 0 ? (
               cashDeployment ? (
                 <div style={cashDeploymentBox}>
-                  <p style={cashDeploymentTitle}>Alternative: invest the new cash without selling</p>
+                  <button
+                    type="button"
+                    onClick={() => setShowNoSells((v) => !v)}
+                    aria-expanded={noSellsOpen}
+                    style={noSellsToggle}
+                  >
+                    <span style={{ color: '#7dd3fc', width: '14px', display: 'inline-block' }}>{noSellsOpen ? '▾' : '▸'}</span>
+                    <span style={{ fontWeight: 700, color: '#e2e8f0' }}>No-sells alternative</span>
+                    <span style={{ color: '#94a3b8' }}>
+                      {' '}
+                      · invest {formatCurrency(cashDeployment.cashAmount)} across{' '}
+                      {cashDeployment.lines.filter((l) => l.investValue > 0).length} purchases, nothing sold
+                    </span>
+                    <span style={{ marginLeft: 'auto', color: '#7dd3fc', fontSize: '12px' }}>
+                      {noSellsOpen ? 'Hide buy list' : 'Show buy list'}
+                    </span>
+                  </button>
+                  {noSellsOpen ? (
+                  <>
                   <CashDeploymentView
                     result={cashDeployment}
                     riskProfile={effectiveRiskProfile}
@@ -1506,6 +1527,8 @@ export default function ClientPortfolioUploadPanel() {
                     new cash, set to the model (the adjustments below). To propose this no-sells option
                     instead, choose &quot;Invest new cash only — no sells&quot; on the Client Advice tab.
                   </p>
+                  </>
+                  ) : null}
                 </div>
               ) : (
                 <p style={tdMutedInline}>
@@ -2116,17 +2139,23 @@ const newMoneyInputs = {
 
 const cashDeploymentBox = {
   margin: '0 0 20px',
-  padding: '16px',
+  padding: '10px 16px',
   borderRadius: '10px',
   background: '#0b1d33',
   border: '1px solid #1e3a5f',
 }
 
-const cashDeploymentTitle = {
-  fontSize: '14px',
-  fontWeight: 700,
-  color: '#5eead4',
-  margin: '0 0 10px',
+const noSellsToggle = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '6px',
+  width: '100%',
+  padding: '4px 0',
+  border: 'none',
+  background: 'transparent',
+  cursor: 'pointer',
+  fontSize: '13px',
+  textAlign: 'left' as const,
 }
 
 const cashDeploymentFootnote = {
