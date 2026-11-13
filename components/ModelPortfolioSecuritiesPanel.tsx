@@ -682,10 +682,10 @@ export function ModelPortfolioSecuritiesPanel() {
                       )}
                     </td>
                     <td style={overviewTdRight}>
-                      {row.count === 0 ? (
-                        <span style={mutedText}>—</span>
+                      {row.count <= 3 ? (
+                        <span style={mutedText} title="Three holdings or fewer - the top 3 is the whole asset class">—</span>
                       ) : (
-                        <span style={{ color: row.count > 3 && row.top3 >= 60 ? '#fbbf24' : '#e2e8f0' }}>{row.top3}%</span>
+                        <span style={{ color: row.top3 >= 60 ? '#fbbf24' : '#e2e8f0' }}>{row.top3}%</span>
                       )}
                     </td>
                     <td style={overviewTdRight}>
@@ -697,7 +697,7 @@ export function ModelPortfolioSecuritiesPanel() {
                     </td>
                     <td style={overviewTd}>
                       {row.covered === 0 ? (
-                        <span style={mutedText}>{row.count === 0 ? '—' : 'Not covered'}</span>
+                        <span style={mutedText} title="No broker ratings - typical for ETFs and managed funds">—</span>
                       ) : (
                         <span style={leanSummary} title={`${row.covered} of ${row.count} holdings rated`}>
                           <span style={{ color: '#4ade80' }}>{row.leans.bullish}</span>
@@ -723,8 +723,9 @@ export function ModelPortfolioSecuritiesPanel() {
             </table>
           </div>
           <p style={overviewFootnote}>
-            Top 3 is highlighted when three holdings carry 60% or more of a sleeve. House view counts holdings rated
-            positive · neutral · negative by Ord Minnett or Barrenjoey.
+            Top 3 shows how much of an asset class sits in its three largest holdings (amber at 60%+; shown only
+            where there are more than three). House view counts holdings rated positive · neutral · negative by Ord
+            Minnett or Barrenjoey - ETFs and managed funds aren&apos;t rated.
           </p>
         </div>
 
