@@ -449,6 +449,13 @@ export async function buildClientAdvice(
     )
   }
 
+  const targetTotal = Math.round(model.assetClasses.reduce((t, ac) => t + ac.targetWeight, 0) * 100) / 100
+  if (Math.abs(targetTotal - 100) >= 0.05) {
+    warnings.push(
+      `Asset class targets for this client add to ${targetTotal}%, not 100% - adjust them in Asset Class Allocation on the Construction tab before presenting.`,
+    )
+  }
+
   const heldCodes = new Set(mapped.map((h) => normaliseCode(h.code)))
   const relevantDecisions = (context.approvedDecisions ?? []).filter(
     (d) => d.currentCode && heldCodes.has(normaliseCode(d.currentCode)),

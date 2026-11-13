@@ -1286,6 +1286,29 @@ export default function ClientPortfolioUploadPanel() {
                       </td>
                     </tr>
                   ))}
+                  {(() => {
+                    const clientTotal = Math.round(comparison.assetClassComparison.reduce((t, r) => t + r.clientWeight, 0) * 100) / 100
+                    const modelTotal = Math.round(comparison.assetClassComparison.reduce((t, r) => t + r.modelWeight, 0) * 100) / 100
+                    const gap = Math.round((modelTotal - 100) * 100) / 100
+                    const ok = Math.abs(gap) < 0.05
+                    return (
+                      <tr>
+                        <td style={{ ...td, fontWeight: 700, borderTop: '1px solid #2d4a6b' }}>Total</td>
+                        <td style={{ ...tdMuted, borderTop: '1px solid #2d4a6b' }} />
+                        <td style={{ ...td, fontWeight: 700, borderTop: '1px solid #2d4a6b' }}>{clientTotal}%</td>
+                        <td style={{ ...td, fontWeight: 700, borderTop: '1px solid #2d4a6b', color: ok ? '#86efac' : '#fbbf24' }}>
+                          {modelTotal}%
+                        </td>
+                        <td colSpan={2} style={{ ...td, borderTop: '1px solid #2d4a6b', color: ok ? '#86efac' : '#fbbf24', fontSize: '12px' }}>
+                          {ok
+                            ? '✓ Adds to 100%'
+                            : gap > 0
+                              ? `${gap}pp over 100% - reduce an asset class before generating the proposal`
+                              : `${Math.abs(gap)}pp short of 100% - the shortfall would sit unallocated`}
+                        </td>
+                      </tr>
+                    )
+                  })()}
                 </tbody>
               </table>
             </div>

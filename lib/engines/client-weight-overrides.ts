@@ -48,12 +48,22 @@ export function applyClientWeightOverrides(
     assetClasses: model.assetClasses.map((assetClass) => {
       const overriddenTargetWeight = assetClassOverrides[assetClass.name]
 
-      const holdings = hasHoldingOverrides
-        ? assetClass.holdings.map((holding) => {
-            const override = holdingOverrides[normaliseCode(holding.code)]
-            return override === undefined ? holding : { ...holding, weight: override }
-          })
-        : assetClass.holdings
+      // A bespoke asset-class weight carries through to its securities: each
+      // keeps its in-class share, scaled to the new class total. (Without this
+      // the class weight changed on screen but the trades still followed the
+      // house model.) A security's own bespoke weight still wins.
+      const scale =
+        overriddenTargetWeight !== undefined && assetClass.targetWeight > 0
+          ? overriddenTargetWeight / assetClass.targetWeight
+          : 1
+      const holdings =
+        hasHoldingOverrides || scale !== 1
+          ? assetClass.holdings.map((holding) => {
+              const override = holdingOverrides[normaliseCode(holding.code)]
+              if (override !== undefined) return { ...holding, weight: override }
+              return scale === 1 ? holding : { ...holding, weight: Math.round(holding.weight * scale * 100) / 100 }
+            })
+          : assetClass.holdings
 
       return overriddenTargetWeight === undefined && holdings === assetClass.holdings
         ? assetClass
