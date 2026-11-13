@@ -54,6 +54,7 @@ export default function ClientAdvicePanel() {
   // Printed on the PDF only - sent with the download, never saved.
   const [pdfClientName, setPdfClientName] = useState('')
   const [pdfCount, setPdfCount] = useState(0)
+  const [pdfBusy, setPdfBusy] = useState(false)
   const [cgt, setCgt] = useState<CgtResult | null>(null)
   const [commentaryMissing, setCommentaryMissing] = useState(0)
 
@@ -151,6 +152,34 @@ export default function ClientAdvicePanel() {
   }
 
 
+  async function downloadProposal(form: HTMLFormElement) {
+    setPdfBusy(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/proposals/pdf', { method: 'POST', body: new FormData(form) })
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        throw new Error(body?.error ?? `Proposal could not be generated (error ${res.status}).`)
+      }
+      const blob = await res.blob()
+      const match = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = match?.[1] ?? 'Investment Proposal.pdf'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+      setSavedNote('Proposal downloaded.')
+      setPdfCount((n) => n + 1)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Proposal could not be generated.')
+    } finally {
+      setPdfBusy(false)
+    }
+  }
+
   const buys = advice?.trades.filter((t) => t.action === 'buy' || t.action === 'increase') ?? []
   const sells = advice?.trades.filter((t) => t.action === 'sell' || t.action === 'reduce') ?? []
   const totalBuys = buys.reduce((s, t) => s + (t.value ?? 0), 0)
@@ -198,8 +227,10 @@ export default function ClientAdvicePanel() {
                   document.getElementById('proposal-commentary')?.scrollIntoView({ behavior: 'smooth' })
                   return
                 }
-                // The record is written while the PDF renders; refresh the list shortly after.
-                setTimeout(() => setPdfCount((n) => n + 1), 8000)
+                // Fetch the PDF and save it directly. (Opening a POST response in a new tab
+                // breaks Edge/Chrome's Save button, which re-requests the URL without the form.)
+                e.preventDefault()
+                void downloadProposal(e.currentTarget)
               }}
             >
               <input type="hidden" name="review" value={review?.id ?? ''} />
@@ -213,8 +244,8 @@ export default function ClientAdvicePanel() {
                 style={nameInput}
                 title="Printed on this proposal only. Never stored on the platform."
               />
-              <button type="submit" style={primaryButton}>
-                Download proposal (PDF)
+              <button type="submit" style={primaryButton} disabled={pdfBusy}>
+                {pdfBusy ? 'Generating proposal…' : 'Download proposal (PDF)'}
               </button>
               {commentaryMissing > 0 ? (
                 <a href="#proposal-commentary" style={{ fontSize: '12px', color: '#fbbf24', whiteSpace: 'nowrap' }}>
