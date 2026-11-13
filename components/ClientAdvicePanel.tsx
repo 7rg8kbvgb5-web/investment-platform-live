@@ -220,7 +220,7 @@ export default function ClientAdvicePanel() {
                 if (
                   commentaryMissing > 0 &&
                   !window.confirm(
-                    `${commentaryMissing} proposal commentary line${commentaryMissing === 1 ? ' hasn\u2019t' : 's haven\u2019t'} been written and saved yet, so ${commentaryMissing === 1 ? 'it' : 'they'} won't appear in the PDF. Generate it anyway?\n\n(Cancel, then use "Draft with AI" in Proposal commentary below.)`,
+                    `${commentaryMissing} ticked proposal commentary line${commentaryMissing === 1 ? ' isn\u2019t' : 's aren\u2019t'} ready - not yet saved, or reading like an internal note - so ${commentaryMissing === 1 ? 'it' : 'they'} won't appear in the PDF. Generate it anyway?\n\n(Cancel, then redraft and save in Proposal commentary below.)`,
                   )
                 ) {
                   e.preventDefault()

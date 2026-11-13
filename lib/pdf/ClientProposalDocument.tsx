@@ -756,8 +756,8 @@ export function ClientProposalDocument({
                   return (
                   <View key={`${t.code}-${t.action}`} wrap={false}>
                   <View style={s.tr}>
-                    <Text style={[s.code, { width: '15%' }]}>{t.code}</Text>
-                    <View style={{ width: '37%' }}>
+                    <Text style={[s.code, { width: '15%', paddingRight: 6 }]}>{t.code}</Text>
+                    <View style={{ width: '37%', paddingRight: 10 }}>
                       <Text style={s.td}>{t.name}</Text>
                       {t.treatment === 'staged_exit' ? <Text style={{ fontSize: 6.5, color: OM.red, marginTop: 1 }}>STAGED EXIT</Text> : null}
                       {t.action === 'increase' || t.action === 'reduce' ? (
@@ -893,8 +893,8 @@ export function ClientProposalDocument({
                     const r = research[h.code.trim().toUpperCase()]
                     return (
                     <View style={s.tr} key={h.code} wrap={false}>
-                      <Text style={[s.code, { width: HW.code }]}>{h.code}</Text>
-                      <Text style={[s.td, { width: HW.sec }]}>
+                      <Text style={[s.code, { width: HW.code, paddingRight: 6 }]}>{h.code}</Text>
+                      <Text style={[s.td, { width: HW.sec, paddingRight: 10 }]}>
                         {h.name}
                         {!h.inModel ? <Text style={{ color: OM.slate }}> (retained)</Text> : null}
                       </Text>

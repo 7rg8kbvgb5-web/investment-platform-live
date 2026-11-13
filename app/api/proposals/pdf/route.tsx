@@ -10,7 +10,7 @@ import { cgtForReview } from '../../../../lib/tax/cgt-for-review'
 import { getTaxReference } from '../../../../lib/tax/tax-reference'
 import { recordProposal } from '../../../../lib/engines/proposal-records'
 import { fetchHouseViews } from '../../../../lib/engines/house-view'
-import { commentaryItemsFor, commentaryKey, defaultCommentarySelection, fetchCommentary } from '../../../../lib/engines/security-commentary'
+import { commentaryItemsFor, commentaryKey, defaultCommentarySelection, fetchCommentary, internalWordingIssues } from '../../../../lib/engines/security-commentary'
 import { buildIncomeCalendar, fetchPaymentPatterns, type IncomeCalendar } from '../../../../lib/engines/income-calendar'
 import { getSignedInAdviser } from '../../../../lib/adviser-identity'
 import { displaySecurityName } from '../../../../lib/pdf/proposal/names'
@@ -90,7 +90,8 @@ async function buildPdf(reviewId: string | null, approachParam: string | null, c
     const commentary: Record<string, string> = {}
     for (const i of commentaryItems) {
       const k = commentaryKey(i.code, i.kind)
-      if (ticked.has(k) && allCommentary[k]) commentary[k] = allCommentary[k]
+      // A brief that reads like an internal note never reaches the client document.
+      if (ticked.has(k) && allCommentary[k] && internalWordingIssues(allCommentary[k]).length === 0) commentary[k] = allCommentary[k]
     }
 
     // Ord Minnett research view on each recommended holding (from the coverage universe / research uploads).

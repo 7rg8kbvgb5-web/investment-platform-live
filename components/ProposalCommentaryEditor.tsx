@@ -68,7 +68,11 @@ export default function ProposalCommentaryEditor({
   }, [codes])
 
   const ticked = items.filter((i) => selected.has(keyOf(i)))
-  const missingSaved = ticked.filter((i) => !saved[keyOf(i)]?.trim()).length
+  // Not ready for the PDF: no saved text, or saved text that reads like an internal note (left out of the PDF).
+  const missingSaved = ticked.filter((i) => {
+    const t = saved[keyOf(i)]?.trim()
+    return !t || internalWordingIssues(t).length > 0
+  }).length
   useEffect(() => {
     onMissingChange?.(missingSaved)
   }, [missingSaved, onMissingChange])
