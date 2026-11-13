@@ -1449,17 +1449,23 @@ export default function ClientPortfolioUploadPanel() {
                   {baseTotalPortfolioValue !== undefined ? formatCurrency(baseTotalPortfolioValue) : '—'}
                 </span>
               </div>
-              <div style={cashBarStat}>
-                <span style={cashBarLabel}>Add cash to invest</span>
-                <input
-                  type="number"
-                  step="100"
-                  placeholder="0"
-                  value={additionalCash}
-                  onChange={(e) => setAdditionalCash(e.target.value)}
-                  style={cashInput}
-                  aria-label="Additional cash to invest"
-                />
+              <div style={addCashCard}>
+                <span style={addCashLabel}>+ Add cash to invest</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ color: '#4ade80', fontSize: '18px', fontWeight: 700 }}>$</span>
+                  <input
+                    type="number"
+                    step="100"
+                    placeholder="0"
+                    value={additionalCash}
+                    onChange={(e) => setAdditionalCash(e.target.value)}
+                    style={cashInput}
+                    aria-label="Additional cash to invest"
+                  />
+                </div>
+                <span style={{ fontSize: '11px', color: '#86efac' }}>
+                  {additionalCashValue > 0 ? 'Included in the rebalance and the proposal' : 'New money from the client, if any'}
+                </span>
               </div>
               <div style={cashBarStat}>
                 <span style={cashBarLabel} title="After a full rebalance including any new cash: the part of the portfolio not allocated to a holding">
@@ -1585,9 +1591,9 @@ export default function ClientPortfolioUploadPanel() {
                     title="Rounds each proposed purchase and partial sale to the nearest 10 units, so the proposal shows round numbers. The small difference is held in cash. Full sales and trades you've adjusted by hand stay exact."
                     style={{
                       ...toggleButton,
-                      background: roundUnits ? '#1e3a5f' : 'transparent',
-                      color: roundUnits ? '#ffffff' : '#93c5fd',
-                      borderColor: roundUnits ? '#38bdf8' : '#2d4a6b',
+                      background: roundUnits ? '#38bdf8' : 'rgba(56, 189, 248, 0.14)',
+                      color: roundUnits ? '#04142b' : '#7dd3fc',
+                      borderColor: '#38bdf8',
                     }}
                   >
                     {roundUnits ? '✓ Units rounded to nearest 10' : 'Round units to nearest 10'}
@@ -2292,14 +2298,15 @@ const resetAllButton = {
 }
 
 const toggleButton = {
-  border: '1px solid #2d4a6b',
+  border: '1px solid #38bdf8',
   background: 'transparent',
-  color: '#93c5fd',
-  fontSize: '11px',
+  color: '#7dd3fc',
+  fontSize: '12px',
   fontWeight: 700,
   cursor: 'pointer',
-  padding: '4px 10px',
+  padding: '6px 14px',
   borderRadius: '6px',
+  whiteSpace: 'nowrap' as const,
 }
 
 const yieldOverviewRow = {
@@ -2505,13 +2512,31 @@ const cashBarSubValue = {
 }
 
 const cashInput = {
-  width: '140px',
-  padding: '7px 10px',
+  width: '160px',
+  padding: '8px 10px',
   borderRadius: '8px',
-  fontSize: '15px',
+  fontSize: '17px',
   fontWeight: 700,
   background: '#04142b',
-  border: '1px solid #2d4a6b',
+  border: '2px solid #22c55e',
+  color: '#4ade80',
+}
+
+const addCashCard = {
+  display: 'flex',
+  flexDirection: 'column' as const,
+  gap: '6px',
+  padding: '10px 14px',
+  borderRadius: '10px',
+  background: 'rgba(34, 197, 94, 0.10)',
+  border: '1px solid #22c55e',
+}
+
+const addCashLabel = {
+  fontSize: '11px',
+  fontWeight: 700,
+  letterSpacing: '0.06em',
+  textTransform: 'uppercase' as const,
   color: '#4ade80',
 }
 
