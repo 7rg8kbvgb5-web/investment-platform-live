@@ -32,7 +32,6 @@ import {
   CMA_AS_AT,
   CPI_ASSUMPTION,
   PROFILE_GUIDE,
-  BROKERAGE_CAP,
   BOND_TRANSACTION_RATE,
   afterAdviceWeights,
   currentWeights,
@@ -1288,8 +1287,8 @@ export function ClientProposalDocument({
                 </View>
                 <View style={s.tr}>
                   <Text style={[s.td, { width: '55%' }]}>Brokerage on listed securities ({fees.listedTrades} trades)</Text>
-                  <Text style={[s.td, s.muted, { width: '22%', textAlign: 'right' }]}>capped at ${BROKERAGE_CAP} per trade</Text>
-                  <Text style={[s.td, { width: '23%', textAlign: 'right' }]}>up to {fmt(fees.brokerageEstimate)}</Text>
+                  <Text style={[s.td, s.muted, { width: '22%', textAlign: 'right' }]}>{fees.brokerageBasis}</Text>
+                  <Text style={[s.td, { width: '23%', textAlign: 'right' }]}>{fmt(fees.brokerageEstimate)}</Text>
                 </View>
                 {fees.bondTradeValue > 0 ? (
                   <View style={s.tr}>
@@ -1300,7 +1299,7 @@ export function ClientProposalDocument({
                 ) : null}
                 <View style={s.trTotal}>
                   <Text style={[s.td, s.bold, { width: '77%' }]}>Estimated one-off implementation costs</Text>
-                  <Text style={[s.td, s.bold, { width: '23%', textAlign: 'right', color: OM.navy }]}>up to {fmt(fees.totalTransactionCosts)}</Text>
+                  <Text style={[s.td, s.bold, { width: '23%', textAlign: 'right', color: OM.navy }]}>{fmt(fees.totalTransactionCosts)}</Text>
                 </View>
               </View>
             </>

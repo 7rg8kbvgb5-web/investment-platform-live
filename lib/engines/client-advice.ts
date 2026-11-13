@@ -19,6 +19,7 @@ import { normaliseCode } from './codes'
 import { frankingCredit } from './yield-aggregation'
 import { fetchHouseViews, houseViewSentence } from './house-view'
 import { exclusionStatus, exclusionWarning } from './exclusions-check'
+import { normaliseTransactionCosts, type TransactionCostSettings } from './transaction-costs'
 
 // One engine that turns a saved client review into advice. Used by the
 // Client Advice tab, the client register (drift), and the proposal PDF,
@@ -92,6 +93,8 @@ export type ClientAdvice = {
   hasBespokeWeights: boolean
   /** Units per step when trades are rounded for presentation (e.g. 10); null = whole units. */
   unitRounding?: number | null
+  /** Transaction cost basis for this client's trades (default $25 per trade). */
+  transactionCosts?: TransactionCostSettings
   isNewMoney: boolean
   existingValue: number | null
   newCash: number
@@ -497,6 +500,7 @@ export async function buildClientAdvice(
     model,
     hasBespokeWeights,
     unitRounding: roundUnitsTo ?? null,
+    transactionCosts: normaliseTransactionCosts(review.transactionCosts),
     isNewMoney,
     existingValue,
     newCash,

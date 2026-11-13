@@ -5,8 +5,16 @@ import type { ClientAdvice } from '../lib/engines/client-advice'
 import {
   EMPTY_OBJECTIVES,
   saveClientObjectives,
+  saveTransactionCosts,
   type ClientObjectives,
 } from '../lib/engines/client-portfolio-reviews'
+import {
+  DEFAULT_TRANSACTION_COSTS,
+  describeTransactionCost,
+  normaliseTransactionCosts,
+  type TransactionCostSettings,
+} from '../lib/engines/transaction-costs'
+import { estimateFees } from '../lib/pdf/proposal/insights'
 
 // Client Advice additions: the client's objectives (open the proposal),
 // income today vs recommended, and the record of proposals issued.
@@ -100,6 +108,122 @@ export function ObjectivesEditor({
       <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '8px' }}>
         <button type="button" onClick={save} disabled={saving} style={button}>
           {saving ? 'Saving…' : 'Save objectives'}
+        </button>
+        {status ? <span style={muted}>{status}</span> : null}
+      </div>
+    </div>
+  )
+}
+
+export function TransactionCostsEditor({
+  reviewId,
+  advice,
+  initial,
+  onSaved,
+}: {
+  reviewId: string
+  advice: ClientAdvice
+  initial: TransactionCostSettings | null
+  onSaved: (settings: TransactionCostSettings) => void
+}) {
+  const start = normaliseTransactionCosts(initial)
+  const [mode, setMode] = useState<TransactionCostSettings['mode']>(start.mode)
+  const [flat, setFlat] = useState(String(start.flat))
+  const [percent, setPercent] = useState(String(start.percent))
+  const [minimum, setMinimum] = useState(String(start.minimum))
+  const [addGst, setAddGst] = useState(start.addGst)
+  const [status, setStatus] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    const s = normaliseTransactionCosts(initial)
+    setMode(s.mode)
+    setFlat(String(s.flat))
+    setPercent(String(s.percent))
+    setMinimum(String(s.minimum))
+    setAddGst(s.addGst)
+    setStatus(null)
+  }, [reviewId, initial])
+
+  const num = (v: string) => {
+    const n = Number(v.replace(/[$,%\s]/g, ''))
+    return Number.isFinite(n) && n >= 0 ? n : null
+  }
+  const draft: TransactionCostSettings = normaliseTransactionCosts({
+    mode,
+    flat: num(flat) ?? undefined,
+    percent: num(percent) ?? undefined,
+    minimum: num(minimum) ?? undefined,
+    addGst,
+  })
+  const preview = estimateFees({ ...advice, transactionCosts: draft })
+
+  async function save() {
+    setSaving(true)
+    setStatus(null)
+    try {
+      await saveTransactionCosts(reviewId, draft)
+      onSaved(draft)
+      setStatus('Saved - used in the proposal\u2019s fees and costs.')
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : 'Save failed.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function reset() {
+    const d = DEFAULT_TRANSACTION_COSTS
+    setMode(d.mode)
+    setFlat(String(d.flat))
+    setPercent(String(d.percent))
+    setMinimum(String(d.minimum))
+    setAddGst(d.addGst)
+  }
+
+  return (
+    <div style={box}>
+      <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginBottom: '10px' }}>
+        <label style={radio}>
+          <input type="radio" checked={mode === 'flat'} onChange={() => setMode('flat')} /> Flat $ per trade
+        </label>
+        <label style={radio}>
+          <input type="radio" checked={mode === 'percent'} onChange={() => setMode('percent')} /> % of each trade, with a minimum
+        </label>
+      </div>
+      <div style={grid}>
+        {mode === 'flat' ? (
+          <label style={field}>
+            <span style={label}>Cost per trade ($)</span>
+            <input value={flat} onChange={(e) => setFlat(e.target.value)} placeholder="25" style={input} />
+          </label>
+        ) : (
+          <>
+            <label style={field}>
+              <span style={label}>Rate (% of trade value)</span>
+              <input value={percent} onChange={(e) => setPercent(e.target.value)} placeholder="1" style={input} />
+            </label>
+            <label style={field}>
+              <span style={label}>Minimum per trade ($)</span>
+              <input value={minimum} onChange={(e) => setMinimum(e.target.value)} placeholder="25" style={input} />
+            </label>
+          </>
+        )}
+        <label style={{ ...radio, alignSelf: 'end', paddingBottom: '8px' }}>
+          <input type="checkbox" checked={addGst} onChange={(e) => setAddGst(e.target.checked)} /> Plus GST
+        </label>
+      </div>
+      <p style={{ ...muted, margin: '10px 0 0' }}>
+        {describeTransactionCost(draft)}
+        {preview ? ` \u00b7 ${preview.listedTrades} listed trade${preview.listedTrades === 1 ? '' : 's'} \u00b7 estimated ${fmt(preview.brokerageEstimate)}` : ''}
+        {' '}(unlisted funds carry no brokerage; bond trades are estimated separately).
+      </p>
+      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '8px' }}>
+        <button type="button" onClick={save} disabled={saving} style={button}>
+          {saving ? 'Saving\u2026' : 'Save transaction costs'}
+        </button>
+        <button type="button" onClick={reset} style={{ ...button, background: 'transparent', border: '1px solid #2d4a6b' }}>
+          Reset to $25 per trade
         </button>
         {status ? <span style={muted}>{status}</span> : null}
       </div>
@@ -286,3 +410,4 @@ const button = {
   border: '1px solid #0891b2',
 }
 const muted = { fontSize: '12px', color: '#94a3b8' }
+const radio = { display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#e2e8f0', cursor: 'pointer' }

@@ -1,7 +1,7 @@
 'use client'
 import { resolveModelId } from '../lib/model-context'
 import ProposalCommentaryEditor from './ProposalCommentaryEditor'
-import { ObjectivesEditor, IncomeComparison, ProposalHistory } from './ClientAdviceExtras'
+import { ObjectivesEditor, IncomeComparison, ProposalHistory, TransactionCostsEditor } from './ClientAdviceExtras'
 import { ExclusionsCheckPanel, StressTestTable } from './ClientAdviceChecks'
 
 import { useCallback, useEffect, useState } from 'react'
@@ -387,6 +387,18 @@ export default function ClientAdvicePanel() {
                 advice={advice}
                 objectives={review.objectives}
                 onSaved={() => compute(review.id, approach)}
+              />
+              <h3 style={sectionTitle}>
+                Transaction costs <span style={sectionSub}>Brokerage on this client&apos;s trades - shown in the proposal&apos;s fees and costs</span>
+              </h3>
+              <TransactionCostsEditor
+                reviewId={review.id}
+                advice={advice}
+                initial={review.transactionCosts}
+                onSaved={(transactionCosts) => {
+                  setReview({ ...review, transactionCosts })
+                  setAdvice({ ...advice, transactionCosts })
+                }}
               />
             </>
           ) : null}

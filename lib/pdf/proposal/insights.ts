@@ -1,6 +1,7 @@
 import type { ClientAdvice } from '../../engines/client-advice'
 import type { RiskProfile } from '../../engines/model-portfolios'
 import { isIsin } from '../../engines/holding-triage'
+import { describeTransactionCost, normaliseTransactionCosts, tradeCost } from '../../engines/transaction-costs'
 
 /**
  * Client-facing analytics for the proposal: expected return and risk of the
@@ -180,7 +181,6 @@ export const ADVISORY_FEE_TIERS = [
   { upTo: Infinity, rate: 0.5 },
 ]
 export const GST_RATE = 0.1
-export const BROKERAGE_CAP = 25
 export const BOND_TRANSACTION_RATE = 0.25
 
 export type FeeEstimate = {
@@ -191,6 +191,8 @@ export type FeeEstimate = {
   effectiveRatePct: number
   listedTrades: number
   brokerageEstimate: number
+  /** e.g. "$25 per trade" or "1.00% + GST, minimum $50 per trade". */
+  brokerageBasis: string
   bondTradeValue: number
   bondCostEstimate: number
   totalTransactionCosts: number
@@ -221,9 +223,12 @@ export function estimateFees(advice: ClientAdvice): FeeEstimate | null {
   }
   const gst = feeExGst * GST_RATE
   const bondTrades = advice.trades.filter((t) => isBondCode(t.code, t.name))
-  const listedTrades = advice.trades.filter((t) => !isBondCode(t.code, t.name) && isListedCode(t.code, t.assetClass)).length
+  const listed = advice.trades.filter((t) => !isBondCode(t.code, t.name) && isListedCode(t.code, t.assetClass))
+  const listedTrades = listed.length
   const bondTradeValue = bondTrades.reduce((s, t) => s + Math.abs(t.value ?? 0), 0)
-  const brokerageEstimate = listedTrades * BROKERAGE_CAP
+  const costs = normaliseTransactionCosts(advice.transactionCosts)
+  const brokerageEstimate = listed.reduce((s, t) => s + tradeCost(t.value ?? 0, costs), 0)
+  const brokerageBasis = describeTransactionCost(costs)
   const bondCostEstimate = (bondTradeValue * BOND_TRANSACTION_RATE) / 100
   return {
     tiers,
@@ -233,6 +238,7 @@ export function estimateFees(advice: ClientAdvice): FeeEstimate | null {
     effectiveRatePct: ((feeExGst + gst) / total) * 100,
     listedTrades,
     brokerageEstimate,
+    brokerageBasis,
     bondTradeValue,
     bondCostEstimate,
     totalTransactionCosts: brokerageEstimate + bondCostEstimate,

@@ -6,6 +6,7 @@ import type { RiskProfile } from './model-portfolios'
 import type { AssetClassWeightOverrides, HoldingWeightOverrides } from './client-weight-overrides'
 import type { TradeOverrides } from './portfolio-review-comparison'
 import type { CgtSettings } from '../tax/cgt'
+import type { TransactionCostSettings } from './transaction-costs'
 
 const TABLE = 'client_portfolio_reviews'
 
@@ -76,6 +77,17 @@ export async function saveCommentarySelection(id: string, keys: string[]): Promi
   }
 }
 
+export async function saveTransactionCosts(id: string, settings: TransactionCostSettings): Promise<void> {
+  const { error } = await supabase.from(TABLE).update({ transaction_costs: settings }).eq('id', id)
+  if (error) {
+    throw new Error(
+      error.message.includes('transaction_costs')
+        ? 'Run migration 0036 in Supabase to save transaction costs.'
+        : `Failed to save transaction costs: ${error.message}`,
+    )
+  }
+}
+
 export async function saveClientObjectives(id: string, objectives: ClientObjectives): Promise<void> {
   const { error } = await supabase.from(TABLE).update({ objectives }).eq('id', id)
   if (error) {
@@ -104,6 +116,8 @@ export type ClientPortfolioReview = {
   commentarySelection: string[] | null
   /** The adviser model this review is built against (migration 0028). */
   modelId: string
+  /** Transaction cost basis for this client's trades (migration 0036). Null = default ($25 per trade). */
+  transactionCosts: TransactionCostSettings | null
 }
 
 type ReviewRow = {
@@ -129,6 +143,7 @@ type ReviewRow = {
   commentary_selection?: string[] | null
   model_id?: string | null
   round_units?: boolean | null
+  transaction_costs?: TransactionCostSettings | null
   updated_at: string
 }
 
@@ -159,6 +174,7 @@ function mapRow(row: ReviewRow): ClientPortfolioReview {
     objectives: row.objectives ?? null,
     commentarySelection: Array.isArray(row.commentary_selection) ? row.commentary_selection : null,
     modelId: row.model_id ?? DEFAULT_MODEL_ID,
+    transactionCosts: row.transaction_costs ?? null,
   }
 }
 
