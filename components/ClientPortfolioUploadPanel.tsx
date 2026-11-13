@@ -320,15 +320,21 @@ export default function ClientPortfolioUploadPanel() {
   // Proposal approach when new cash is added (saved with the review; read by Client Advice and the PDF).
   const [adviceApproach, setAdviceApproach] = useState<'rebalance' | 'new-cash' | null>(null)
   const [approachError, setApproachError] = useState<string | null>(null)
-  async function chooseApproach(next: 'rebalance' | 'new-cash') {
-    setAdviceApproach(next)
-    setApproachError(null)
-    if (!reviewId) return
+  // A choice made before the review's first autosave is saved as soon as it has an id.
+  const pendingApproach = useRef<'rebalance' | 'new-cash' | null>(null)
+  async function saveApproach(id: string, next: 'rebalance' | 'new-cash') {
     try {
-      await updateClientAdvice(reviewId, { adviceApproach: next })
+      await updateClientAdvice(id, { adviceApproach: next })
+      pendingApproach.current = null
     } catch (err) {
       setApproachError(err instanceof Error ? err.message : 'Could not save the approach.')
     }
+  }
+  async function chooseApproach(next: 'rebalance' | 'new-cash') {
+    setAdviceApproach(next)
+    setApproachError(null)
+    pendingApproach.current = next
+    if (reviewId) await saveApproach(reviewId, next)
   }
 
   useEffect(() => {
@@ -410,6 +416,10 @@ export default function ClientPortfolioUploadPanel() {
   // gap for the client-specific working file.
   const [clientReviewName, setClientReviewName] = useState('')
   const [reviewId, setReviewId] = useState<string | null>(null)
+  useEffect(() => {
+    if (reviewId && pendingApproach.current) void saveApproach(reviewId, pendingApproach.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviewId])
   const [reviewStatus, setReviewStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [reviewError, setReviewError] = useState<string | null>(null)
   const [showLoadPicker, setShowLoadPicker] = useState(false)
