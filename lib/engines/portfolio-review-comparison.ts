@@ -402,6 +402,7 @@ export function compareClientPortfolioToModel(
   if (context.roundUnitsTo && totalPortfolioValue) {
     roundTradeUnits(holdingRecommendations, context.roundUnitsTo, totalPortfolioValue)
   }
+  if (totalPortfolioValue) balanceThroughCash(holdingRecommendations, totalPortfolioValue)
 
   const unclassifiedHoldings = mappedHoldings.filter((h) => !h.mapped)
 
@@ -438,9 +439,29 @@ export function roundTradeUnits(recs: HoldingRecommendation[], step: number, tot
     r.changeWeight = round2(r.targetWeight - r.currentWeight)
   }
   if (Math.abs(difference) < 0.005) return
+  moveThroughCash(recs, -difference, totalPortfolioValue)
+}
+
+/**
+ * Small rounding left over when securities are sized from rounded weights
+ * (model weights to 2dp, in-class weights that don't quite add to 100) is
+ * absorbed by the model's Cash holding, so a full rebalance adds to exactly
+ * 100% instead of showing a phantom few-hundred-dollar over/under-allocation.
+ * Larger gaps are a real allocation choice and are left visible.
+ */
+export function balanceThroughCash(recs: HoldingRecommendation[], totalPortfolioValue: number, maxGapPct = 0.25): void {
+  if (totalPortfolioValue <= 0) return
+  const allocated = recs.reduce((t, r) => t + (r.targetValue ?? 0), 0)
+  const gap = round2(totalPortfolioValue - allocated)
+  if (Math.abs(gap) < 0.005 || Math.abs(gap) > (totalPortfolioValue * maxGapPct) / 100) return
+  moveThroughCash(recs, gap, totalPortfolioValue)
+}
+
+/** Adds `delta` dollars to the model Cash holding's trade (negative takes it away). */
+function moveThroughCash(recs: HoldingRecommendation[], delta: number, totalPortfolioValue: number): void {
   const cash = recs.find((r) => r.assetClass === 'Cash' && !r.adjusted && r.currentValue !== null && r.changeValue !== null)
   if (!cash || cash.currentValue === null || cash.changeValue === null) return
-  cash.changeValue = round2(cash.changeValue - difference)
+  cash.changeValue = round2(cash.changeValue + delta)
   cash.targetValue = round2(cash.currentValue + cash.changeValue)
   cash.targetWeight = round2((cash.targetValue / totalPortfolioValue) * 100)
   cash.changeWeight = round2(cash.targetWeight - cash.currentWeight)

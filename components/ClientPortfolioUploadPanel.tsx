@@ -38,6 +38,7 @@ import {
   listClientReviews,
   fetchClientReview,
   deleteClientReview,
+  updateClientAdvice,
 } from '../lib/engines/client-portfolio-reviews'
 import AssetClassComparisonChart from './AssetClassComparisonChart'
 import AllocationPieChart from './AllocationPieChart'
@@ -316,6 +317,19 @@ export default function ClientPortfolioUploadPanel() {
   const roundUnitsTo = roundUnits ? UNIT_ROUNDING : undefined
   // The no-sells alternative is tucked away unless asked for (or already adjusted).
   const [showNoSells, setShowNoSells] = useState(false)
+  // Proposal approach when new cash is added (saved with the review; read by Client Advice and the PDF).
+  const [adviceApproach, setAdviceApproach] = useState<'rebalance' | 'new-cash' | null>(null)
+  const [approachError, setApproachError] = useState<string | null>(null)
+  async function chooseApproach(next: 'rebalance' | 'new-cash') {
+    setAdviceApproach(next)
+    setApproachError(null)
+    if (!reviewId) return
+    try {
+      await updateClientAdvice(reviewId, { adviceApproach: next })
+    } catch (err) {
+      setApproachError(err instanceof Error ? err.message : 'Could not save the approach.')
+    }
+  }
 
   useEffect(() => {
     if (isHydrating.current) return
@@ -492,6 +506,7 @@ export default function ClientPortfolioUploadPanel() {
       setTradeOverrides(review.state.tradeOverrides ?? {})
       tradeOverridesTouched.current = Object.keys(review.state.tradeOverrides ?? {}).length > 0
       setRoundUnits(!!review.state.roundUnits)
+      setAdviceApproach(review.adviceApproach ?? null)
       roundUnitsTouched.current = !!review.state.roundUnits
       setMode(review.state.entryMode === 'new-money' ? 'new-money' : 'pdf')
       setReviewModelVersion(review.state.modelVersion ?? null)
@@ -543,6 +558,7 @@ export default function ClientPortfolioUploadPanel() {
     tradeOverridesTouched.current = false
     setRoundUnits(false)
     roundUnitsTouched.current = false
+    setAdviceApproach(null)
     setMode('pdf')
     setReviewModelVersion(null)
   }
@@ -659,7 +675,8 @@ export default function ClientPortfolioUploadPanel() {
       roundUnitsTo,
     })
   }, [clientAdjustedModel, additionalCashValue, isNewMoney, baseTotalPortfolioValue, mappingResult.mappedHoldings, prices, tradeOverrides, roundUnitsTo])
-  const noSellsOpen = showNoSells || !!cashDeployment?.lines.some((l) => l.adjusted)
+  const noSellsInProposal = adviceApproach === 'new-cash' && !isNewMoney
+  const noSellsOpen = showNoSells || noSellsInProposal || !!cashDeployment?.lines.some((l) => l.adjusted)
 
   // Aggregate yield/income for the target (post-rebalance) portfolio, at
   // this client's actual dollar value where known. Uses clientAdjustedModel
@@ -682,15 +699,13 @@ export default function ClientPortfolioUploadPanel() {
   // buys are needed to close the gap.
   const residualCash = useMemo(() => {
     if (!comparison || effectiveTotalPortfolioValue === undefined) return null
-    const totalTargetWeightPct = comparison.holdingRecommendations.reduce(
-      (sum, rec) => sum + rec.targetWeight,
-      0,
-    )
-    // Target weights are rounded per holding, so a few hundredths of a
-    // percent either way is rounding, not a real shortfall - treat as zero.
-    const rawPct = Math.round((100 - totalTargetWeightPct) * 100) / 100
-    const residualPct = Math.abs(rawPct) < 0.05 ? 0 : rawPct
-    const residualValue = Math.round(effectiveTotalPortfolioValue * (residualPct / 100) * 100) / 100
+    // In dollars, from each holding's target value - rounding is already
+    // absorbed by cash, so anything left here is a real over/under-allocation.
+    const allocated = comparison.holdingRecommendations.reduce((sum, rec) => sum + (rec.targetValue ?? 0), 0)
+    const raw = Math.round((effectiveTotalPortfolioValue - allocated) * 100) / 100
+    const residualValue = Math.abs(raw) < 1 ? 0 : raw
+    const residualPct =
+      effectiveTotalPortfolioValue > 0 ? Math.round((residualValue / effectiveTotalPortfolioValue) * 10000) / 100 : 0
     return { residualPct, residualValue }
   }, [comparison, effectiveTotalPortfolioValue])
 
@@ -1491,6 +1506,35 @@ export default function ClientPortfolioUploadPanel() {
                   )}
                 </span>
               </div>
+              {additionalCashValue > 0 && !isNewMoney ? (
+                <div style={approachCard}>
+                  <span style={cashBarLabel}>Proposal approach for the new cash</span>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => chooseApproach('rebalance')}
+                      style={!noSellsInProposal ? approachOn : approachOff}
+                      aria-pressed={!noSellsInProposal}
+                    >
+                      Full rebalance
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => chooseApproach('new-cash')}
+                      style={noSellsInProposal ? approachOn : approachOff}
+                      aria-pressed={noSellsInProposal}
+                    >
+                      Invest new cash only — no sells
+                    </button>
+                  </div>
+                  <span style={{ fontSize: '11px', color: approachError ? '#fca5a5' : '#94a3b8' }}>
+                    {approachError ??
+                      (noSellsInProposal
+                        ? 'The proposal uses the no-sells buy list below.'
+                        : 'The proposal uses the full rebalance table below.')}
+                  </span>
+                </div>
+              ) : null}
             </div>
 
             {additionalCashValue > 0 ? (
@@ -1502,16 +1546,17 @@ export default function ClientPortfolioUploadPanel() {
                     aria-expanded={noSellsOpen}
                     style={noSellsToggle}
                   >
-                    <span style={{ color: '#7dd3fc', width: '14px', display: 'inline-block' }}>{noSellsOpen ? '▾' : '▸'}</span>
-                    <span style={{ fontWeight: 700, color: '#e2e8f0' }}>No-sells alternative</span>
+                    <span style={{ color: '#38bdf8', width: '16px', display: 'inline-block', fontSize: '15px' }}>{noSellsOpen ? '▾' : '▸'}</span>
+                    <span style={{ fontWeight: 700, color: '#e0f2fe', fontSize: '14px' }}>
+                      {noSellsInProposal ? 'No-sells buy list' : 'No-sells alternative'}
+                    </span>
+                    {noSellsInProposal ? <span style={inProposalTag}>In the proposal</span> : null}
                     <span style={{ color: '#94a3b8' }}>
                       {' '}
                       · invest {formatCurrency(cashDeployment.cashAmount)} across{' '}
                       {cashDeployment.lines.filter((l) => l.investValue > 0).length} purchases, nothing sold
                     </span>
-                    <span style={{ marginLeft: 'auto', color: '#7dd3fc', fontSize: '12px' }}>
-                      {noSellsOpen ? 'Hide buy list' : 'Show buy list'}
-                    </span>
+                    <span style={showBuyListPill}>{noSellsOpen ? 'Hide buy list ▴' : 'Show buy list ▾'}</span>
                   </button>
                   {noSellsOpen ? (
                   <>
@@ -1523,9 +1568,9 @@ export default function ClientPortfolioUploadPanel() {
                     onReset={clearTradeOverride}
                   />
                   <p style={cashDeploymentFootnote}>
-                    The proposal uses a full rebalance by default - the whole portfolio, including the
-                    new cash, set to the model (the adjustments below). To propose this no-sells option
-                    instead, choose &quot;Invest new cash only — no sells&quot; on the Client Advice tab.
+                    {noSellsInProposal
+                      ? 'This buy list is what the proposal recommends. The full rebalance below is shown for comparison only.'
+                      : 'The proposal uses the full rebalance below. To propose this no-sells option instead, choose "Invest new cash only — no sells" in the cash bar above.'}
                   </p>
                   </>
                   ) : null}
@@ -2141,9 +2186,50 @@ const cashDeploymentBox = {
   margin: '0 0 20px',
   padding: '10px 16px',
   borderRadius: '10px',
-  background: '#0b1d33',
-  border: '1px solid #1e3a5f',
+  background: 'rgba(56, 189, 248, 0.08)',
+  border: '1px solid #38bdf8',
 }
+
+const showBuyListPill = {
+  marginLeft: 'auto',
+  padding: '5px 12px',
+  borderRadius: '999px',
+  background: '#38bdf8',
+  color: '#04142b',
+  fontSize: '12px',
+  fontWeight: 700,
+  whiteSpace: 'nowrap' as const,
+}
+
+const inProposalTag = {
+  marginLeft: '6px',
+  padding: '1px 8px',
+  borderRadius: '999px',
+  border: '1px solid #22c55e',
+  color: '#4ade80',
+  fontSize: '11px',
+  fontWeight: 700,
+}
+
+const approachCard = {
+  display: 'flex',
+  flexDirection: 'column' as const,
+  gap: '6px',
+  marginLeft: 'auto',
+}
+
+const approachOff = {
+  padding: '6px 12px',
+  borderRadius: '8px',
+  border: '1px solid #2d4a6b',
+  background: 'transparent',
+  color: '#cbd5e1',
+  fontSize: '12px',
+  fontWeight: 600,
+  cursor: 'pointer',
+}
+
+const approachOn = { ...approachOff, background: '#1e3a5f', border: '1px solid #38bdf8', color: '#e0f2fe', fontWeight: 700 }
 
 const noSellsToggle = {
   display: 'flex',

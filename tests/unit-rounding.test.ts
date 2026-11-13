@@ -53,3 +53,25 @@ describe('roundTradeUnits', () => {
     expect(recs).toEqual(before)
   })
 })
+
+describe('balanceThroughCash', () => {
+  it('absorbs small rounding into cash so the rebalance adds to 100%', async () => {
+    const { balanceThroughCash } = await import('../lib/engines/portfolio-review-comparison')
+    const recs = [
+      rec({ code: 'A', action: 'buy', currentValue: 0, changeValue: 500_600, targetValue: 500_600 }),
+      rec({ code: 'CASH', assetClass: 'Cash', action: 'reduce', currentValue: 520_000, changeValue: -20_000, targetValue: 500_000 }),
+    ]
+    balanceThroughCash(recs, TOTAL)
+    expect(recs[1].targetValue).toBe(499_400)
+    expect(recs.reduce((t, r) => t + (r.targetValue ?? 0), 0)).toBe(TOTAL)
+  })
+  it('leaves a real allocation gap visible', async () => {
+    const { balanceThroughCash } = await import('../lib/engines/portfolio-review-comparison')
+    const recs = [
+      rec({ code: 'A', action: 'buy', currentValue: 0, changeValue: 480_000, targetValue: 480_000 }),
+      rec({ code: 'CASH', assetClass: 'Cash', action: 'hold', currentValue: 500_000, changeValue: 0, targetValue: 500_000 }),
+    ]
+    balanceThroughCash(recs, TOTAL)
+    expect(recs[1].targetValue).toBe(500_000)
+  })
+})

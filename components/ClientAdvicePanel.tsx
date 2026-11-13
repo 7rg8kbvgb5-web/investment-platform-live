@@ -103,17 +103,6 @@ export default function ClientAdvicePanel() {
     }
   }, [selectedId, compute])
 
-  async function changeApproach(next: AdviceApproach) {
-    if (!review) return
-    setApproach(next)
-    await compute(review.id, next)
-    try {
-      await updateClientAdvice(review.id, { adviceApproach: next })
-    } catch {
-      // Before migration 0021 the choice just isn't remembered.
-    }
-  }
-
   async function saveNotes() {
     if (!review) return
     setSaving(true)
@@ -318,20 +307,12 @@ export default function ClientAdvicePanel() {
           {!advice.isNewMoney && advice.newCash > 0 ? (
             <div style={approachRow}>
               <span style={fieldLabelText}>Approach</span>
-              <button
-                type="button"
-                style={approach === 'new-cash' ? toggleActive : toggle}
-                onClick={() => changeApproach('new-cash')}
-              >
-                Invest new cash only — no sells
-              </button>
-              <button
-                type="button"
-                style={approach === 'rebalance' ? toggleActive : toggle}
-                onClick={() => changeApproach('rebalance')}
-              >
-                Full rebalance
-              </button>
+              <span style={{ ...toggleActive, cursor: 'default' }}>
+                {approach === 'new-cash' ? 'Invest new cash only — no sells' : 'Full rebalance'}
+              </span>
+              <a href={review ? `/portfolios?tab=construction&review=${review.id}` : '#'} style={{ fontSize: '12px', color: '#7dd3fc' }}>
+                Change on the Construction tab
+              </a>
             </div>
           ) : null}
 
