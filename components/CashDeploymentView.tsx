@@ -104,7 +104,7 @@ export default function CashDeploymentView({
       {editable ? (
         <p style={footnote}>
           Change any line&apos;s units (or the dollar amount where there&apos;s no live price) to depart from the
-          model. Residual cash updates to match; ↺ returns a line to its calculated size.
+          model. Residual cash updates to match; ↺ Reset returns a line to its calculated size.
         </p>
       ) : null}
       {result.residualCash < -1 ? (
@@ -185,9 +185,20 @@ function ResetButton({ onClick }: { onClick: () => void }) {
       type="button"
       onClick={onClick}
       title="Reset to the calculated amount"
-      style={{ background: 'none', border: 'none', color: '#38bdf8', cursor: 'pointer', fontSize: '14px', marginLeft: '6px' }}
+      style={{
+        border: '1px solid #f59e0b',
+        background: 'rgba(245, 158, 11, 0.14)',
+        color: '#fbbf24',
+        cursor: 'pointer',
+        fontSize: '12px',
+        fontWeight: 700,
+        padding: '2px 8px',
+        borderRadius: '6px',
+        marginLeft: '6px',
+        whiteSpace: 'nowrap',
+      }}
     >
-      ↺
+      ↺ Reset
     </button>
   )
 }

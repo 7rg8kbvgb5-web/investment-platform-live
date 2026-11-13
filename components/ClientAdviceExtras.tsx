@@ -222,8 +222,8 @@ export function TransactionCostsEditor({
         <button type="button" onClick={save} disabled={saving} style={button}>
           {saving ? 'Saving\u2026' : 'Save transaction costs'}
         </button>
-        <button type="button" onClick={reset} style={{ ...button, background: 'transparent', border: '1px solid #2d4a6b' }}>
-          Reset to $25 per trade
+        <button type="button" onClick={reset} style={{ ...button, background: 'rgba(245, 158, 11, 0.14)', border: '1px solid #f59e0b', color: '#fbbf24' }}>
+          ↺ Reset to $25 per trade
         </button>
         {status ? <span style={muted}>{status}</span> : null}
       </div>

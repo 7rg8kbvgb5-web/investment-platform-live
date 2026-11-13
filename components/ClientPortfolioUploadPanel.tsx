@@ -1226,7 +1226,7 @@ export default function ClientPortfolioUploadPanel() {
                   unchanged.
                 </span>
                 <button style={resetAllButton} onClick={resetAllClientOverrides}>
-                  Reset all to model
+                  ↺ Reset all to model
                 </button>
               </div>
             ) : null}
@@ -1272,7 +1272,7 @@ export default function ClientPortfolioUploadPanel() {
                               title="Reset to house model weight"
                               onClick={() => resetAssetClassWeight(row.assetClass)}
                             >
-                              ↺
+                              ↺ Reset
                             </button>
                           ) : null}
                         </div>
@@ -1584,7 +1584,7 @@ export default function ClientPortfolioUploadPanel() {
                     aria-pressed={roundUnits}
                     title="Rounds each proposed purchase and partial sale to the nearest 10 units, so the proposal shows round numbers. The small difference is held in cash. Full sales and trades you've adjusted by hand stay exact."
                     style={{
-                      ...resetAllButton,
+                      ...toggleButton,
                       background: roundUnits ? '#1e3a5f' : 'transparent',
                       color: roundUnits ? '#ffffff' : '#93c5fd',
                       borderColor: roundUnits ? '#38bdf8' : '#2d4a6b',
@@ -1596,7 +1596,7 @@ export default function ClientPortfolioUploadPanel() {
                 <p style={tdMutedInline}>
                   Adjust any trade by changing its units (positive to buy, negative to sell), or its dollar
                   value where there&apos;s no live price. Target weight, residual cash and the proposal update
-                  to match. ↺ returns a trade to the model-derived size.
+                  to match. ↺ Reset returns a trade to the model-derived size.
                 </p>
                 <div style={assetClassList}>
                   {clientAdjustedModel.assetClasses.map((assetClass) => {
@@ -1656,7 +1656,7 @@ export default function ClientPortfolioUploadPanel() {
                                       title="Reset to house model weight"
                                       onClick={() => resetHoldingWeight(rec.code)}
                                     >
-                                      ↺
+                                      ↺ Reset
                                     </button>
                                   ) : null}
                                 </HoldingMetricCell>
@@ -1689,7 +1689,7 @@ export default function ClientPortfolioUploadPanel() {
                                           title="Reset to the model-derived trade"
                                           onClick={() => clearTradeOverride(rec.code)}
                                         >
-                                          ↺
+                                          ↺ Reset
                                         </button>
                                       ) : null}
                                     </>
@@ -1711,7 +1711,7 @@ export default function ClientPortfolioUploadPanel() {
                                           title="Reset to the model-derived trade"
                                           onClick={() => clearTradeOverride(rec.code)}
                                         >
-                                          ↺
+                                          ↺ Reset
                                         </button>
                                       ) : null}
                                     </>
@@ -2250,13 +2250,19 @@ const weightInputOverridden = {
   background: '#0b2447',
 }
 
+// Reset controls only appear where something has been changed from the model,
+// so they use the same amber as an override and read clearly as an action.
 const resetWeightButton = {
-  border: 'none',
-  background: 'transparent',
-  color: '#60a5fa',
-  fontSize: '11px',
+  border: '1px solid #f59e0b',
+  background: 'rgba(245, 158, 11, 0.14)',
+  color: '#fbbf24',
+  fontSize: '12px',
+  fontWeight: 700,
   cursor: 'pointer',
-  padding: '2px 4px',
+  padding: '2px 8px',
+  borderRadius: '6px',
+  marginLeft: '6px',
+  whiteSpace: 'nowrap' as const,
 }
 
 const bespokeBanner = {
@@ -2274,6 +2280,18 @@ const bespokeBanner = {
 }
 
 const resetAllButton = {
+  border: '1px solid #f59e0b',
+  background: '#f59e0b',
+  color: '#0b1a2e',
+  fontSize: '12px',
+  fontWeight: 700,
+  cursor: 'pointer',
+  padding: '6px 14px',
+  borderRadius: '6px',
+  whiteSpace: 'nowrap' as const,
+}
+
+const toggleButton = {
   border: '1px solid #2d4a6b',
   background: 'transparent',
   color: '#93c5fd',
