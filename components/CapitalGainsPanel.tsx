@@ -251,7 +251,7 @@ export default function CapitalGainsPanel() {
           {advice && advice.approach === 'new-cash' ? (
             <StatusBox variant="neutral">
               This review invests new cash without selling, so there are no capital gains to estimate. Switch it to a
-              full rebalance on the Client Advice tab to see the tax on the sales.
+              full rebalance in the cash bar on the Construction tab to see the tax on the sales.
             </StatusBox>
           ) : sales.length === 0 ? (
             <StatusBox variant="neutral">The recommended trades for this review don&apos;t include any sales.</StatusBox>

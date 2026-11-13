@@ -1,13 +1,10 @@
-import { ASSET_CLASSES, fetchAllRiskProfileWeights, computeGrowthDefensiveByProfile, fetchModelPortfolio } from './model-portfolio-core';
+import { ASSET_CLASSES } from './model-portfolio-core';
 import { dedupeHoldings, isQuotableCode } from './market-data';
 import { getHistoricalEod, toEodhdTicker, isEodhdConfigured } from '../eodhd-client';
 import { supabase } from '../supabase';
 import type { ModelHolding } from './model-portfolios';
-import { classifyPortfolioRiskProfile } from './portfolio-risk-classification';
-import { applyClientWeightOverrides } from './client-weight-overrides';
-import { compareClientPortfolioToModel } from './portfolio-review-comparison';
-import { mapClientHoldings } from './client-holdings-mapping';
 import { listClientReviews, fetchClientReview } from './client-portfolio-reviews';
+import { buildAdviceWithPrices } from './client-advice-server';
 import {
   dailyReturns,
   annualizedReturn,
@@ -275,44 +272,21 @@ export async function getRecommendedPortfolioAnalytics(modelId?: string | null):
   }
 
   const review = await fetchClientReview(reviews[0].id)
-  const { state } = review
-
-  if (state.holdings.length === 0) {
+  if (review.state.holdings.length === 0 && !(Number(review.state.additionalCash) > 0)) {
     return { analytics: null, clientName: review.clientName }
   }
 
-  const mappingResult = await mapClientHoldings(state.holdings, review.modelId)
-
-  const allWeights = await fetchAllRiskProfileWeights(review.modelId)
-  const growthDefensiveByProfile = computeGrowthDefensiveByProfile(allWeights)
-  const riskClassification = classifyPortfolioRiskProfile(
-    mappingResult.growthWeight,
-    mappingResult.defensiveWeight,
-    growthDefensiveByProfile,
-  )
-  const effectiveRiskProfile =
-    state.riskOverride === 'auto' ? riskClassification.nearestRiskProfile : state.riskOverride
-
-  const model = await fetchModelPortfolio(effectiveRiskProfile, review.modelId)
-  const clientAdjustedModel = applyClientWeightOverrides(
-    model,
-    state.assetClassOverrides,
-    state.holdingOverrides,
-  )
-
-  const comparison = compareClientPortfolioToModel(mappingResult.mappedHoldings, clientAdjustedModel)
-
-  // Only holdings that will actually remain/be bought under the
-  // recommendation - a full sell (targetWeight 0) isn't part of the
-  // resulting portfolio's risk profile.
-  const recommendedHoldings: ModelHolding[] = comparison.holdingRecommendations
-    .filter((rec) => rec.targetWeight > 0)
-    .map((rec) => ({
-      code: rec.code,
-      name: rec.name,
-      sector: rec.assetClass,
-      weight: rec.targetWeight,
-      rationale: rec.rationale,
+  // The same engine as Client Advice and the proposal: bespoke weights, trade
+  // adjustments, new cash and the chosen approach all included.
+  const { advice } = await buildAdviceWithPrices(review)
+  const recommendedHoldings: ModelHolding[] = advice.resultingHoldings
+    .filter((h) => h.weight > 0)
+    .map((h) => ({
+      code: h.code,
+      name: h.name,
+      sector: h.assetClass,
+      weight: h.weight,
+      rationale: '',
     }))
 
   if (recommendedHoldings.length === 0) {

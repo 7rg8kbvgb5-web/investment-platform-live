@@ -204,6 +204,8 @@ const MIGRATION_PROBES: Array<{ migration: string; table: string; column?: strin
   { migration: '0032', table: 'client_portfolio_reviews', column: 'commentary_selection' },
   { migration: '0033', table: 'risk_profile_strategic_weights' },
   { migration: '0034', table: 'system_job_runs' },
+  { migration: '0035', table: 'client_portfolio_reviews', column: 'round_units' },
+  { migration: '0036', table: 'client_portfolio_reviews', column: 'transaction_costs' },
 ]
 
 async function checkMigrations(): Promise<HealthIssue[]> {

@@ -1,10 +1,8 @@
 import { describeAiError } from '../../../../lib/ai-errors'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { fetchClientReview } from '../../../../lib/engines/client-portfolio-reviews'
-import { buildClientAdvice, type AdviceApproach } from '../../../../lib/engines/client-advice'
-import { listApprovedSwaps } from '../../../../lib/engines/investment-committee-decisions'
-import { getLatestModelVersion } from '../../../../lib/engines/model-versioning'
-import { getQuotesForCodes } from '../../../../lib/engines/market-data'
+import { type AdviceApproach } from '../../../../lib/engines/client-advice'
+import { buildAdviceWithPrices } from '../../../../lib/engines/client-advice-server'
 import { ClientProposalDocument } from '../../../../lib/pdf/ClientProposalDocument'
 import { cgtForReview } from '../../../../lib/tax/cgt-for-review'
 import { getTaxReference } from '../../../../lib/tax/tax-reference'
@@ -46,24 +44,7 @@ async function buildPdf(reviewId: string | null, approachParam: string | null, c
       approachParam === 'rebalance' || approachParam === 'new-cash' ? approachParam : undefined
 
     const review = await fetchClientReview(reviewId)
-    const [approved, version] = await Promise.all([
-      listApprovedSwaps(review.modelId).catch(() => []),
-      getLatestModelVersion(review.modelId).catch(() => null),
-    ])
-    const context = { approvedDecisions: approved, currentModelVersion: version?.version ?? null }
-
-    const preliminary = await buildClientAdvice(review, context, approach ?? review.adviceApproach ?? undefined)
-    const codes = new Set<string>()
-    for (const ac of preliminary.model.assetClasses) for (const h of ac.holdings) codes.add(h.code)
-    for (const h of review.state.holdings) codes.add(h.code)
-    let prices: Record<string, number | null> = {}
-    try {
-      const quotes = await getQuotesForCodes(Array.from(codes).slice(0, 200))
-      prices = Object.fromEntries(Object.entries(quotes).map(([k, v]) => [k, v.price]))
-    } catch {
-      prices = {}
-    }
-    const built = await buildClientAdvice(review, { ...context, prices }, approach ?? review.adviceApproach ?? undefined)
+    const { advice: built, prices } = await buildAdviceWithPrices(review, approach)
     // Tidy security names for the client document (non-breaking spaces, exchange boilerplate).
     const tidy = <T extends { name: string }>(rows: T[]): T[] => rows.map((r) => ({ ...r, name: displaySecurityName(r.name) }))
     const advice = {
