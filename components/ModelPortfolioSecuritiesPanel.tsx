@@ -11,6 +11,7 @@ import {
   updateCoreSecurityYield,
   updateCoreSecurityHoldingType,
   updateCoreSecurityFranking,
+  fetchRiskProfileWeights,
   HOLDING_TYPE_LABELS,
   type CoreSecurity,
   type HoldingType,
@@ -32,6 +33,8 @@ import HouseViewAlternatives from './HouseViewAlternatives';
 import { fetchHouseViews, type HouseViewEntry } from '../lib/engines/house-view';
 import StatusBox from './dashboard/StatusBox';
 import { normaliseSector } from '../lib/engines/sector-names';
+import { useClientAdvice } from './ClientAdviceContext';
+import type { RiskProfile } from '../lib/engines/model-portfolios';
 
 // This is the model portfolio itself - the one, static list of which
 // securities belong in which asset class. It holds true across every
@@ -57,6 +60,13 @@ export function ModelPortfolioSecuritiesPanel() {
   const [analytics, setAnalytics] = useState<PortfolioAnalytics | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
   const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+  const { selectedRiskProfile } = useClientAdvice();
+  const [profileWeights, setProfileWeights] = useState<Record<string, number>>({});
+  useEffect(() => {
+    fetchRiskProfileWeights(selectedRiskProfile as RiskProfile)
+      .then(setProfileWeights)
+      .catch(() => setProfileWeights({}));
+  }, [selectedRiskProfile]);
   const [classifying, setClassifying] = useState(false);
   const [classifyMessage, setClassifyMessage] = useState<string | null>(null);
 
@@ -390,10 +400,6 @@ export function ModelPortfolioSecuritiesPanel() {
   // there's no weighting on this page to build a $ or % picture from. ---
   const totalSecurities = securities.length;
   const securitiesWithYield = securities.filter((s) => typeof s.yield === 'number');
-  const averageForwardYield =
-    securitiesWithYield.length > 0
-      ? round1(securitiesWithYield.reduce((sum, s) => sum + (s.yield ?? 0), 0) / securitiesWithYield.length)
-      : null;
   const yieldCoveragePct =
     totalSecurities > 0 ? round1((securitiesWithYield.length / totalSecurities) * 100) : 0;
 
@@ -430,7 +436,9 @@ export function ModelPortfolioSecuritiesPanel() {
         covered++;
       }
     }
-    const stance = tacticalView?.calls.find((c) => c.assetClass === ac.name)?.stance ?? null;
+    const call = tacticalView?.calls.find((c) => c.assetClass === ac.name);
+    const stance = call?.stance ?? null;
+    const stanceRationale = call?.rationale ?? null;
     return {
       name: ac.name,
       count: holdings.length,
@@ -443,8 +451,37 @@ export function ModelPortfolioSecuritiesPanel() {
       leans,
       covered,
       stance,
+      stanceRationale,
     };
   });
+
+  // --- Headline income for the selected risk profile: each asset class's
+  // weighted yield, scaled by that class's share of the profile. Grossed-up
+  // adds franking credits at the 30% company rate. ---
+  let incomeWeight = 0;
+  let cashYield = 0;
+  let grossYield = 0;
+  for (const ac of assetClasses) {
+    const acWeight = profileWeights[ac.name] ?? 0;
+    const withYield = ac.holdings.filter((h) => typeof h.yield === 'number');
+    const inClass = withYield.reduce((sum, h) => sum + h.inClassWeight, 0);
+    if (acWeight <= 0 || inClass <= 0) continue;
+    const y = withYield.reduce((sum, h) => sum + (h.yield ?? 0) * h.inClassWeight, 0) / inClass;
+    const g =
+      withYield.reduce(
+        (sum, h) => sum + (h.yield ?? 0) * (1 + ((h.frankingPct ?? 0) / 100) * (30 / 70)) * h.inClassWeight,
+        0
+      ) / inClass;
+    incomeWeight += acWeight;
+    cashYield += y * acWeight;
+    grossYield += g * acWeight;
+  }
+  const profileYield = incomeWeight > 0 ? round1(cashYield / incomeWeight) : null;
+  const profileGrossYield = incomeWeight > 0 ? round1(grossYield / incomeWeight) : null;
+
+  const ratedHoldings = securities.filter((sec) => houseViews.has(sec.code));
+  const positiveHoldings = ratedHoldings.filter((sec) => houseViews.get(sec.code)?.lean === 'bullish').length;
+  const negativeHoldings = ratedHoldings.filter((sec) => houseViews.get(sec.code)?.lean === 'bearish').length;
 
   // --- Australian equities by sector, weighted by each holding's weight in
   // the sleeve - the real sector bets the model is making. ---
@@ -506,83 +543,49 @@ export function ModelPortfolioSecuritiesPanel() {
         </StatusBox>
       )}
 
-      <div style={statsRow}>
-        <div style={statBoxThin}>
-          <span style={statLabel}>Securities</span>
-          <span style={statValue}>{totalSecurities}</span>
+      <div style={kpiStrip}>
+        <div style={kpiTile}>
+          <span style={kpiLabel}>Holdings</span>
+          <span style={kpiValue}>{totalSecurities}</span>
+          <span style={kpiCaption}>across {assetClasses.filter((ac) => ac.holdings.length > 0).length} asset classes</span>
         </div>
-        <div style={statBoxThin}>
-          <span style={statLabel}>Asset classes</span>
-          <span style={statValue}>{assetClasses.filter((ac) => ac.holdings.length > 0).length}</span>
-        </div>
-        <div style={statBoxThin}>
-          <span style={statLabel}>Avg. fwd yield</span>
-          <span style={statValue}>{averageForwardYield !== null ? `${averageForwardYield}%` : '—'}</span>
-        </div>
-        <div style={statBoxThin}>
-          <span style={statLabel}>Yield coverage</span>
-          <span style={statValue}>{yieldCoveragePct}%</span>
-        </div>
-        <div style={statBoxThin}>
-          <span style={statLabel}>Conviction coverage</span>
-          <span style={statValue}>{convictionsLoading ? '…' : `${convictionCoveragePct}%`}</span>
-        </div>
-        <div style={statBoxThin}>
-          <span style={statLabel}>Weight issues</span>
-          <span
-            style={{
-              ...statValue,
-              color: assetClassesWithWeightIssues === 0 ? '#4ade80' : '#fca5a5',
-            }}
-          >
-            {assetClassesWithWeightIssues}
+        <div style={kpiTile} title="Cash yield of the model at this risk profile's asset allocation, weighted by holding size">
+          <span style={kpiLabel}>Model yield · {selectedRiskProfile}</span>
+          <span style={kpiValue}>{profileYield !== null ? `${profileYield}%` : '—'}</span>
+          <span style={kpiCaption}>
+            {profileGrossYield !== null ? `${profileGrossYield}% grossed up for franking` : 'Enter yields to calculate'}
           </span>
         </div>
-        <div style={tacticalTableBox}>
-          <div style={tacticalTableBoxHeader}>
-            <span style={statLabel}>Live Global Asset Class View</span>
-            <div style={tacticalHeaderRight}>
-              {tacticalView && (
-                <span style={tacticalTimestamp}>
-                  {new Date(tacticalView.generatedAt).toLocaleString('en-AU', {
-                    day: 'numeric',
-                    month: 'short',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </span>
-              )}
-              <button
-                type="button"
-                onClick={runTacticalScan}
-                disabled={tacticalScanning}
-                style={tacticalScanButton}
-              >
-                {tacticalScanning ? '…' : 'Run scan'}
-              </button>
-            </div>
-          </div>
-          {tacticalError && (
-            <StatusBox variant="error" display="inline">
-              {tacticalError}
-            </StatusBox>
-          )}
-          {!tacticalView && !tacticalError ? (
-            <p style={emptyText}>No scan run yet.</p>
-          ) : (
-            <table style={tacticalTable}>
-              <tbody>
-                {tacticalView?.calls.map((call) => (
-                  <tr key={call.assetClass} title={call.rationale}>
-                    <td style={tacticalTableTd}>{call.assetClass}</td>
-                    <td style={tacticalTableTdRight}>
-                      <span style={tacticalStanceTag(call.stance)}>{call.stance}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+        <div style={kpiTile} title="Holdings rated positive by Ord Minnett or Barrenjoey, as a share of those rated">
+          <span style={kpiLabel}>House view support</span>
+          <span style={kpiValue}>
+            {ratedHoldings.length > 0 ? `${Math.round((positiveHoldings / ratedHoldings.length) * 100)}%` : '—'}
+          </span>
+          <span style={{ ...kpiCaption, color: negativeHoldings > 0 ? '#fca5a5' : kpiCaption.color }}>
+            {ratedHoldings.length > 0
+              ? `${positiveHoldings} positive${negativeHoldings > 0 ? ` · ${negativeHoldings} negative` : ''} of ${ratedHoldings.length} rated`
+              : 'No house ratings loaded'}
+          </span>
+        </div>
+        <div style={kpiTile} title="Share of holdings with a yield entered, and with at least one rating source">
+          <span style={kpiLabel}>Data coverage</span>
+          <span style={{ ...kpiValue, color: yieldCoveragePct >= 90 && convictionCoveragePct >= 75 ? '#4ade80' : '#fbbf24' }}>
+            {Math.round(yieldCoveragePct)}%
+          </span>
+          <span style={kpiCaption}>
+            yields · {convictionsLoading ? '…' : `${Math.round(convictionCoveragePct)}%`} ratings
+          </span>
+        </div>
+        <div style={kpiTile} title="Holding weights within each asset class must total 100%">
+          <span style={kpiLabel}>Weight check</span>
+          <span style={{ ...kpiValue, color: assetClassesWithWeightIssues === 0 ? '#4ade80' : '#fca5a5' }}>
+            {assetClassesWithWeightIssues === 0 ? 'All 100%' : assetClassesWithWeightIssues}
+          </span>
+          <span style={kpiCaption}>
+            {assetClassesWithWeightIssues === 0
+              ? 'every asset class balanced'
+              : `asset class${assetClassesWithWeightIssues === 1 ? '' : 'es'} not at 100%`}
+          </span>
         </div>
       </div>
 
@@ -623,7 +626,26 @@ export function ModelPortfolioSecuritiesPanel() {
 
       <div style={overviewRow}>
         <div style={overviewTableCol}>
-          <p style={overviewHeading}>Asset class scorecard</p>
+          <div style={sectorHeader}>
+            <p style={overviewHeading}>Asset class scorecard</p>
+            <span style={tacticalHeaderRight}>
+              {tacticalError && <span style={{ fontSize: '11px', color: '#fca5a5' }}>{tacticalError}</span>}
+              {tacticalView && (
+                <span style={tacticalTimestamp}>
+                  Tactical view{' '}
+                  {new Date(tacticalView.generatedAt).toLocaleString('en-AU', {
+                    day: 'numeric',
+                    month: 'short',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </span>
+              )}
+              <button type="button" onClick={runTacticalScan} disabled={tacticalScanning} style={tacticalScanButton}>
+                {tacticalScanning ? 'Running…' : tacticalView ? 'Refresh' : 'Run tactical scan'}
+              </button>
+            </span>
+          </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={overviewTable}>
               <thead>
@@ -687,7 +709,13 @@ export function ModelPortfolioSecuritiesPanel() {
                       )}
                     </td>
                     <td style={overviewTd}>
-                      {row.stance ? <span style={tacticalStanceTag(row.stance)}>{row.stance}</span> : <span style={mutedText}>—</span>}
+                      {row.stance ? (
+                        <span style={tacticalStanceTag(row.stance)} title={row.stanceRationale ?? undefined}>
+                          {row.stance}
+                        </span>
+                      ) : (
+                        <span style={mutedText}>—</span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -1009,55 +1037,59 @@ const savedIndicator = {
   color: '#86efac',
 };
 
-const statsRow = {
-  display: 'flex',
-  flexWrap: 'wrap' as const,
+const kpiStrip = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
   gap: '12px',
   marginBottom: '18px',
 };
 
-const statBoxThin = {
+const kpiTile = {
   display: 'flex',
   flexDirection: 'column' as const,
-  padding: '10px 12px',
+  gap: '4px',
+  padding: '14px 16px',
   borderRadius: '10px',
   background: '#0b2447',
   border: '1px solid #2d4a6b',
-  minWidth: '100px',
-  flex: '0 1 110px',
+  minWidth: 0,
 };
+
+const kpiLabel = {
+  fontSize: '11px',
+  fontWeight: 600,
+  color: '#94a3b8',
+  textTransform: 'uppercase' as const,
+  letterSpacing: '0.04em',
+  whiteSpace: 'nowrap' as const,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+};
+
+const kpiValue = {
+  fontSize: '26px',
+  lineHeight: 1.15,
+  fontWeight: 700,
+  color: '#4ade80',
+};
+
+const kpiCaption = {
+  fontSize: '12px',
+  color: '#64748b',
+  whiteSpace: 'nowrap' as const,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+};
+
+
 
 const statLabel = {
   fontSize: '11px',
   color: '#94a3b8',
 };
 
-const statValue = {
-  fontSize: '22px',
-  fontWeight: 700,
-  color: '#4ade80',
-  marginTop: '2px',
-};
 
-const tacticalTableBox = {
-  display: 'flex',
-  flexDirection: 'column' as const,
-  padding: '10px 16px',
-  borderRadius: '10px',
-  background: '#0b2447',
-  border: '1px solid #2d4a6b',
-  minWidth: '340px',
-  flex: '2 1 340px',
-};
 
-const tacticalTableBoxHeader = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  flexWrap: 'wrap' as const,
-  gap: '8px',
-  marginBottom: '6px',
-};
 
 const tacticalHeaderRight = {
   display: 'flex',
@@ -1081,21 +1113,8 @@ const tacticalScanButton = {
   cursor: 'pointer',
 };
 
-const tacticalTable = {
-  width: '100%',
-  borderCollapse: 'collapse' as const,
-};
 
-const tacticalTableTd = {
-  padding: '3px 0',
-  fontSize: '12px',
-  color: '#e2e8f0',
-};
 
-const tacticalTableTdRight = {
-  ...tacticalTableTd,
-  textAlign: 'right' as const,
-};
 
 function tacticalStanceTag(stance: 'OW' | 'N' | 'UW') {
   const colors: Record<string, { bg: string; border: string; text: string }> = {
