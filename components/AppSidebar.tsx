@@ -39,6 +39,17 @@ const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
+    href: '/research',
+    label: 'Research',
+    description: 'Consensus, research uploads, house views',
+    icon: (
+      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <path d="M4 4h12v12H4z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+        <path d="M7 8h6M7 11h6M7 14h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
     href: '/monitoring',
     label: 'Monitoring',
     description: 'Daily scan of model holdings',
@@ -46,17 +57,6 @@ const NAV_ITEMS: NavItem[] = [
       <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
         <circle cx="10" cy="10" r="7" stroke="currentColor" strokeWidth="1.5" />
         <path d="M10 6v4l2.5 2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-  {
-    href: '/research',
-    label: 'Research',
-    description: 'House views, Top Ideas, Approved List',
-    icon: (
-      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-        <path d="M4 4h12v12H4z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-        <path d="M7 8h6M7 11h6M7 14h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       </svg>
     ),
   },
