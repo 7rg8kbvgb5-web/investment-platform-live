@@ -330,6 +330,18 @@ export default function ResearchLibraryPanel() {
               placeholder="e.g. Financials, Resources"
             />
           </label>
+
+          {securities.length === 0 && (source === 'Ord Minnett' || source === 'Barrenjoey') ? (
+            <label style={label} title="Optional - feeds the conviction rating on Security Master">
+              {source} rating (optional)
+              <input
+                style={input}
+                value={houseViewRating}
+                onChange={(event) => setHouseViewRating(event.target.value)}
+                placeholder="e.g. Buy, Accumulate, Hold"
+              />
+            </label>
+          ) : null}
         </div>
 
         {securities.length > 0 ? (
@@ -354,7 +366,7 @@ export default function ResearchLibraryPanel() {
                   <tr key={`${sec.code}-${i}`}>
                     <td style={td}>
                       <input
-                        style={{ ...input, width: '80px' }}
+                        style={{ ...input, width: '80px', height: '32px' }}
                         value={sec.code}
                         onChange={(e) => updateSecurity(i, { code: e.target.value.toUpperCase() })}
                       />
@@ -362,14 +374,14 @@ export default function ResearchLibraryPanel() {
                     <td style={td}>{sec.name ?? '—'}</td>
                     <td style={td}>
                       <input
-                        style={{ ...input, width: '120px' }}
+                        style={{ ...input, width: '120px', height: '32px' }}
                         value={sec.rating ?? ''}
                         onChange={(e) => updateSecurity(i, { rating: e.target.value || null })}
                       />
                     </td>
                     <td style={td}>
                       <input
-                        style={{ ...input, width: '90px' }}
+                        style={{ ...input, width: '90px', height: '32px' }}
                         type="number"
                         step="0.01"
                         value={sec.priceTarget ?? ''}
@@ -398,22 +410,10 @@ export default function ResearchLibraryPanel() {
           </div>
         ) : null}
 
-        {securities.length === 0 && (source === 'Ord Minnett' || source === 'Barrenjoey') && (
-          <label style={label}>
-            {source}&apos;s rating (optional — feeds the conviction rating on Security Master)
-            <input
-              style={input}
-              value={houseViewRating}
-              onChange={(event) => setHouseViewRating(event.target.value)}
-              placeholder="e.g. Buy, Accumulate, Hold, Reduce, Sell"
-            />
-          </label>
-        )}
-
         <label style={label}>
           Summary (optional)
           <textarea
-            style={{ ...input, height: '64px', resize: 'vertical' as const }}
+            style={{ ...input, height: '64px', padding: '10px 12px', fontFamily: 'inherit', resize: 'vertical' as const }}
             value={summary}
             onChange={(event) => setSummary(event.target.value)}
             placeholder="One or two lines on what this document covers."
@@ -550,9 +550,10 @@ const form = {
   gap: '14px',
 };
 
+// One three-column grid for every row, so fields line up from row to row.
 const formRow = {
-  display: 'flex',
-  flexWrap: 'wrap' as const,
+  display: 'grid',
+  gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
   gap: '14px',
 };
 
@@ -564,20 +565,25 @@ const label = {
   color: '#94a3b8',
   textTransform: 'uppercase' as const,
   letterSpacing: '0.04em',
-  flex: '1 1 220px',
+  minWidth: 0,
 };
 
 const input = {
   background: '#0b1f38',
   border: '1px solid #2d4a6b',
   borderRadius: '8px',
-  padding: '10px 12px',
+  padding: '0 12px',
+  // Text boxes and dropdowns share one height so a row lines up.
+  height: '40px',
+  boxSizing: 'border-box' as const,
+  width: '100%',
   color: '#e2e8f0',
   fontSize: '13px',
 };
 
 const fileInput = {
   ...input,
+  height: 'auto',
   padding: '8px',
 };
 
