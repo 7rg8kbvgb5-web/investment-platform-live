@@ -40,7 +40,6 @@ import {
   deleteClientReview,
 } from '../lib/engines/client-portfolio-reviews'
 import AssetClassComparisonChart from './AssetClassComparisonChart'
-import HoldingAdjustmentChart from './HoldingAdjustmentChart'
 import AllocationPieChart from './AllocationPieChart'
 import StatusBox from './dashboard/StatusBox'
 import { deployCash } from '../lib/engines/cash-deployment'
@@ -1431,7 +1430,6 @@ export default function ClientPortfolioUploadPanel() {
               wants to inject from elsewhere. */}
           <div style={subPanel}>
             <p style={subHeading}>Resulting Portfolio</p>
-            <HoldingAdjustmentChart recommendations={comparison.holdingRecommendations} />
 
             <div style={cashBar}>
               <div style={cashBarStat}>
@@ -1517,7 +1515,6 @@ export default function ClientPortfolioUploadPanel() {
               )
             ) : null}
 
-            <p style={{ ...resultingColumnTitle, margin: '0 0 8px' }}>Today and recommended adjustments</p>
             <ResultingPortfolioTable
               assetClasses={clientAdjustedModel.assetClasses.map((ac) => ({ name: ac.name, type: ac.type }))}
               recommendations={comparison.holdingRecommendations}
@@ -2201,15 +2198,6 @@ const addCashLabel = {
   letterSpacing: '0.06em',
   textTransform: 'uppercase' as const,
   color: '#4ade80',
-}
-
-const resultingColumnTitle = {
-  margin: '0 0 10px',
-  fontSize: '13px',
-  fontWeight: 700,
-  color: '#93c5fd',
-  textTransform: 'uppercase' as const,
-  letterSpacing: '0.03em',
 }
 
 function round2Local(value: number): number {
