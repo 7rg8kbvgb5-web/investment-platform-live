@@ -210,10 +210,11 @@ export async function buildClientAdvice(
         ? 'watch'
         : 'in-tolerance'
 
-  // Approach: new money and top-ups default to investing the cash without
-  // selling; otherwise a full rebalance.
-  const approach: AdviceApproach =
-    approachOverride ?? (isNewMoney || newCash > 0 ? 'new-cash' : 'rebalance')
+  // Approach: new money is invested straight into the model. An existing
+  // portfolio - with or without a top-up - defaults to a full rebalance, with
+  // any new cash included in the total the model weights are applied to.
+  // "Invest new cash only - no sells" stays available as an alternative.
+  const approach: AdviceApproach = approachOverride ?? (isNewMoney ? 'new-cash' : 'rebalance')
 
   let cashDeployment: CashDeploymentResult | null = null
   if (approach === 'new-cash' && newCash > 0) {
@@ -242,7 +243,10 @@ export async function buildClientAdvice(
         units: l.units,
         currentWeight: cashDeployment!.existingValue > 0 ? round2((l.currentValue / cashDeployment!.existingValue) * 100) : 0,
         targetWeight: l.targetWeight,
-        rationale: l.currentValue > 0 ? `Below target - new cash directed here.` : 'New position, per the model.',
+        rationale:
+          l.currentValue > 0
+            ? `Below target within an underweight asset class - new cash directed here.`
+            : 'New position, per the model, within an underweight asset class.',
       }))
   } else {
     trades = comparison.holdingRecommendations

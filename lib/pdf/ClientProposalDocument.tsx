@@ -326,7 +326,7 @@ export function ClientProposalDocument({
   const recommendation = advice.isNewMoney
     ? `We recommend investing ${fmt(advice.newCash)} in a ${advice.riskProfile} portfolio built from the Ord Minnett house model: a diversified mix of quality Australian and international investments, matched to your objectives and your tolerance for risk.`
     : advice.approach === 'new-cash'
-      ? `We recommend investing the new ${fmt(advice.newCash)} into the parts of your portfolio furthest below their targets. No existing holdings are sold, so no capital gains are realised and turnover is kept to a minimum.`
+      ? `We recommend investing the new ${fmt(advice.newCash)} into the asset classes furthest below their targets, using the securities in our house model. No existing holdings are sold, so no capital gains are realised and turnover is kept to a minimum.`
       : `We recommend repositioning your portfolio to the Ord Minnett ${advice.riskProfile} house model${advice.newCash > 0 ? `, including the new ${fmt(advice.newCash)}` : ''}. The changes align your investments with your risk profile, concentrate capital in our highest-conviction holdings and improve the reliability of your income.`
 
   let n = 0

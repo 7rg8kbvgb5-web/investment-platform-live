@@ -9,17 +9,21 @@ import type { TradeOverrides } from './portfolio-review-comparison'
 //   - New money: the client has no existing portfolio with us. The whole
 //     lump sum is invested straight into the selected model at its target
 //     weights.
-//   - Top-up: the client already holds a portfolio and is adding cash.
-//     The new cash goes to whatever is furthest below its target weight
-//     first, measured against the portfolio's size AFTER the cash goes
-//     in. Nothing is sold - this is deliberately the no-CGT, no-turnover
-//     route. Only once every underweight is filled does any surplus get
-//     spread across the whole model at its target weights.
-//
-// When the cash isn't enough to fill every underweight, it's shared
-// across them in proportion to how far each is below target, so the
-// portfolio moves evenly toward the model rather than one gap being
-// closed completely while another is untouched.
+//   - Top-up: the client already holds a portfolio and is adding cash,
+//     and nothing is to be sold (the no-CGT, no-turnover route). The cash
+//     is directed TOP DOWN, measured against the portfolio's size AFTER
+//     the cash goes in:
+//       1. Asset classes first. Cash goes only to asset classes below
+//          their risk-profile target - an overweight asset class gets
+//          nothing, however many of its model securities the client
+//          doesn't yet own.
+//       2. Then securities within each asset class, by the model's
+//          security weights: to the holdings furthest below target first,
+//          then any remainder at the model's in-class weights.
+//     When the cash can't close every asset-class gap it's shared across
+//     the underweight classes in proportion to their gaps, so the whole
+//     portfolio moves evenly toward the model. Once every gap is closed,
+//     any surplus is spread across the model at its target weights.
 //
 // Unit counts are rounded DOWN to whole units where a live price exists,
 // so a buy list never asks for more money than is actually available.
@@ -68,9 +72,9 @@ export type CashDeploymentResult = {
   totalInvested: number
   /** New cash left uninvested: unit rounding, plus any part of the model not allocated (bespoke weights summing below 100%). */
   residualCash: number
-  /** True when the cash wasn't enough to fill every underweight - some gaps remain after this. */
+  /** True when the cash wasn't enough to fill every underweight asset class - some gaps remain after this. */
   underweightsRemain: boolean
-  /** Sum of underweights before investing - how much new cash would bring every holding up to target. */
+  /** Sum of asset-class shortfalls before investing - how much new cash would bring every asset class up to target without selling. */
   totalShortfall: number
 }
 
@@ -126,19 +130,57 @@ export function deployCash(input: CashDeploymentInput): CashDeploymentResult {
     }
   }
 
-  const totalShortfall = drafts.reduce((sum, d) => sum + d.shortfall, 0)
-  const underweightsRemain = totalShortfall > cashAmount + 0.5
+  // Step 1 - asset classes. Current value per class counts every mapped
+  // holding in it, including ones outside the model, so an overweight class
+  // is recognised as overweight.
+  const currentByClass = new Map<string, number>()
+  for (const holding of mappedHoldings) {
+    if (!holding.mapped) continue
+    const value = holding.value ?? (holding.weight / 100) * existingValue
+    currentByClass.set(holding.assetClass, (currentByClass.get(holding.assetClass) ?? 0) + value)
+  }
+  const classes = model.assetClasses
+    .map((ac) => {
+      const lines = drafts.filter((d) => d.assetClass === ac.name)
+      const modelWeight = lines.reduce((sum, d) => sum + d.targetWeight, 0)
+      const targetValue = (modelWeight / 100) * totalAfter
+      return {
+        name: ac.name,
+        lines,
+        modelWeight,
+        shortfall: Math.max(0, targetValue - (currentByClass.get(ac.name) ?? 0)),
+      }
+    })
+    .filter((c) => c.lines.length > 0 && c.modelWeight > 0)
 
-  if (totalShortfall <= 0) {
-    // Already at or above target everywhere - spread at model weights.
-    for (const d of drafts) d.rawInvest = cashAmount * (d.targetWeight / 100)
-  } else if (totalShortfall >= cashAmount) {
-    // Not enough to fill every gap - share in proportion to each gap.
-    for (const d of drafts) d.rawInvest = cashAmount * (d.shortfall / totalShortfall)
-  } else {
-    // Fill every gap, then spread the surplus at model weights.
-    const surplus = cashAmount - totalShortfall
-    for (const d of drafts) d.rawInvest = d.shortfall + surplus * (d.targetWeight / 100)
+  const totalShortfall = classes.reduce((sum, c) => sum + c.shortfall, 0)
+  const underweightsRemain = totalShortfall > cashAmount + 0.5
+  const modelTotalWeight = classes.reduce((sum, c) => sum + c.modelWeight, 0)
+
+  const classCash = new Map<string, number>()
+  for (const c of classes) {
+    let cash: number
+    if (mode === 'new-money' || totalShortfall <= 0) {
+      cash = cashAmount * (c.modelWeight / 100)
+    } else if (totalShortfall >= cashAmount) {
+      cash = cashAmount * (c.shortfall / totalShortfall)
+    } else {
+      cash = c.shortfall + (cashAmount - totalShortfall) * (c.modelWeight / Math.max(modelTotalWeight, 100))
+    }
+    classCash.set(c.name, cash)
+  }
+
+  // Step 2 - securities within each asset class.
+  for (const c of classes) {
+    const cash = classCash.get(c.name) ?? 0
+    if (cash <= 0) continue
+    const gaps = c.lines.reduce((sum, d) => sum + d.shortfall, 0)
+    for (const d of c.lines) {
+      const share = d.targetWeight / c.modelWeight
+      if (mode === 'new-money' || gaps <= 0) d.rawInvest = cash * share
+      else if (gaps >= cash) d.rawInvest = cash * (d.shortfall / gaps)
+      else d.rawInvest = d.shortfall + (cash - gaps) * share
+    }
   }
 
   const overrides = input.tradeOverrides ?? {}
@@ -185,12 +227,7 @@ export function deployCash(input: CashDeploymentInput): CashDeploymentResult {
   // Asset-class view, before vs after. "Before" uses the existing
   // portfolio's own size; holdings outside the model still count toward
   // their asset class so the picture isn't flattered.
-  const beforeByClass = new Map<string, number>()
-  for (const holding of mappedHoldings) {
-    if (!holding.mapped) continue
-    const value = holding.value ?? (holding.weight / 100) * existingValue
-    beforeByClass.set(holding.assetClass, (beforeByClass.get(holding.assetClass) ?? 0) + value)
-  }
+  const beforeByClass = currentByClass
   const investByClass = new Map<string, number>()
   for (const line of lines) {
     investByClass.set(line.assetClass, (investByClass.get(line.assetClass) ?? 0) + line.investValue)

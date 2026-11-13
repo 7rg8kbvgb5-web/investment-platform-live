@@ -681,7 +681,10 @@ export default function ClientPortfolioUploadPanel() {
       (sum, rec) => sum + rec.targetWeight,
       0,
     )
-    const residualPct = Math.round((100 - totalTargetWeightPct) * 100) / 100
+    // Target weights are rounded per holding, so a few hundredths of a
+    // percent either way is rounding, not a real shortfall - treat as zero.
+    const rawPct = Math.round((100 - totalTargetWeightPct) * 100) / 100
+    const residualPct = Math.abs(rawPct) < 0.05 ? 0 : rawPct
     const residualValue = Math.round(effectiveTotalPortfolioValue * (residualPct / 100) * 100) / 100
     return { residualPct, residualValue }
   }, [comparison, effectiveTotalPortfolioValue])
@@ -1424,8 +1427,12 @@ export default function ClientPortfolioUploadPanel() {
                 />
               </div>
               <div style={cashBarStat}>
-                <span style={cashBarLabel}>
-                  {residualCash && residualCash.residualValue < 0 ? 'Cash deficit' : 'Residual cash'}
+                <span style={cashBarLabel} title="After a full rebalance including any new cash: the part of the portfolio not allocated to a holding">
+                  {residualCash && residualCash.residualValue < 0
+                    ? 'Over-allocated (full rebalance)'
+                    : residualCash && residualCash.residualValue === 0
+                      ? 'Full rebalance'
+                      : 'Unallocated (full rebalance)'}
                 </span>
                 <span
                   style={{
@@ -1438,7 +1445,9 @@ export default function ClientPortfolioUploadPanel() {
                           : '#4ade80',
                   }}
                 >
-                  {residualCash !== null ? (
+                  {residualCash !== null && residualCash.residualValue === 0 ? (
+                    'Fully invested'
+                  ) : residualCash !== null ? (
                     <>
                       {residualCash.residualValue < 0 ? '-' : ''}
                       {formatCurrency(Math.abs(residualCash.residualValue))}
@@ -1454,7 +1463,7 @@ export default function ClientPortfolioUploadPanel() {
             {additionalCashValue > 0 ? (
               cashDeployment ? (
                 <div style={cashDeploymentBox}>
-                  <p style={cashDeploymentTitle}>Investing the new cash — no sells</p>
+                  <p style={cashDeploymentTitle}>Alternative: invest the new cash without selling</p>
                   <CashDeploymentView
                     result={cashDeployment}
                     riskProfile={effectiveRiskProfile}
@@ -1463,8 +1472,9 @@ export default function ClientPortfolioUploadPanel() {
                     onReset={clearTradeOverride}
                   />
                   <p style={cashDeploymentFootnote}>
-                    The adjustments below show the alternative: a full rebalance of the whole
-                    portfolio including the new cash, which may involve selling.
+                    The proposal uses a full rebalance by default - the whole portfolio, including the
+                    new cash, set to the model (the adjustments below). To propose this no-sells option
+                    instead, choose &quot;Invest new cash only — no sells&quot; on the Client Advice tab.
                   </p>
                 </div>
               ) : (

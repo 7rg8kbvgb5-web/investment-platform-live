@@ -30,15 +30,45 @@ describe('cash deployment', () => {
     expect(r.residualCash).toBe(0)
   })
 
-  it('a top-up fills the gaps first', () => {
-    // Existing $100k all in AAA. Adding $100k -> $200k total; targets AAA 60k, BBB 60k, CASH 80k.
+  it('a top-up fills asset-class gaps first, then securities within the class', () => {
+    // Existing $100k all in AAA. Adding $100k -> $200k total.
+    // Asset classes: Aus Equities target $120k (holds $100k, gap $20k); Cash target $80k (gap $80k).
     const r = deployCash({ model, cashAmount: 100_000, mappedHoldings: [held('AAA', 100_000, 'Australian Equities')], existingPortfolioValue: 100_000 })
     expect(r.mode).toBe('top-up')
     const byCode = Object.fromEntries(r.lines.map((l) => [l.code, l.investValue]))
-    expect(byCode.AAA).toBe(0) // already over target - never sold, never topped up
-    expect(byCode.BBB + byCode.CASH).toBe(100_000)
-    expect(byCode.CASH / byCode.BBB).toBeCloseTo(80 / 60, 6) // gaps shared in proportion
-    expect(r.underweightsRemain).toBe(true)
+    expect(byCode.AAA).toBe(0) // over its own target - never sold, never topped up
+    expect(byCode.BBB).toBe(20_000) // the class's whole gap goes to the unheld security
+    expect(byCode.CASH).toBe(80_000)
+    expect(r.totalShortfall).toBe(100_000)
+    expect(r.underweightsRemain).toBe(false)
+  })
+
+  it('sends nothing to an overweight asset class, even if the client lacks some of its securities', () => {
+    // Existing $100k all in AAA (Aus Equities = 100% vs 60% target). Add $20k -> $120k.
+    // Aus Equities target $72k vs $100k held: overweight. BBB is unheld, but the class is over target.
+    const r = deployCash({ model, cashAmount: 20_000, mappedHoldings: [held('AAA', 100_000, 'Australian Equities')], existingPortfolioValue: 100_000 })
+    const byCode = Object.fromEntries(r.lines.map((l) => [l.code, l.investValue]))
+    expect(byCode.AAA).toBe(0)
+    expect(byCode.BBB).toBe(0)
+    expect(byCode.CASH).toBe(20_000)
+    expect(r.underweightsRemain).toBe(true) // Cash target $48k, so $28k of gap remains
+    const ae = r.assetClasses.find((c) => c.assetClass === 'Australian Equities')!
+    expect(ae.investValue).toBe(0)
+  })
+
+  it('once every asset class is at target, the surplus follows the model weights', () => {
+    // $60k AAA + $60k BBB + $80k CASH = $200k, exactly on model. Add $100k.
+    const r = deployCash({
+      model,
+      cashAmount: 100_000,
+      mappedHoldings: [
+        held('AAA', 60_000, 'Australian Equities'),
+        held('BBB', 60_000, 'Australian Equities'),
+        { ...held('CASH', 80_000, 'Cash'), assetClassType: 'Defensive' },
+      ],
+      existingPortfolioValue: 200_000,
+    })
+    expect(r.lines.map((l) => l.investValue)).toEqual([30_000, 30_000, 40_000])
   })
 
   it('rounds to whole units when priced, leaving the remainder in cash', () => {

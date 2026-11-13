@@ -32,12 +32,11 @@ export default function CashDeploymentView({
       <p style={bodyText}>
         {isTopUp ? (
           <>
-            The new cash goes to the holdings furthest below their {riskProfile} target weight first,
-            measured against the portfolio&apos;s size once the cash is in. <strong>Nothing is sold</strong>,
-            so there&apos;s no capital gains tax and no unnecessary turnover.{' '}
+            {`The new cash goes first to the asset classes below their ${riskProfile} target, measured against the portfolio's size once the cash is in, then to the securities within each class by the model's weights. Asset classes already over target receive nothing. `}
+            <strong>Nothing is sold</strong>, so there&apos;s no capital gains tax and no unnecessary turnover.{' '}
             {result.underweightsRemain
-              ? `The cash isn't enough to close every gap — it's shared across the underweights in proportion to how far each is below target. Fully closing every gap would take ${formatCurrency(result.totalShortfall)}.`
-              : 'Every underweight is filled, and the remainder is spread across the model at its target weights.'}
+              ? `The cash isn't enough to bring every asset class up to target - it's shared across the underweight classes in proportion to their gaps. Closing every gap without selling would take ${formatCurrency(result.totalShortfall)}.`
+              : 'Every underweight asset class is brought up to target, and the remainder is spread across the model at its target weights.'}
           </>
         ) : (
           <>
