@@ -355,22 +355,29 @@ export function ClientProposalDocument({
     <Document title={`Investment Proposal - ${client}`} author="Ord Minnett" subject={`${advice.riskProfile} portfolio proposal`}>
       {/* ---------- Cover ---------- */}
       <Page size="A4" style={s.cover}>
-        <View style={{ paddingTop: 70, alignItems: 'center' }}>
+        <View style={{ position: 'absolute', top: 0, left: 0 }}>
+          <Weave width={595} height={842} />
+        </View>
+        <View style={{ paddingTop: 62, alignItems: 'center' }}>
           <Text style={{ fontFamily: 'Times-Bold', fontSize: 22, letterSpacing: 6, color: OM.white }}>ORD MINNETT</Text>
           <View style={{ width: 40, height: 1.5, backgroundColor: OM.red, marginTop: 10 }} />
+          <Text style={{ fontSize: 8.5, letterSpacing: 3, color: OM.paleSilver, marginTop: 12 }}>PRIVATE WEALTH</Text>
         </View>
-        <View style={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 60 }}>
-          <Text style={{ fontSize: 8.5, letterSpacing: 3, color: OM.paleSilver, marginBottom: 18 }}>PRIVATE WEALTH</Text>
-          <Text style={{ fontFamily: 'Times-Italic', fontSize: 30, color: OM.white }}>Your Investment</Text>
-          <Text style={{ fontFamily: 'Times-Bold', fontSize: 34, color: OM.white, marginTop: 2 }}>Proposal</Text>
-          <View style={{ width: 70, height: 2, backgroundColor: OM.red, marginTop: 14, marginBottom: 22 }} />
-          <Text style={{ fontSize: 12, color: OM.white, marginBottom: 6 }}>Prepared for {client}</Text>
-          <Text style={{ fontSize: 10, color: OM.paleSilver, marginBottom: 4 }}>{advice.riskProfile} portfolio</Text>
-          <Text style={{ fontSize: 10, color: OM.paleSilver }}>{preparedOn}</Text>
-          <Text style={{ fontSize: 7, letterSpacing: 2, color: OM.paleSilver, marginTop: 26 }}>YOUR ADVISERS</Text>
+        <View style={{ alignItems: 'center', marginTop: 56 }}>
+          <Text style={{ fontSize: 30, color: OM.white }}>
+            <Text style={{ fontFamily: 'Times-Bold' }}>Investment </Text>
+            <Text style={{ fontFamily: 'Times-Italic' }}>Proposal</Text>
+          </Text>
+          <View style={{ width: 70, height: 2, backgroundColor: OM.red, marginTop: 12 }} />
+          <Text style={{ fontSize: 11, color: OM.paleSilver, marginTop: 14 }}>{advice.riskProfile} portfolio</Text>
+        </View>
+        <View style={{ position: 'absolute', top: 470, left: 0, right: 0, alignItems: 'center' }}>
+          <Text style={{ fontSize: 7, letterSpacing: 2, color: OM.paleSilver }}>PREPARED FOR</Text>
+          <Text style={{ fontFamily: 'Times-Roman', fontSize: 18, color: OM.white, marginTop: 6 }}>{client}</Text>
+          <Text style={{ fontSize: 10, color: OM.paleSilver, marginTop: 6 }}>{preparedOn}</Text>
+          <Text style={{ fontSize: 7, letterSpacing: 2, color: OM.paleSilver, marginTop: 34 }}>YOUR ADVISERS</Text>
           <Text style={{ fontSize: 10, color: OM.white, marginTop: 5 }}>{ADVICE_TEAM.map((m) => m.name).join('  ·  ')}</Text>
         </View>
-        <Weave width={595} height={170} />
         <View style={{ position: 'absolute', bottom: 18, left: 0, right: 0, alignItems: 'center' }}>
           <Text style={{ fontSize: 6.5, color: OM.paleSilver }}>{ABN_LINE} · Private and confidential</Text>
         </View>

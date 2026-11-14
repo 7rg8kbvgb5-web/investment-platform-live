@@ -1,4 +1,4 @@
-import { Svg, Path, Rect, Line, Polyline, Circle, View, Text } from '@react-pdf/renderer'
+import { Svg, Path, Rect, Line, Polyline, Circle, Ellipse, View, Text } from '@react-pdf/renderer'
 
 // Ord Minnett palette - as used in the PARS pitch deck.
 export const OM = {
@@ -371,19 +371,29 @@ export function HBars({ rows, format = shortMoney }: { rows: { label: string; va
   )
 }
 
-/** The "Financial Weave" motif for the cover - interlaced diagonal lines. */
+/**
+ * The Ord Minnett ring motif for the cover: a band of fine red concentric
+ * rings arching up from the lower page. The rings share almost the same crown,
+ * so they sit tight at the top and fan out down the sides (wider on the left),
+ * as on Ord Minnett's own brochure covers. Drawn full-page; the page clips it.
+ */
 export function Weave({ width, height }: { width: number; height: number }) {
-  const lines: { x1: number; y1: number; x2: number; y2: number; c: string; w: number }[] = []
-  for (let i = -height; i < width; i += 14) {
-    lines.push({ x1: i, y1: height, x2: i + height * 0.9, y2: 0, c: '#1E4A75', w: 0.8 })
-    lines.push({ x1: i + 7, y1: 0, x2: i + 7 + height * 0.9, y2: height, c: '#2E5B88', w: 0.5 })
+  const rings = 30
+  const crown = height * 0.33 // top of the arch
+  const items: { cx: number; cy: number; rx: number; ry: number; o: number; w: number }[] = []
+  for (let k = 0; k < rings; k++) {
+    const f = k / (rings - 1)
+    const rx = width * 0.5 + k * 3.6
+    const ry = height * 0.6 + k * 1.4
+    const cx = width * 0.53 - k * 2.4
+    const top = crown + k * 1.3
+    items.push({ cx, cy: top + ry, rx, ry, o: 1 - f * 0.55, w: 0.9 - f * 0.35 })
   }
   return (
     <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
-      {lines.map((l, i) => (
-        <Line key={i} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} stroke={l.c} strokeWidth={l.w} />
+      {items.map((r, i) => (
+        <Ellipse key={i} cx={r.cx} cy={r.cy} rx={r.rx} ry={r.ry} stroke={OM.red} strokeWidth={r.w} strokeOpacity={r.o} fill="none" />
       ))}
-      <Rect x={0} y={0} width={width} height={1.2} fill={OM.red} />
     </Svg>
   )
 }
