@@ -78,4 +78,21 @@ describe('cash deployment', () => {
     expect(a.investValue).toBe(a.units! * 7)
     expect(r.totalInvested + r.residualCash).toBeCloseTo(10_000, 2)
   })
+
+  it("takes an adjusted line's overspend out of the model's cash allocation", () => {
+    // AAA bumped from $30k to $31k of units: the extra $1k comes out of CASH, no shortfall.
+    const r = deployCash({ model, cashAmount: 100_000, mappedHoldings: [], existingPortfolioValue: 0, prices: { AAA: 10, BBB: 10 }, tradeOverrides: { AAA: { units: 3_100 } } })
+    const byCode = Object.fromEntries(r.lines.map((l) => [l.code, l.investValue]))
+    expect(byCode.AAA).toBe(31_000)
+    expect(byCode.CASH).toBe(39_000)
+    expect(r.residualCash).toBe(0)
+    expect(r.totalInvested).toBe(100_000)
+  })
+
+  it('only shows a shortfall once the cash allocation is used up', () => {
+    const r = deployCash({ model, cashAmount: 100_000, mappedHoldings: [], existingPortfolioValue: 0, prices: { AAA: 10, BBB: 10 }, tradeOverrides: { AAA: { units: 7_500 } } })
+    const byCode = Object.fromEntries(r.lines.map((l) => [l.code, l.investValue]))
+    expect(byCode.CASH).toBe(0)
+    expect(r.residualCash).toBe(-5_000)
+  })
 })

@@ -225,6 +225,25 @@ export function deployCash(input: CashDeploymentInput): CashDeploymentResult {
     }
   })
 
+  // The model's own cash holding is the balancing item. If manual unit
+  // changes push the buy list over the cash available, the overspend comes
+  // out of the cash allocation first (lines the adviser hasn't adjusted
+  // themselves). Only once that cash is used up does the proposal show a
+  // shortfall.
+  let overspend = round2(lines.reduce((sum, l) => sum + l.investValue, 0) - cashAmount)
+  if (overspend > 0) {
+    for (const line of lines) {
+      if (overspend <= 0) break
+      if (line.assetClass !== 'Cash' || line.adjusted || line.investValue <= 0) continue
+      const take = Math.min(line.investValue, overspend)
+      line.investValue = round2(line.investValue - take)
+      line.units = line.price && line.price > 0 ? Math.floor(line.investValue / line.price) : line.units
+      line.resultingValue = round2(line.currentValue + line.investValue)
+      line.resultingWeight = totalAfter > 0 ? round2((line.resultingValue / totalAfter) * 100) : 0
+      overspend = round2(overspend - take)
+    }
+  }
+
   const totalInvested = round2(lines.reduce((sum, l) => sum + l.investValue, 0))
   const residualCash = round2(cashAmount - totalInvested)
 

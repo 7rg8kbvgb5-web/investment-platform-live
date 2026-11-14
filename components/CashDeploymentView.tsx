@@ -103,12 +103,12 @@ export default function CashDeploymentView({
       {editable ? (
         <p style={footnote}>
           Change any line&apos;s units (or the dollar amount where there&apos;s no live price) to depart from the
-          model. Residual cash updates to match; ↺ returns a line to its calculated size.
+          model. Any extra comes out of the model's cash allocation first, and residual cash updates to match; ↺ returns a line to its calculated size.
         </p>
       ) : null}
       {result.residualCash < -1 ? (
         <p style={{ ...footnote, color: '#fca5a5' }}>
-          The adjusted buy list needs {formatCurrency(-result.residualCash)} more than the cash available — reduce a
+          The adjusted buy list uses all of the cash allocation and still needs {formatCurrency(-result.residualCash)} more — reduce a
           line or add more cash.
         </p>
       ) : null}
